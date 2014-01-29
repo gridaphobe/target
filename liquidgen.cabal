@@ -19,7 +19,8 @@ library
   exposed-modules:     LiquidGen
   -- other-modules:       
   -- other-extensions:    
-  build-depends:       mtl >= 2.1.2,
+  build-depends:       containers >= 0.5.0.0,
+                       mtl >= 2.1.2,
                        base >=4.6 && <4.7,
                        liquid-fixpoint,
                        liquidhaskell,

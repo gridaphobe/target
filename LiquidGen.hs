@@ -3,35 +3,43 @@ module LiquidGen where
 
 import Control.Applicative
 import Control.Monad.Reader
+import qualified Data.Map as M
 import Data.SBV
 import Language.Fixpoint.Parse
 import Language.Fixpoint.Types hiding (Symbolic)
-import Language.Haskell.Liquid.Parse
+import Language.Haskell.Liquid.Parse ()
 import Language.Haskell.Liquid.Types
 
--- foo :: SpecType -> Symbolic a
--- foo (RApp c [] [] r)
---   = do (v :: SInteger) <- exists "v"
---        undefined
+test s = sat $ runReaderT (genT (rr s :: BareType)) M.empty
 
-test s = sat $ gen $ toReft $ rt_reft (rr s :: BareType)
+genT :: BareType -> Convert SBool
+genT (RApp c as ps r)
+  = gen $ toReft r
+genT (RFun (S x) i o r)
+  = do x' <- lift $ sInteger x
+       local (M.insert x x') $ do
+         lift . constrain =<< genT i
+         genT o
 
+-- blah = sat $ do x <- sInteger "x"
+--                 solve [x .== 100]
+--                 v <- sInteger "v"
+--                 return $ v .== x + 1
 
-gen :: Reft -> Symbolic SBool
-gen (Reft ((S v), rs))
-  = do (v :: SInteger) <- exists v
-       solve $ map (flip runReader v . ofPred . toPred) rs
-
-gen' :: Refa -> Symbolic a
-gen' (RConc p) = gen'' p
-
-gen'' :: Pred -> Symbolic a
-gen'' = undefined
-
+gen :: Reft -> Convert SBool
+gen (Reft (S v, rs))
+  = do mv <- asks $ M.lookup v
+       case mv of
+         Nothing -> do
+           v' <- lift $ sInteger v
+           local (M.insert v v') go
+         Just _ -> go
+  where
+    go = bAnd <$> mapM (ofPred . toPred) rs
 
 toPred (RConc p) = p
 
-type Convert = Reader SInteger
+type Convert = ReaderT (M.Map String SInteger) Symbolic
 
 ofPred :: Pred -> Convert SBool
 ofPred PTrue           = return true
@@ -53,14 +61,25 @@ ofBrel Ge = (.>=)
 ofBrel Lt = (.<)
 ofBrel Le = (.<=)
 
--- ofExpr :: Expr -> Convert SBool
-ofExpr (EVar (S s))   = ask
+ofExpr :: Expr -> Convert SInteger
+ofExpr (EVar (S s))   = asks (M.! s)
 ofExpr (EBin b e1 e2) = ofBop b <$> ofExpr e1 <*> ofExpr e2
 ofExpr (ECon (I i))   = return $ literal i
 
--- ofBop :: Bop -> SInteger -> SInteger -> SInteger
+ofBop :: Bop -> SInteger -> SInteger -> SInteger
 ofBop Plus  = (+)
 ofBop Minus = (-)
 ofBop Times = (*)
 ofBop Div   = sDiv
 ofBop Mod   = sMod
+
+
+--------------------------------------------------------------------------------
+--- STUPID Functor -> Applicative -> Monad NONSENSE
+--------------------------------------------------------------------------------
+
+instance Applicative Symbolic where
+  pure  = return
+  f <*> x = do f <- f
+               x <- x
+               return $ f x
