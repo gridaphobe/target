@@ -1,22 +1,33 @@
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module LiquidGen where
+module Main where
 
 import           Control.Applicative
+import           Control.Arrow (second)
 import           Control.Exception.Base
 import "mtl"     Control.Monad.Reader
+import           Data.Data
+import           Data.Dynamic
+import           Data.Function
+import           Data.List
 import qualified Data.Map as M
+import           Data.Maybe
+import           Data.Tuple
 import           Data.Typeable
 import           Test.QuickCheck hiding ((==>))
 import           Text.Printf
 
 import           Data.SBV
+import           Data.SBV.Internals
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Types hiding (Symbolic)
 import qualified Language.Haskell.Interpreter as Hint
 import           Language.Haskell.Liquid.Parse ()
 import           Language.Haskell.Liquid.Types
 
+import           Debug.Trace
 
 {-
 
@@ -44,8 +55,9 @@ For some sufficiently complex `f` and `g`.
 -}
 
 
-test s = runReaderT (genT (rr s :: BareType)) M.empty
+convert = flip runReaderT M.empty
 
+test s = runReaderT (genT (rr s :: BareType)) M.empty
 
 test' spec func
   = do let (cs, r) = genPrePost $ rr spec
@@ -61,6 +73,11 @@ test' spec func
                  else "UNSAFE"
          printf "%s:\tx = %d, f x = %s\n" k x v
 
+allSat' :: Provable a => a -> IO AllSatResult
+allSat' = allSatWith defaultSMTCfg{ timeOut = Just 10, Data.SBV.verbose = True }
+
+sat' :: Provable a => a -> IO SatResult
+sat' = satWith defaultSMTCfg{ timeOut = Just 10, Data.SBV.verbose = True }
 
 eval :: Typeable a => String -> IO a
 eval s = do r <- Hint.runInterpreter $ do Hint.setImportsQ [("Prelude", Nothing)]
@@ -76,15 +93,80 @@ genPrePost t = (genT t', r)
     t' = mkArrow [] [] (zip (init xs) (init ts)) (last ts)
     r  = toReft $ rt_reft rt
 
+foo :: BareType
+foo = rr "{v:[a] | (len v) = 5}"
 
 
+main = print =<< (allSat' $ convert $ genList 5 foo)
+
+deSat (SatResult s) = s
+
+-- shape :: SMTResult -> [[(String,CW)]]
+-- shape (Satisfiable _ m) = groupBy ((==) `on` snd) $ modelAssocs m
+shape (Satisfiable _ m) = M.fromListWith (++) $ map (second (:[]) . swap)
+                        $ modelAssocs m
+
+
+boo :: Symbolic SBool
+boo = do x :: SInteger <- free "x"
+         y :: SInteger <- free "x"
+         return $ x .== y
+
+
+
+data L a = N | C a (L a) deriving (Eq, Ord, Read, Show, Data, Typeable)
+
+instance (Data a, HasKind a) => HasKind [a] where
+  kindOf _ = KUninterpreted $ "list" -- ++ showType (undefined :: a)
+instance (Data a, Ord a, HasKind a) => SymWord [a]
+
+instance (Data a, HasKind a) => HasKind (L a) where
+instance (Data a, Ord a, HasKind a) => SymWord (L a)
+
+type SList a = SBV (L a)
+
+-- len :: (Data a, SymWord a) => SList a -> SInteger
+len :: SInteger -> SInteger
+len = uninterpret "len"
+
+genList :: Int -> BareType -> Convert SBool
+genList n (RApp _ [a] _ r)
+  = do nil :: SInteger <- lift $ free "nil"
+       lift $ constrain $ len nil .== 0
+       ls <- foldrM foo [nil] =<< replicateM n (lift free_)
+       l <- lift $ free "l"
+       lift $ constrain $ bOr [l .== l' | l' <- nil:ls]
+       local (M.insert "len" (toDyn (\[x::SInteger] -> len x)) . M.insert "v" (toDyn l)) $ gen $ toReft r
+  where
+    -- foo :: SList Integer -> [SList Integer] -> Convert [SList Integer]
+    foo l (l':ls) = do lift $ constrain $ len l .== len l' + 1
+
+                       return $ l:l':ls
+
+foldrM :: Monad m => (a -> b -> m b) -> b -> [a] -> m b
+foldrM f z []     = return z
+foldrM f z (x:xs) = do xs' <- foldrM f z xs
+                       f x xs'
+
+unfold f z
+  = case f z of
+      Nothing -> []
+      Just z' -> z' : unfold f z'
+
+
+-- unfoldM :: (Functor m, Monad m) => (b -> m (Maybe (a, b))) -> b -> m [a]
+unfoldM f b
+  = do mx <- f b
+       case mx of
+         Nothing     -> return []
+         Just (a,b') -> traceShow a $ (a:) <$> unfoldM f b'
 
 genT :: BareType -> Convert SBool
 genT (RApp c as ps r)
   = gen $ toReft r
 genT (RFun (S x) i o r)
   = do x' <- lift $ sInteger x
-       local (M.insert x x') $ do
+       local (M.insert x (toDyn x')) $ do
          lift . constrain =<< genT i
          genT o
 
@@ -95,18 +177,19 @@ genT (RFun (S x) i o r)
 
 gen :: Reft -> Convert SBool
 gen (Reft (S v, rs))
-  = do mv <- asks $ M.lookup v
+  = do mv <- asks (M.lookup v)
        case mv of
          Nothing -> do
            v' <- lift $ sInteger v
-           local (M.insert v v') go
+           local (M.insert v (toDyn v')) go
          Just _ -> go
   where
     go = bAnd <$> mapM (ofPred . toPred) rs
 
 toPred (RConc p) = p
 
-type Convert = ReaderT (M.Map String SInteger) Symbolic
+-- type Convert = ReaderT (M.Map String SInteger) Symbolic
+type Convert = ReaderT (M.Map String Dynamic) Symbolic
 
 ofPred :: Pred -> Convert SBool
 ofPred PTrue           = return true
@@ -128,12 +211,14 @@ ofBrel Ge = (.>=)
 ofBrel Lt = (.<)
 ofBrel Le = (.<=)
 
-ofExpr :: Expr -> Convert SInteger
-ofExpr (EVar (S s))   = asks (M.! s)
+ofExpr :: (Typeable a, OrdSymbolic a) => Expr -> Convert a
+ofExpr (EVar (S s))   = fromD <$> asks (M.! s)
 ofExpr (EBin b e1 e2) = ofBop b <$> ofExpr e1 <*> ofExpr e2
 ofExpr (ECon (I i))   = return $ literal i
+ofExpr (EApp f es)    = asks (M.! (show $ val f)) >>= \f ->
+  (fromD f ) <$> (mapM ofExpr es)
 
-ofBop :: Bop -> SInteger -> SInteger -> SInteger
+-- ofBop :: Bop -> SInteger -> SInteger -> SInteger
 ofBop Plus  = (+)
 ofBop Minus = (-)
 ofBop Times = (*)
@@ -185,3 +270,8 @@ instance Applicative Symbolic where
   f <*> x = do f <- f
                x <- x
                return $ f x
+
+deriving instance Typeable1 SBV
+
+fromD :: (Typeable a) => Dynamic -> a
+fromD d = fromDyn d (error $ "fromDyn: WRONG TYPE!!! " ++ show d)
