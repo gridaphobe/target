@@ -88,18 +88,31 @@ driver :: Constrain a => Int -> BareType -> a -> IO a
 driver d t v
   = do let (cs, vs) = runGen $ constrain d v t
            cts      = ctors v
+           -- nullary constructors, needed later
            consts   = filter (notFun . snd) cts
            notFun (FFunc _ _) = False
            notFun _           = True
        ctx <- makeContext Z3
+       -- declare data constructors
        mapM_ (\ (x,t)  -> command ctx $ makeDecl x t) cts
+       -- declare variables
        mapM_ (\ x      -> command ctx $ Declare (symbol x) [] FInt) vs
+       -- declare measures
+       -- should be part of type class..
        command ctx $ Declare (stringSymbol "len") [FInt] FInt
-       smtWrite ctx "(assert (forall ((x Int)) (=> (= x nil) (= (len x) 0))))"
+       -- send assertions about nullary constructors, e.g. []
+       -- this should be part of the type class..
+       command ctx $ Assert $ len nil `eq` 0
+       -- smtWrite ctx "(assert (forall ((x Int)) (=> (= x nil) (= (len x) 0))))"
+       -- smtWrite ctx "(assert (forall ((x Int) (y Int) (xs Int)) (=> (= x (cons y xs)) (= (len x) (+ 1 (len xs))))))"
        mapM_ (command ctx .  Assert) cs
        print =<< command ctx CheckSat
+       -- get model for variables and nullary constructors
+       -- FIXME: does having a single [] break things when you have multiple lists?
        Values vals <- command ctx (GetValue $ map symbol vs ++ map fst consts)
+       -- TODO: at this point we'd want to refute the model and get another one
        print vals
+       -- build up the haskell value
        let x = runCons (map (first symbolString) vals) $ construct d
        cleanupContext ctx
        return x
@@ -155,7 +168,7 @@ instance Constrain a => Constrain [a] where
                return (cr ++ c:cs, l:xs)
       build l = do l' <- var <$> freshen "list"
                    (cs, v:vs) <- constrain d (undefined :: a) a
-                   let c = l' `eq` cons (var v) l
+                   let c = pAnd [l' `eq` cons (var v) l, len l' `eq` (len l + 1)]
                    return ((c:cs, showpp l':v:vs), l')
       -- build l = let l'     = freshen "list"
       --               (cs,v:vs)  = constrain d (undefined :: a) a
@@ -208,8 +221,8 @@ freshen x = fresh >>= return . (x++) . show
 var :: String -> Expr
 var = EVar . symbol
 
-len :: SMT.Expr -> SMT.Expr
-len x = SMT.app "len" [x]
+len :: Expr -> Expr
+len x = EApp (dummyLoc $ stringSymbol "len") [x]
 
 -- nil :: SMT.Expr
 -- nil = var "nil"
@@ -223,6 +236,10 @@ nil = EVar $ stringSymbol "nil"
 cons :: Expr -> Expr -> Expr
 cons x xs = EApp (dummyLoc $ stringSymbol "cons") [x,xs]
 
+
+instance Num Expr where
+  fromInteger = ECon . I . fromInteger
+  (+) = EBin Plus
 
 --------------------------------------------------------------------------------
 --- test data
