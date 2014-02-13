@@ -158,29 +158,37 @@ instance Constrain Int where
   ctors _ = []
 
 instance Constrain a => Constrain [a] where
-  constrain d _ (RApp _ [a] _ r) = act -- (concat cs, concat vs)
+  constrain d _ (RApp _ [a] ps r) = act -- (concat cs, concat vs)
     where
-      act = do (cs,xs) <- (concat *** concat) . unzip <$> unfoldrNM d build nil
+      concat4 (a,b,c,d) = (concat a, concat b, concat c, concat d)
+      unzip4 [] = ([],[],[],[])
+      unzip4 ((a,b,c,d):ts) = let (as,bs,cs,ds) = unzip4 ts
+                              in (a:as,b:bs,c:cs,d:ds)
+      act = do (cs,ls,vs,xs) <- concat4 . unzip4 <$> unfoldrNM d build ([nil],[])
                l <- freshen "list"
-               let ls = filter ("list" `isPrefixOf`) xs
-                   c  = pOr $ map (var l `eq`) (nil : map var ls)
+               let c  = pOr $ map (var l `eq`) (nil : ls)
                    cr = ofReft l $ toReft r
+                   -- cxs = foldr buildAbs [] vs
                return (cr ++ c:cs, l:xs)
-      build l = do l' <- var <$> freshen "list"
-                   (cs, v:vs) <- constrain d (undefined :: a) a
-                   let c = pAnd [l' `eq` cons (var v) l, len l' `eq` (len l + 1)]
-                   return ((c:cs, showpp l':v:vs), l')
-      -- build l = let l'     = freshen "list"
-      --               (cs,v:vs)  = constrain d (undefined :: a) a
-      --               c = l' `eq` cons (var v) l
-      --           in Just ((c:cs, showpp l':v:vs), l')
-  -- construct d svs = (ls,rest)
-  --   where
-  --     (lvs,rest)              = first toQuads $ splitAt (d*2) svs
-  --     toQuads []              = []
-  --     toQuads ((x,y):(z,w):r) = (x,y,z,w) : toQuads r
-  --     ls                      = scanl build ("nil",[]) lvs
-  --     build (_,l) (_,x,_,v)   = (x,v:l)
+
+      buildAbs :: Expr -> [Expr] -> Pred
+      buildAbs h ts = pAnd [h `rel` t | t <- ts]
+        where
+          rel x y = pAnd [subst su p | RPoly [(sx,_)] (RVar _ r) <- ps
+                                     , let Reft (sy, ras) = toReft r
+                                     , RConc p <- ras
+                                     , let su = mkSubst [(sx,x), (sy,y)]
+                                     ]
+      -- build :: ([Expr],[Expr]) -> Gen ((Constraint, [Expr], [Expr], [String]), ([Expr], [Expr]))
+      build (l:ls,vs)
+        = do l' <- var <$> freshen "list"
+             (cs, x:xs) <- constrain d (undefined :: a) a
+             let v = var x
+                 c = pAnd [ l' `eq` cons v l
+                          , len l' `eq` (len l + 1)
+                          , buildAbs v vs]
+             return ((c:cs, l':l:ls, v:vs, showpp l':x:xs), (l':l:ls, v:vs))
+
   construct d = do (_,x) <- pop
                    ls    <- unfoldrNM d build []
                    n     <- fromJust . lookup "nil" <$> get
@@ -190,6 +198,7 @@ instance Constrain a => Constrain [a] where
                    x::a  <- construct d
                    return ((v,x:l),x:l)
   ctors _ = [(stringSymbol "nil", FInt), (stringSymbol "cons", FFunc 2 [FInt, FInt, FInt])]
+         ++ ctors (undefined :: a)
 
 unfoldrM :: Monad m => (a -> m (b, a)) -> a -> m [b]
 unfoldrM f z
@@ -218,7 +227,7 @@ freshen x = fresh >>= return . (x++) . show
 -- var :: String -> SMT.Expr
 -- var = flip SMT.app [] . fromString
 
-var :: String -> Expr
+var :: Symbolic a => a -> Expr
 var = EVar . symbol
 
 len :: Expr -> Expr
@@ -228,7 +237,7 @@ len x = EApp (dummyLoc $ stringSymbol "len") [x]
 -- nil = var "nil"
 
 nil :: Expr
-nil = EVar $ stringSymbol "nil"
+nil = var ("nil" :: String)
 
 -- cons :: SMT.Expr -> SMT.Expr -> SMT.Expr
 -- cons x xs = SMT.app "cons" [x,xs]
@@ -240,13 +249,22 @@ cons x xs = EApp (dummyLoc $ stringSymbol "cons") [x,xs]
 instance Num Expr where
   fromInteger = ECon . I . fromInteger
   (+) = EBin Plus
+  (-) = EBin Minus
+  (*) = EBin Times
+
+instance Real Expr
+instance Enum Expr
+
+instance Integral Expr where
+  div = EBin Div
+  mod = EBin Mod
 
 --------------------------------------------------------------------------------
 --- test data
 --------------------------------------------------------------------------------
 
 t :: BareType
-t = rr "{v:[{v0:Int | v0 >= 0}] | (len v) > 0}"
+t = rr "{v:[{v0:Int | (v0 >= 0 && v0 < 10)}]<{\\h t -> h < t}> | (len v) >= 3}"
 
 
 list :: [Int]
