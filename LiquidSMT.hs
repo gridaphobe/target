@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -7,8 +8,10 @@ module LiquidSMT where
 import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad.State
+import           Data.Function
 import           Data.List
 import           Data.Maybe
+import           Data.Ord
 import           Data.String
 import qualified Data.Text.Lazy as T
 import           Debug.Trace
@@ -19,6 +22,7 @@ import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.Parse
 import           Language.Haskell.Liquid.Types hiding (ctors, var)
 import           System.Exit
+import           System.IO.Unsafe
 import           Text.PrettyPrint.HughesPJ hiding (first)
 
 import qualified SMTLib2 as SMT
@@ -84,52 +88,78 @@ ofBop Mod   = SMT.nMod
 -- type Value     = SMT.Literal
 
 
-driver :: Constrain a => Int -> BareType -> a -> IO a
+driver :: Constrain a => Int -> BareType -> a -> IO [a]
 driver d t v
-  = do let (cs, vs) = runGen $ constrain d v t
-           cts      = ctors v
-           -- nullary constructors, needed later
-           consts   = filter (notFun . snd) cts
-           notFun (FFunc _ _) = False
-           notFun _           = True
-       ctx <- makeContext Z3
+  = do ctx <- makeContext Z3
+       -- declare sorts
+       mapM_ (\ s      -> command ctx $ Define s) (sorts v)
        -- declare data constructors
        mapM_ (\ (x,t)  -> command ctx $ makeDecl x t) cts
        -- declare variables
-       mapM_ (\ x      -> command ctx $ Declare (symbol x) [] FInt) vs
+       mapM_ (\ x      -> command ctx $ Declare (symbol x) [] (fst x)) vs
        -- declare measures
        -- should be part of type class..
-       command ctx $ Declare (stringSymbol "len") [FInt] FInt
+       command ctx $ Declare (stringSymbol "len") [FObj $ stringSymbol "GHC.Types.List"] FInt
        -- send assertions about nullary constructors, e.g. []
        -- this should be part of the type class..
        command ctx $ Assert $ len nil `eq` 0
        -- smtWrite ctx "(assert (forall ((x Int)) (=> (= x nil) (= (len x) 0))))"
        -- smtWrite ctx "(assert (forall ((x Int) (y Int) (xs Int)) (=> (= x (cons y xs)) (= (len x) (+ 1 (len xs))))))"
        mapM_ (command ctx .  Assert) cs
-       print =<< command ctx CheckSat
-       -- get model for variables and nullary constructors
-       -- FIXME: does having a single [] break things when you have multiple lists?
-       Values vals <- command ctx (GetValue $ map symbol vs ++ map fst consts)
-       -- TODO: at this point we'd want to refute the model and get another one
-       print vals
+       -- print =<< command ctx CheckSat
+       -- -- get model for variables and nullary constructors
+       -- -- FIXME: does having a single [] break things when you have multiple lists?
+       -- Values vals <- command ctx (GetValue $ map symbol vs ++ map fst consts)
+       -- -- TODO: at this point we'd want to refute the model and get another one
+       -- print vals
+       vals <- take 10 <$> allSat ctx
        -- build up the haskell value
-       let x = runCons (map (first symbolString) vals) $ construct d
-       cleanupContext ctx
-       return x
+       let xs = map (flip runCons (construct d) . map (first symbolString)) vals
+--       cleanupContext ctx
+       return xs
+  where
+    (cs, vs) = runGen $ constrain d v t
+    unints   = [symbol v | (t,v) <- vs, t /= FInt] ++ [c | (c,t) <- consts, t /= FInt]
+    cts      = ctors v
+    -- nullary constructors, needed later
+    consts   = filter (notFun . snd) cts
+    notFun (FFunc _ _) = False
+    notFun _           = True
+    allSat ctx = do resp <- command ctx CheckSat
+                    case resp of
+                      Unsat -> return []
+                      Sat   -> unsafeInterleaveIO $
+                               do Values vals <- command ctx (GetValue $ map symbol vs ++ map fst consts)
+                                  let cs = refute vals
+                                  command ctx $ Assert $ PNot $ pAnd cs
+                                  (vals:) <$> allSat ctx
+    refute model = let equiv = map (map fst) . filter ((>1) . length) . groupBy ((==) `on` snd) . sortBy (comparing snd) $ model
+                   in  [var x `eq` (ESym $ SL v) | (x,v) <- model, x `notElem` unints]
+                   ++ [var x `eq` var y | cls <- equiv
+                                        , x   <- cls
+                                        , y   <- cls
+                                        , x /= y]
 
 makeDecl x (FFunc _ ts) = Declare x (init ts) (last ts)
-makeDecl x t            = Declare x []        FInt
+makeDecl x t            = Declare x []        t
 
 type Constraint = [Pred]
+type Variable   = ( Sort   -- ^ the `sort'
+                  , String -- ^ the name
+                  )
 type Value      = String
+
+instance Symbolic Variable where
+  symbol (s, x) = symbol x
 
 instance SMTLIB2 Constraint where
   smt2 = smt2 . PAnd
 
 class Constrain a where
-  constrain :: Int -> a -> BareType -> Gen (Constraint, [String])
+  constrain :: Int -> a -> BareType -> Gen (Constraint, [Variable])
   construct :: Int -> Cons a
   ctors     :: a -> [(Symbol, Sort)]
+  sorts     :: a -> [Sort]
 
 type Gen  = State Int
 type Cons = State [(String,Value)]
@@ -138,6 +168,9 @@ fresh :: Gen Int
 fresh = do i <- get
            modify (+1)
            return i
+
+freshen :: Sort -> Gen Variable
+freshen x = fresh >>= return . (x,) . (T.unpack (smt2 x) ++) . show
 
 runGen :: Gen a -> a
 runGen x = evalState x 0
@@ -151,11 +184,12 @@ runCons :: [(String,Value)] -> Cons a -> a
 runCons svs act = evalState act svs
 
 instance Constrain Int where
-  constrain _ _ (RApp _ [] _ r) = do x <- freshen "v"
-                                     return $ (ofReft x $ toReft r, [x])
+  constrain _ _ (RApp _ [] _ r) = do x <- freshen FInt
+                                     return $ (ofReft (snd x) $ toReft r, [x])
   construct _ = do (_,v) <- pop
                    return $ read v
   ctors _ = []
+  sorts _ = []
 
 instance Constrain a => Constrain [a] where
   constrain d _ (RApp _ [a] ps r) = act -- (concat cs, concat vs)
@@ -165,9 +199,9 @@ instance Constrain a => Constrain [a] where
       unzip4 ((a,b,c,d):ts) = let (as,bs,cs,ds) = unzip4 ts
                               in (a:as,b:bs,c:cs,d:ds)
       act = do (cs,ls,vs,xs) <- concat4 . unzip4 <$> unfoldrNM d build ([nil],[])
-               l <- freshen "list"
+               l <- freshen $ FObj $ stringSymbol "GHC.Types.List"
                let c  = pOr $ map (var l `eq`) (nil : ls)
-                   cr = ofReft l $ toReft r
+                   cr = ofReft (snd l) $ toReft r
                    -- cxs = foldr buildAbs [] vs
                return (cr ++ c:cs, l:xs)
 
@@ -181,13 +215,14 @@ instance Constrain a => Constrain [a] where
                                      ]
       -- build :: ([Expr],[Expr]) -> Gen ((Constraint, [Expr], [Expr], [String]), ([Expr], [Expr]))
       build (l:ls,vs)
-        = do l' <- var <$> freshen "list"
+        = do l' <- freshen $ FObj $ stringSymbol "GHC.Types.List"
              (cs, x:xs) <- constrain d (undefined :: a) a
              let v = var x
-                 c = pAnd [ l' `eq` cons v l
-                          , len l' `eq` (len l + 1)
+                 lv = var $ snd l'
+                 c = pAnd [ lv `eq` cons v l
+                          , len lv `eq` (len l + 1)
                           , buildAbs v vs]
-             return ((c:cs, l':l:ls, v:vs, showpp l':x:xs), (l':l:ls, v:vs))
+             return ((c:cs, lv:l:ls, v:vs, l':x:xs), (lv:l:ls, v:vs))
 
   construct d = do (_,x) <- pop
                    ls    <- unfoldrNM d build []
@@ -197,8 +232,11 @@ instance Constrain a => Constrain [a] where
       build l = do (_,v) <- pop
                    x::a  <- construct d
                    return ((v,x:l),x:l)
-  ctors _ = [(stringSymbol "nil", FInt), (stringSymbol "cons", FFunc 2 [FInt, FInt, FInt])]
+  ctors _ = [(stringSymbol "nil", listsort), (stringSymbol "cons", FFunc 2 [FInt, listsort, listsort])]
          ++ ctors (undefined :: a)
+  sorts _ = [FObj $ stringSymbol "GHC.Types.List"] ++ sorts (undefined :: a)
+
+listsort = FObj $ stringSymbol "GHC.Types.List"
 
 unfoldrM :: Monad m => (a -> m (b, a)) -> a -> m [b]
 unfoldrM f z
@@ -221,8 +259,6 @@ eq = PAtom Eq
 -- fresh :: Expr -> Expr
 -- fresh (EVar x) = EVar . symbol . (++ "_") $ symbolString x
 
-freshen :: String -> Gen String
-freshen x = fresh >>= return . (x++) . show
 
 -- var :: String -> SMT.Expr
 -- var = flip SMT.app [] . fromString
@@ -264,7 +300,7 @@ instance Integral Expr where
 --------------------------------------------------------------------------------
 
 t :: BareType
-t = rr "{v:[{v0:Int | (v0 >= 0 && v0 < 10)}]<{\\h t -> h < t}> | (len v) >= 3}"
+t = rr "{v:[{v0:Int | (v0 >= 0 && v0 < 6)}]<{\\h t -> h < t}> | (len v) >= 3}"
 
 
 list :: [Int]
