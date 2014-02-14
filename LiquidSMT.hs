@@ -16,6 +16,7 @@ import           Data.Default
 import           Data.Function
 import           Data.List
 import           Data.Maybe
+import           Data.Monoid
 import           Data.Ord
 import           Data.String
 import qualified Data.Text.Lazy as T
@@ -25,6 +26,7 @@ import           Language.Fixpoint.Parse
 import           Language.Fixpoint.SmtLib2
 import           Language.Fixpoint.Types hiding (prop)
 import           Language.Haskell.Liquid.Parse
+import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Types hiding (ctors, var)
 import           System.Exit
 import           System.IO.Unsafe
@@ -86,7 +88,7 @@ driver d t v = runGen $ do
   where
     -- (cs, vs) = runGen $ constrain d v t
     unints vs = [symbol v | (v,t) <- vs ++ consts, t `elem` interps]
-    interps = [boolsort]
+    interps = [FInt, boolsort]
     cts       = ctors v
     -- -- nullary constructors, needed later
     consts   = filter (notFun . snd) cts
@@ -302,16 +304,19 @@ instance Constrain Int where
 
 instance (Constrain a) => Constrain [a] where
   gen _ 0 t = gen_nil t
-  gen _ n t = do x1 <- gen_nil t
-                 x2 <- gen_cons ((undefined :: a) : []) n t
-                 x3 <- freshChoose [x1,x2] listsort
-                 return x3
+  gen _ n t@(RApp c [ta] ps r)
+    = do let t' = RApp c [ta] ps mempty
+         x1 <- gen_nil t'
+         (x2,c) <- gen_cons ((undefined :: a) : []) n t'
+         x3 <- freshChoose [x1,x2] listsort
+         constrain $ ofReft x3 (toReft r)
+         return x3
 
   -- stitch n = error "TODO: Constrain [a] stitch"
   stitch 0 = stitch_nil
-  stitch d = do [n,c] <- popChoices 2
-                void $ pop      -- the "actual" list, but we don't care about it
-                io $ print [n,c]
+  stitch d = do [c,n] <- popChoices 2
+                pop >>= io . print     -- the "actual" list, but we don't care about it
+--                io $ print [n,c]
                 cc    <- stitch_cons d
                 nn    <- stitch_nil
                 case (n,c) of
@@ -323,7 +328,7 @@ instance (Constrain a) => Constrain [a] where
          ++ ctors (undefined :: a)
   sorts _ = [FObj $ stringSymbol "GHC.Types.List"] ++ sorts (undefined :: a)
 
-gen_nil (RApp _ _ _ r)
+gen_nil (RApp _ _ _ _)
   = do x <- fresh listsort
        constrain $ len (var x) `eq` 0
        return x
@@ -331,15 +336,22 @@ gen_nil (RApp _ _ _ r)
 stitch_nil
   = do pop >> return []
 
-gen_cons :: Constrain a => [a] -> Int -> BareType -> Gen String
-gen_cons l@(a:_) n t@(RApp _ [t'] ps r)
-  = do x  <- gen a (n-1) t'
-       xs <- gen l (n-1) t
+gen_cons :: Constrain a => [a] -> Int -> BareType -> Gen (String,String)
+gen_cons l@(a:_) n t@(RApp c [ta] ps r)
+  = do x  <- gen a (n-1) ta
+       let ta' = ta `strengthen` mconcat [subst su p | RPoly [v] tp <- ps
+                                                   , let su = mkSubst [(fst v, var x)]
+                                                   , let p  = rt_reft tp
+                                                   ]
+       let t' = RApp c [ta'] ps r
+       io $ print t'
+       xs <- gen l (n-1) t'
+       c  <- return "" --peekChoice
        z  <- fresh listsort
-       constrain $ var z `eq` cons (var x) (var xs)
+--       constrain $ var z `eq` cons (var x) (var xs)
        constrain $ len (var z) `eq` len (var xs) + 1
-       constrain $ ofReft z $ toReft r
-       return z
+--       constrain $ ofReft z $ toReft r
+       return (z,c)
 
 --stitch_cons :: Constrain [a] => Int -> Gen [a]
 stitch_cons d
