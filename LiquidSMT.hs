@@ -1,13 +1,18 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module LiquidSMT where
 
 import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad.State
+import           Data.Char
+import           Data.Default
 import           Data.Function
 import           Data.List
 import           Data.Maybe
@@ -18,7 +23,7 @@ import           Debug.Trace
 import           Language.Fixpoint.Config (SMTSolver (..))
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.SmtLib2
-import           Language.Fixpoint.Types
+import           Language.Fixpoint.Types hiding (prop)
 import           Language.Haskell.Liquid.Parse
 import           Language.Haskell.Liquid.Types hiding (ctors, var)
 import           System.Exit
@@ -42,201 +47,168 @@ import qualified SMTLib2.Int as SMT
 --     where
 --       toPred (RConc p) = p
 
-
-ofReft :: String -> Reft -> Constraint
-ofReft s (Reft (v, rs))
-  -- = do v' <- freshen $ symbolString v
-  --      let s = mkSubst [(v, var v')]
-  --      return ([subst s p | RConc p <- rs], [v'])
-  = let x = mkSubst [(v, var s)]
-    in [subst x p | RConc p <- rs]
-
-ofPred :: Pred -> SMT.Expr
-ofPred PTrue           = SMT.true
-ofPred PFalse          = SMT.false
-ofPred (PAnd ps)       = SMT.app "and" $ map ofPred ps
-ofPred (POr ps)        = SMT.app "or"  $ map ofPred ps
-ofPred (PNot p)        = SMT.not       $ ofPred p
-ofPred (PImp p q)      = ofPred p SMT.==> ofPred q
-ofPred (PIff p q)      = SMT.app "iff" [ofPred p, ofPred q]
-ofPred (PBexp e)       = undefined -- ofExpr e
-ofPred (PAtom b e1 e2) = ofBrel b (ofExpr e1) (ofExpr e2)
-ofPred (PAll ss p)     = undefined
-ofPred PTop            = undefined
-
-ofBrel Eq = (SMT.===)
-ofBrel Ne = (SMT.=/=)
-ofBrel Gt = SMT.nGt
-ofBrel Ge = SMT.nGeq
-ofBrel Lt = SMT.nLt
-ofBrel Le = SMT.nLeq
-
-ofExpr :: Expr -> SMT.Expr
-ofExpr (EVar (S s))   = SMT.Lit $ SMT.LitStr s
-ofExpr (EBin b e1 e2) = ofBop b (ofExpr e1) (ofExpr e2)
-ofExpr (ECon (I i))   = SMT.num i
-ofExpr (EApp f es)    = SMT.app (fromString $ show $ val f) $ map ofExpr es
-
-ofBop Plus  = SMT.nAdd
-ofBop Minus = SMT.nSub
-ofBop Times = SMT.nMul
-ofBop Div   = SMT.nDiv
-ofBop Mod   = SMT.nMod
-
-
--- type Constraint = [SMT.Expr]
--- type Value     = SMT.Literal
-
+io = liftIO
 
 driver :: Constrain a => Int -> BareType -> a -> IO [a]
-driver d t v
-  = do ctx <- makeContext Z3
+driver d t v = runGen $ do
+       void $ gen v d t
+       ctx <- io $ makeContext Z3
        -- declare sorts
-       mapM_ (\ s      -> command ctx $ Define s) (sorts v)
+       mapM_ (\ s      -> io . command ctx $ Define s) (sorts v)
        -- declare data constructors
-       mapM_ (\ (x,t)  -> command ctx $ makeDecl x t) cts
+       mapM_ (\ (x,t)  -> io . command ctx $ makeDecl (symbol x) t) cts
        -- declare variables
-       mapM_ (\ x      -> command ctx $ Declare (symbol x) [] (fst x)) vs
+       vs <- gets variables
+       mapM_ (\ x      -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
        -- declare measures
        -- should be part of type class..
-       command ctx $ Declare (stringSymbol "len") [FObj $ stringSymbol "GHC.Types.List"] FInt
+       io $ command ctx $ Declare (stringSymbol "len") [FObj $ stringSymbol "GHC.Types.List"] FInt
        -- send assertions about nullary constructors, e.g. []
        -- this should be part of the type class..
-       command ctx $ Assert $ len nil `eq` 0
+--       command ctx $ Assert $ len nil `eq` 0
        -- smtWrite ctx "(assert (forall ((x Int)) (=> (= x nil) (= (len x) 0))))"
        -- smtWrite ctx "(assert (forall ((x Int) (y Int) (xs Int)) (=> (= x (cons y xs)) (= (len x) (+ 1 (len xs))))))"
-       mapM_ (command ctx .  Assert) cs
+       cs <- gets constraints
+       mapM_ (io . command ctx .  Assert) cs
        -- print =<< command ctx CheckSat
        -- -- get model for variables and nullary constructors
        -- -- FIXME: does having a single [] break things when you have multiple lists?
        -- Values vals <- command ctx (GetValue $ map symbol vs ++ map fst consts)
        -- -- TODO: at this point we'd want to refute the model and get another one
        -- print vals
-       vals <- take 10 <$> allSat ctx
+       vals <- io $ take 10 <$> allSat ctx vs
        -- build up the haskell value
-       let xs = map (flip runCons (construct d) . map (first symbolString)) vals
+       xs <- forM vals $ \ vs -> do
+         setValues vs
+         stitch d
 --       cleanupContext ctx
        return xs
   where
-    (cs, vs) = runGen $ constrain d v t
-    unints   = [symbol v | (t,v) <- vs, t /= FInt] ++ [c | (c,t) <- consts, t /= FInt]
-    cts      = ctors v
-    -- nullary constructors, needed later
+    -- (cs, vs) = runGen $ constrain d v t
+    unints vs = [symbol v | (v,t) <- vs ++ consts, t `elem` interps]
+    interps = [boolsort]
+    cts       = ctors v
+    -- -- nullary constructors, needed later
     consts   = filter (notFun . snd) cts
     notFun (FFunc _ _) = False
     notFun _           = True
-    allSat ctx = do resp <- command ctx CheckSat
-                    case resp of
-                      Unsat -> return []
-                      Sat   -> unsafeInterleaveIO $
-                               do Values vals <- command ctx (GetValue $ map symbol vs ++ map fst consts)
-                                  let cs = refute vals
-                                  command ctx $ Assert $ PNot $ pAnd cs
-                                  (vals:) <$> allSat ctx
-    refute model = let equiv = map (map fst) . filter ((>1) . length) . groupBy ((==) `on` snd) . sortBy (comparing snd) $ model
-                   in  [var x `eq` (ESym $ SL v) | (x,v) <- model, x `notElem` unints]
-                   ++ [var x `eq` var y | cls <- equiv
-                                        , x   <- cls
-                                        , y   <- cls
-                                        , x /= y]
+    allSat ctx vs
+      = do resp <- command ctx CheckSat
+--           print resp
+           case resp of
+             Error e -> error $ T.unpack e
+             Unsat   -> return []
+             Sat     -> unsafeInterleaveIO $ do
+               Values vals <- command ctx (GetValue $ map symbol vs ++ map symbol consts)
+               let cs = refute vals vs
+               command ctx $ Assert $ PNot $ pAnd cs
+               (map snd vals:) <$> allSat ctx vs
+
+    refute model vs = let equiv = map (map fst) . filter ((>1) . length) . groupBy ((==) `on` snd) . sortBy (comparing snd) $ model
+                      in [var x `eq` (ESym $ SL v) | (x,v) <- model, x `elem` unints vs]
+                   -- ++ [var x `eq` var y | cls <- equiv
+                   --                      , x   <- cls
+                   --                      , y   <- cls
+                   --                      , x /= y]
 
 makeDecl x (FFunc _ ts) = Declare x (init ts) (last ts)
 makeDecl x t            = Declare x []        t
 
 type Constraint = [Pred]
-type Variable   = ( Sort   -- ^ the `sort'
-                  , String -- ^ the name
+type Variable   = ( String -- ^ the name
+                  , Sort   -- ^ the `sort'
                   )
 type Value      = String
 
 instance Symbolic Variable where
-  symbol (s, x) = symbol x
+  symbol (x, s) = symbol x
 
 instance SMTLIB2 Constraint where
   smt2 = smt2 . PAnd
 
-class Constrain a where
-  constrain :: Int -> a -> BareType -> Gen (Constraint, [Variable])
-  construct :: Int -> Cons a
-  ctors     :: a -> [(Symbol, Sort)]
-  sorts     :: a -> [Sort]
+-- class Constrain a where
+--   constrain :: Int -> a -> BareType -> Gen (Constraint, [Variable])
+--   construct :: Int -> Cons a
+--   ctors     :: a -> [(Symbol, Sort)]
+--   sorts     :: a -> [Sort]
 
-type Gen  = State Int
-type Cons = State [(String,Value)]
+-- type Gen  = State Int
+-- type Cons = State [(String,Value)]
 
-fresh :: Gen Int
-fresh = do i <- get
-           modify (+1)
-           return i
+-- fresh :: Gen Int
+-- fresh = do i <- get
+--            modify (+1)
+--            return i
 
-freshen :: Sort -> Gen Variable
-freshen x = fresh >>= return . (x,) . (T.unpack (smt2 x) ++) . show
+-- freshen :: Sort -> Gen Variable
+-- freshen x = fresh >>= return . (x,) . (T.unpack (smt2 x) ++) . show
 
-runGen :: Gen a -> a
-runGen x = evalState x 0
+-- runGen :: Gen a -> a
+-- runGen x = evalState x 0
 
-pop :: Cons (String,Value)
-pop = do (sv:svs) <- get
-         put svs
-         return sv
+-- pop :: Cons (String,Value)
+-- pop = do (sv:svs) <- get
+--          put svs
+--          return sv
 
-runCons :: [(String,Value)] -> Cons a -> a
-runCons svs act = evalState act svs
+-- runCons :: [(String,Value)] -> Cons a -> a
+-- runCons svs act = evalState act svs
 
-instance Constrain Int where
-  constrain _ _ (RApp _ [] _ r) = do x <- freshen FInt
-                                     return $ (ofReft (snd x) $ toReft r, [x])
-  construct _ = do (_,v) <- pop
-                   return $ read v
-  ctors _ = []
-  sorts _ = []
+-- instance Constrain Int where
+--   constrain _ _ (RApp _ [] _ r) = do x <- freshen FInt
+--                                      return $ (ofReft (snd x) $ toReft r, [x])
+--   construct _ = do (_,v) <- pop
+--                    return $ read v
+--   ctors _ = []
+--   sorts _ = []
 
-instance Constrain a => Constrain [a] where
-  constrain d _ (RApp _ [a] ps r) = act -- (concat cs, concat vs)
-    where
-      concat4 (a,b,c,d) = (concat a, concat b, concat c, concat d)
-      unzip4 [] = ([],[],[],[])
-      unzip4 ((a,b,c,d):ts) = let (as,bs,cs,ds) = unzip4 ts
-                              in (a:as,b:bs,c:cs,d:ds)
-      act = do (cs,ls,vs,xs) <- concat4 . unzip4 <$> unfoldrNM d build ([nil],[])
-               l <- freshen $ FObj $ stringSymbol "GHC.Types.List"
-               let c  = pOr $ map (var l `eq`) (nil : ls)
-                   cr = ofReft (snd l) $ toReft r
-                   -- cxs = foldr buildAbs [] vs
-               return (cr ++ c:cs, l:xs)
+-- instance Constrain a => Constrain [a] where
+--   constrain d _ (RApp _ [a] ps r) = act -- (concat cs, concat vs)
+--     where
+--       concat4 (a,b,c,d) = (concat a, concat b, concat c, concat d)
+--       unzip4 [] = ([],[],[],[])
+--       unzip4 ((a,b,c,d):ts) = let (as,bs,cs,ds) = unzip4 ts
+--                               in (a:as,b:bs,c:cs,d:ds)
+--       act = do (cs,ls,vs,xs) <- concat4 . unzip4 <$> unfoldrNM d build ([nil],[])
+--                l <- freshen $ FObj $ stringSymbol "GHC.Types.List"
+--                let c  = pOr $ map (var l `eq`) (nil : ls)
+--                    cr = ofReft (snd l) $ toReft r
+--                    -- cxs = foldr buildAbs [] vs
+--                return (cr ++ c:cs, l:xs)
 
-      buildAbs :: Expr -> [Expr] -> Pred
-      buildAbs h ts = pAnd [h `rel` t | t <- ts]
-        where
-          rel x y = pAnd [subst su p | RPoly [(sx,_)] (RVar _ r) <- ps
-                                     , let Reft (sy, ras) = toReft r
-                                     , RConc p <- ras
-                                     , let su = mkSubst [(sx,x), (sy,y)]
-                                     ]
-      -- build :: ([Expr],[Expr]) -> Gen ((Constraint, [Expr], [Expr], [String]), ([Expr], [Expr]))
-      build (l:ls,vs)
-        = do l' <- freshen $ FObj $ stringSymbol "GHC.Types.List"
-             (cs, x:xs) <- constrain d (undefined :: a) a
-             let v = var x
-                 lv = var $ snd l'
-                 c = pAnd [ lv `eq` cons v l
-                          , len lv `eq` (len l + 1)
-                          , buildAbs v vs]
-             return ((c:cs, lv:l:ls, v:vs, l':x:xs), (lv:l:ls, v:vs))
+--       buildAbs :: Expr -> [Expr] -> Pred
+--       buildAbs h ts = pAnd [h `rel` t | t <- ts]
+--         where
+--           rel x y = pAnd [subst su p | RPoly [(sx,_)] (RVar _ r) <- ps
+--                                      , let Reft (sy, ras) = toReft r
+--                                      , RConc p <- ras
+--                                      , let su = mkSubst [(sx,x), (sy,y)]
+--                                      ]
+--       -- build :: ([Expr],[Expr]) -> Gen ((Constraint, [Expr], [Expr], [String]), ([Expr], [Expr]))
+--       build (l:ls,vs)
+--         = do l' <- freshen $ FObj $ stringSymbol "GHC.Types.List"
+--              (cs, x:xs) <- constrain d (undefined :: a) a
+--              let v = var x
+--                  lv = var $ snd l'
+--                  c = pAnd [ lv `eq` cons v l
+--                           , len lv `eq` (len l + 1)
+--                           , buildAbs v vs]
+--              return ((c:cs, lv:l:ls, v:vs, l':x:xs), (lv:l:ls, v:vs))
 
-  construct d = do (_,x) <- pop
-                   ls    <- unfoldrNM d build []
-                   n     <- fromJust . lookup "nil" <$> get
-                   return $ fromJust $ lookup (traceShow x x) ((n, []):ls)
-    where
-      build l = do (_,v) <- pop
-                   x::a  <- construct d
-                   return ((v,x:l),x:l)
-  ctors _ = [(stringSymbol "nil", listsort), (stringSymbol "cons", FFunc 2 [FInt, listsort, listsort])]
-         ++ ctors (undefined :: a)
-  sorts _ = [FObj $ stringSymbol "GHC.Types.List"] ++ sorts (undefined :: a)
+--   construct d = do (_,x) <- pop
+--                    ls    <- unfoldrNM d build []
+--                    n     <- fromJust . lookup "nil" <$> get
+--                    return $ fromJust $ lookup (traceShow x x) ((n, []):ls)
+--     where
+--       build l = do (_,v) <- pop
+--                    x::a  <- construct d
+--                    return ((v,x:l),x:l)
+--   ctors _ = [(stringSymbol "nil", listsort), (stringSymbol "cons", FFunc 2 [FInt, listsort, listsort])]
+--          ++ ctors (undefined :: a)
+--   sorts _ = [FObj $ stringSymbol "GHC.Types.List"] ++ sorts (undefined :: a)
 
 listsort = FObj $ stringSymbol "GHC.Types.List"
+boolsort = FObj $ stringSymbol "Bool"
 
 unfoldrM :: Monad m => (a -> m (b, a)) -> a -> m [b]
 unfoldrM f z
@@ -251,32 +223,155 @@ unfoldrNM d f z
        xs     <- unfoldrNM (d-1) f z'
        return (x:xs)
 
-eq = PAtom Eq
+newtype Gen a = Gen (StateT GenState IO a)
+  deriving (Functor, Applicative, Monad, MonadIO, MonadState GenState)
 
--- fresh :: SMT.Expr -> SMT.Expr
--- fresh x = var $ (++"_") $ render $ SMT.pp x
+runGen :: Gen a -> IO a
+runGen (Gen x) = evalStateT x def
 
--- fresh :: Expr -> Expr
--- fresh (EVar x) = EVar . symbol . (++ "_") $ symbolString x
+execGen :: Gen a -> IO GenState
+execGen (Gen x) = execStateT x def
 
+data GenState
+  = GS { seed        :: Int
+       , variables   :: [Variable]
+       , choices     :: [String]
+       , constraints :: Constraint
+       , values      :: [String]
+       } deriving (Show)
 
--- var :: String -> SMT.Expr
--- var = flip SMT.app [] . fromString
+instance Default GenState where
+  def = GS def def def def def
+
+setValues vs = modify $ \s@(GS {..}) -> s { values = vs }
+
+fresh :: Sort -> Gen String
+fresh sort
+  = do n <- gets seed
+       modify $ \s@(GS {..}) -> s { seed = seed + 1 }
+       let x = T.unpack (smt2 sort) ++ show n
+       modify $ \s@(GS {..}) -> s { variables = (x,sort) : variables }
+       return x
+
+freshChoice :: Gen String
+freshChoice
+  = do c <- fresh boolsort
+       modify $ \s@(GS {..}) -> s { choices = c : choices }
+       return c
+
+freshChoose :: [String] -> Sort -> Gen String
+freshChoose xs sort
+  = do x <- fresh sort
+       cs <- forM xs $ \x' -> do
+               c <- freshChoice
+               constrain $ prop c `iff` var x `eq` var x'
+               return $ prop c
+       constrain $ pOr cs
+       return x
+
+constrain :: Pred -> Gen ()
+constrain p = modify $ \s@(GS {..}) -> s { constraints = p : constraints }
+
+pop :: Gen String
+pop = do v <- gets $ head . values
+         modify $ \s@(GS {..}) -> s { values = tail values}
+         return v
+
+popN :: Int -> Gen [String]
+popN d = replicateM d pop
+
+popChoices :: Int -> Gen [Bool]
+popChoices n = fmap read <$> popN n
+  where
+    read "true"  = True
+    read "false" = False
+    read e       = error $ "popChoices: " ++ e
+
+class Constrain a where
+  gen    :: a -> Int -> BareType -> Gen String
+  stitch :: Int -> Gen a
+  sorts  :: a -> [Sort]
+  ctors  :: a -> [Variable]
+
+instance Constrain Int where
+  gen _ _  (RApp _ [] _ r) = fresh FInt >>= \x -> do constrain $ ofReft x (toReft r)
+                                                     return x
+  stitch _                 = read <$> pop
+  sorts _                  = []
+  ctors _                  = []
+
+instance (Constrain a) => Constrain [a] where
+  gen _ 0 t = gen_nil t
+  gen _ n t = do x1 <- gen_nil t
+                 x2 <- gen_cons ((undefined :: a) : []) n t
+                 x3 <- freshChoose [x1,x2] listsort
+                 return x3
+
+  -- stitch n = error "TODO: Constrain [a] stitch"
+  stitch 0 = stitch_nil
+  stitch d = do [n,c] <- popChoices 2
+                void $ pop      -- the "actual" list, but we don't care about it
+                io $ print [n,c]
+                cc    <- stitch_cons d
+                nn    <- stitch_nil
+                case (n,c) of
+                  (True,_) -> return nn
+                  (_,True) -> return cc
+
+  ctors _ = [ ("nil", listsort)
+            , ("cons", FFunc 2 [FInt, listsort, listsort])]
+         ++ ctors (undefined :: a)
+  sorts _ = [FObj $ stringSymbol "GHC.Types.List"] ++ sorts (undefined :: a)
+
+gen_nil (RApp _ _ _ r)
+  = do x <- fresh listsort
+       constrain $ len (var x) `eq` 0
+       return x
+
+stitch_nil
+  = do pop >> return []
+
+gen_cons :: Constrain a => [a] -> Int -> BareType -> Gen String
+gen_cons l@(a:_) n t@(RApp _ [t'] ps r)
+  = do x  <- gen a (n-1) t'
+       xs <- gen l (n-1) t
+       z  <- fresh listsort
+       constrain $ var z `eq` cons (var x) (var xs)
+       constrain $ len (var z) `eq` len (var xs) + 1
+       constrain $ ofReft z $ toReft r
+       return z
+
+--stitch_cons :: Constrain [a] => Int -> Gen [a]
+stitch_cons d
+  = do z  <- pop
+       xs <- stitch (d-1)
+       x  <- stitch (d-1)
+       return (x:xs)
+
+ofReft :: String -> Reft -> Pred
+ofReft s (Reft (v, rs))
+  -- = do v' <- freshen $ symbolString v
+  --      let s = mkSubst [(v, var v')]
+  --      return ([subst s p | RConc p <- rs], [v'])
+  = let x = mkSubst [(v, var s)]
+    in pAnd [subst x p | RConc p <- rs]
+
+infix 4 `eq`
+eq  = PAtom Eq
+infix 3 `iff`
+iff = PIff
 
 var :: Symbolic a => a -> Expr
 var = EVar . symbol
 
+prop :: Symbolic a => a -> Pred
+prop = PBexp . EVar . symbol
+
 len :: Expr -> Expr
 len x = EApp (dummyLoc $ stringSymbol "len") [x]
 
--- nil :: SMT.Expr
--- nil = var "nil"
-
-nil :: Expr
-nil = var ("nil" :: String)
-
--- cons :: SMT.Expr -> SMT.Expr -> SMT.Expr
--- cons x xs = SMT.app "cons" [x,xs]
+-- nil :: Expr
+-- nil = var ("nil" :: String)
 
 cons :: Expr -> Expr -> Expr
 cons x xs = EApp (dummyLoc $ stringSymbol "cons") [x,xs]
@@ -302,6 +397,15 @@ instance Integral Expr where
 t :: BareType
 t = rr "{v:[{v0:Int | (v0 >= 0 && v0 < 6)}]<{\\h t -> h < t}> | (len v) >= 3}"
 
+t' :: BareType
+t' = rr "{v:[{v0:Int | (v0 >= 0 && v0 < 6)}] | true}"
+
+
+i :: BareType
+i = rr "{v:Int | v > 0}"
 
 list :: [Int]
 list = []
+
+inT :: Int
+inT = 0
