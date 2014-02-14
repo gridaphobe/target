@@ -1,3 +1,4 @@
+{-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -9,7 +10,7 @@
 module LiquidSMT where
 
 import           Control.Applicative
-import           Control.Arrow
+import           Control.Arrow hiding (app)
 import           Control.Monad.State
 import           Data.Char
 import           Data.Default
@@ -64,7 +65,8 @@ driver d t v = runGen $ do
        mapM_ (\ x      -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
        -- declare measures
        -- should be part of type class..
-       io $ command ctx $ Declare (stringSymbol "len") [FObj $ stringSymbol "GHC.Types.List"] FInt
+       io $ command ctx $ Declare (stringSymbol "len") [listsort] FInt
+       -- io $ command ctx $ Declare (stringSymbol "size") [treesort] FInt
        -- send assertions about nullary constructors, e.g. []
        -- this should be part of the type class..
 --       command ctx $ Assert $ len nil `eq` 0
@@ -269,6 +271,7 @@ freshChoose xs sort
                constrain $ prop c `iff` var x `eq` var x'
                return $ prop c
        constrain $ pOr cs
+       constrain $ pAnd [ PNot $ pAnd [x, y] | [x, y] <- filter ((==2) . length) $ subsequences cs ]
        return x
 
 constrain :: Pred -> Gen ()
@@ -304,10 +307,10 @@ instance Constrain Int where
 
 instance (Constrain a) => Constrain [a] where
   gen _ 0 t = gen_nil t
-  gen _ n t@(RApp c [ta] ps r)
+  gen _ d t@(RApp c [ta] ps r)
     = do let t' = RApp c [ta] ps mempty
-         x1 <- gen_nil t'
-         (x2,c) <- gen_cons ((undefined :: a) : []) n t'
+         x1 <- gen_nil t' -- (undefined :: [a]) (d-1) t
+         x2 <- gen_cons ((undefined :: a) : []) d t'
          x3 <- freshChoose [x1,x2] listsort
          constrain $ ofReft x3 (toReft r)
          return x3
@@ -324,9 +327,9 @@ instance (Constrain a) => Constrain [a] where
                   (_,True) -> return cc
 
   ctors _ = [ ("nil", listsort)
-            , ("cons", FFunc 2 [FInt, listsort, listsort])]
-         ++ ctors (undefined :: a)
-  sorts _ = [FObj $ stringSymbol "GHC.Types.List"] ++ sorts (undefined :: a)
+            , ("cons", FFunc 2 [FInt, listsort, listsort])
+            ] ++ ctors (undefined :: a)
+  sorts _ = [listsort] ++ sorts (undefined :: a)
 
 gen_nil (RApp _ _ _ _)
   = do x <- fresh listsort
@@ -336,22 +339,17 @@ gen_nil (RApp _ _ _ _)
 stitch_nil
   = do pop >> return []
 
-gen_cons :: Constrain a => [a] -> Int -> BareType -> Gen (String,String)
-gen_cons l@(a:_) n t@(RApp c [ta] ps r)
+gen_cons :: Constrain a => [a] -> Int -> BareType -> Gen String
+gen_cons l@(a:_) n t@(RApp c [ta] [p] r)
   = do x  <- gen a (n-1) ta
-       let ta' = ta `strengthen` mconcat [subst su p | RPoly [v] tp <- ps
-                                                   , let su = mkSubst [(fst v, var x)]
-                                                   , let p  = rt_reft tp
-                                                   ]
-       let t' = RApp c [ta'] ps r
+       let ta' = applyRef p [x] ta
+       let t'  = RApp c [ta'] [p] r
        io $ print t'
        xs <- gen l (n-1) t'
-       c  <- return "" --peekChoice
        z  <- fresh listsort
 --       constrain $ var z `eq` cons (var x) (var xs)
        constrain $ len (var z) `eq` len (var xs) + 1
---       constrain $ ofReft z $ toReft r
-       return (z,c)
+       return z
 
 --stitch_cons :: Constrain [a] => Int -> Gen [a]
 stitch_cons d
@@ -362,9 +360,6 @@ stitch_cons d
 
 ofReft :: String -> Reft -> Pred
 ofReft s (Reft (v, rs))
-  -- = do v' <- freshen $ symbolString v
-  --      let s = mkSubst [(v, var v')]
-  --      return ([subst s p | RConc p <- rs], [v'])
   = let x = mkSubst [(v, var s)]
     in pAnd [subst x p | RConc p <- rs]
 
@@ -372,6 +367,11 @@ infix 4 `eq`
 eq  = PAtom Eq
 infix 3 `iff`
 iff = PIff
+infix 3 `imp`
+imp = PImp
+
+app :: Symbolic a => a -> [Expr] -> Expr
+app f es = EApp (dummyLoc $ symbol f) es
 
 var :: Symbolic a => a -> Expr
 var = EVar . symbol
@@ -380,13 +380,13 @@ prop :: Symbolic a => a -> Pred
 prop = PBexp . EVar . symbol
 
 len :: Expr -> Expr
-len x = EApp (dummyLoc $ stringSymbol "len") [x]
+len x = app ("len" :: String) [x]
 
 -- nil :: Expr
 -- nil = var ("nil" :: String)
 
 cons :: Expr -> Expr -> Expr
-cons x xs = EApp (dummyLoc $ stringSymbol "cons") [x,xs]
+cons x xs = app ("cons" :: String) [x,xs]
 
 
 instance Num Expr where
@@ -402,12 +402,13 @@ instance Integral Expr where
   div = EBin Div
   mod = EBin Mod
 
+
 --------------------------------------------------------------------------------
 --- test data
 --------------------------------------------------------------------------------
 
 t :: BareType
-t = rr "{v:[{v0:Int | (v0 >= 0 && v0 < 6)}]<{\\h t -> h < t}> | (len v) >= 3}"
+t = rr "{v:[{v0:Int | (v0 >= 0)}]<{\\h t -> h < t}> | (len v) >= 3}"
 
 t' :: BareType
 t' = rr "{v:[{v0:Int | (v0 >= 0 && v0 < 6)}] | true}"
@@ -421,3 +422,79 @@ list = []
 
 inT :: Int
 inT = 0
+
+tree :: Tree Int
+tree = Leaf
+
+tt :: BareType
+tt = rr "{v:Tree <{\\r x -> x != r}, {\\r y -> r != y}> {v0 : Int | v0 >= 0} | (size v) = 2}"
+
+data Tree a = Leaf | Node a (Tree a) (Tree a) deriving (Eq, Ord, Show)
+treesort = FObj $ stringSymbol "Tree"
+size :: Expr -> Expr
+size x = EApp (dummyLoc $ stringSymbol "size") [x]
+treeList Leaf = []
+treeList (Node x l r) = treeList l ++ [x] ++ treeList r
+
+instance Constrain a => Constrain (Tree a) where
+  gen _ 0 t = gen_leaf t
+  gen _ d t@(RApp c [ta] ps r)
+    = do let t' = RApp c [ta] ps mempty
+         l  <- gen_leaf t'
+         nl <- gen_node (Node (undefined :: a) undefined undefined) d t'
+         nr <- gen_node (Node (undefined :: a) undefined undefined) d t'
+         z  <- freshChoose [l,nl,nr] treesort
+         constrain $ ofReft z (toReft r)
+         return z
+
+  stitch 0 = stitch_leaf
+  stitch d
+    = do [cnr,cnl,cl] <- popChoices 3
+         void pop -- "actual" tree
+         nr <- stitch_node d
+         nl <- stitch_node d
+         l  <- stitch_leaf
+         case (cnr,cnl,cl) of
+           (True,_,_) -> return nr
+           (_,True,_) -> return nl
+           (_,_,True) -> return l
+
+  ctors _ = [ ("leaf", treesort)
+            , ("node", FFunc 3 [FInt, treesort, treesort, treesort])
+            ] ++ ctors (undefined :: a)
+  sorts _ = [treesort] ++ sorts (undefined :: a)
+
+gen_leaf _
+  = do x <- fresh treesort
+       constrain $ size (var x) `eq` 0
+       return x
+
+stitch_leaf = pop >> return Leaf
+
+gen_node :: Constrain a => Tree a -> Int -> BareType -> Gen String
+gen_node foo@(Node a _ _) d t@(RApp c [ta] [pl,pr] r)
+  = do x <- gen (a) (d-1) ta
+       let tal = applyRef pl [x] ta
+       let tl  = RApp c [tal] [pl,pr] r
+       let tar = applyRef pr [x] ta
+       let tr  = RApp c [tar] [pl,pr] r
+       nl <- gen (foo) (d-1) tl
+       nr <- gen (foo) (d-1) tr
+       z  <- fresh treesort
+       constrain $ size (var z) `eq` size (var nl) + size (var nr) + 1
+       return z
+
+stitch_node d
+  = do z <- pop
+       nr <- stitch (d-1)
+       nl <- stitch (d-1)
+       x <- stitch (d-1)
+       return (Node x nl nr)
+
+
+-- applyRef :: Ref -> [Variable] -> RType
+applyRef (RPoly xs p) vs t
+  = t `strengthen` r
+  where
+    r  = subst su $ rt_reft p
+    su = mkSubst [(fst x, var v) | x <- xs | v <- vs]
