@@ -54,12 +54,14 @@ io = liftIO
 
 driver :: Constrain a => Int -> BareType -> a -> IO [a]
 driver d t v = runGen $ do
-       void $ gen v d t
+       root <- gen v d t
        ctx <- io $ makeContext Z3
+       let ctx' = ctx  -- {verbose = True}
        -- declare sorts
+       io $ smtWrite ctx "(define-sort CHOICE () Bool)"
        mapM_ (\ s      -> io . command ctx $ Define s) (sorts v)
        -- declare data constructors
-       mapM_ (\ (x,t)  -> io . command ctx $ makeDecl (symbol x) t) cts
+       --mapM_ (\ (x,t)  -> io . command ctx $ makeDecl (symbol x) t) cts
        -- declare variables
        vs <- gets variables
        mapM_ (\ x      -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
@@ -69,48 +71,85 @@ driver d t v = runGen $ do
        -- io $ command ctx $ Declare (stringSymbol "size") [treesort] FInt
        -- send assertions about nullary constructors, e.g. []
        -- this should be part of the type class..
---       command ctx $ Assert $ len nil `eq` 0
-       -- smtWrite ctx "(assert (forall ((x Int)) (=> (= x nil) (= (len x) 0))))"
-       -- smtWrite ctx "(assert (forall ((x Int) (y Int) (xs Int)) (=> (= x (cons y xs)) (= (len x) (+ 1 (len xs))))))"
+       --command ctx $ Assert $ len nil `eq` 0
+       --smtWrite ctx "(assert (forall ((x Int)) (=> (= x nil) (= (len x) 0))))"
+       --smtWrite ctx "(assert (forall ((x Int) (y Int) (xs Int)) (=> (= x (cons y xs)) (= (len x) (+ 1 (len xs))))))"
        cs <- gets constraints
+       deps <- gets deps
        mapM_ (io . command ctx .  Assert) cs
-       -- print =<< command ctx CheckSat
-       -- -- get model for variables and nullary constructors
-       -- -- FIXME: does having a single [] break things when you have multiple lists?
-       -- Values vals <- command ctx (GetValue $ map symbol vs ++ map fst consts)
-       -- -- TODO: at this point we'd want to refute the model and get another one
-       -- print vals
-       vals <- io $ take 10 <$> allSat ctx vs
+       vals <- io $ allSat ctx' (symbol root) (map (symbol *** symbol) deps) vs
        -- build up the haskell value
        xs <- forM vals $ \ vs -> do
          setValues vs
          stitch d
---       cleanupContext ctx
+       --cleanupContext ctx
        return xs
   where
     -- (cs, vs) = runGen $ constrain d v t
-    unints vs = [symbol v | (v,t) <- vs ++ consts, t `elem` interps]
-    interps = [FInt, boolsort]
-    cts       = ctors v
-    -- -- nullary constructors, needed later
-    consts   = filter (notFun . snd) cts
-    notFun (FFunc _ _) = False
-    notFun _           = True
-    allSat ctx vs
+    unints vs = [symbol v | (v,t) <- vs, t `elem` interps]
+    interps = [FInt, boolsort, choicesort]
+    -- cts       = ctors v
+    -- -- -- nullary constructors, needed later
+    -- consts   = filter (notFun . snd) cts
+    -- notFun (FFunc _ _) = False
+    -- notFun _           = True
+    allSat ctx root deps vs
       = do resp <- command ctx CheckSat
 --           print resp
            case resp of
              Error e -> error $ T.unpack e
              Unsat   -> return []
              Sat     -> unsafeInterleaveIO $ do
-               Values vals <- command ctx (GetValue $ map symbol vs ++ map symbol consts)
-               let cs = refute vals vs
+               Values model <- command ctx (GetValue $ map symbol vs)
+               let cs = refute root model deps vs
                command ctx $ Assert $ PNot $ pAnd cs
-               (map snd vals:) <$> allSat ctx vs
+               (map snd model:) <$> allSat ctx root deps vs
 
-    refute model vs = let equiv = map (map fst) . filter ((>1) . length) . groupBy ((==) `on` snd) . sortBy (comparing snd) $ model
-                      in [var x `eq` (ESym $ SL v) | (x,v) <- model, x `elem` unints vs]
-                   -- ++ [var x `eq` var y | cls <- equiv
+    -- refute model vs = let equiv = map (map fst) . filter ((>1) . length) . groupBy ((==) `on` snd) . sortBy (comparing snd) $ model
+    --                   in [var x `eq` (ESym $ SL v) | (x,v) <- model, x `elem` unints vs]
+    refute root model deps vs = let realized = reaches root model deps
+                                in [var x `eq` (ESym $ SL v) | (x,v) <- realized, x `elem` unints vs]
+
+    -- FIXME: this is going to be super slow!!
+--reaches :: String -> [(String, String)] -> [(String,String)] -> [(String, String)]
+-- reaches root model deps = [ ((v,"true"):xvs) ++ concat xvs'  | (x,v) <- deps
+--                                   , root == x
+--                                   , let b = lookup v model
+--                                   , fromMaybe "" b == "true"
+--                                   , (c,z) <- deps
+--                                   , v == c
+--                                   , let xvs = filter ((==z).fst) model
+--                                         xvs' = reaches z model deps
+--                                   ]
+-- reaches root model deps = (root,rootVal) : choices
+--                        ++ concatMap choiceReaches choices
+--   where
+--     rootVal = fromJust $ lookup root model
+--     choices = myTrace "choices" [(c,v) | (x,c) <- deps, x == root, let v = fromJust $ lookup c model]
+--     choiceReaches (c,v)
+--       | "CHOICE" `isPrefixOf` c && v == "true"
+--       = concatMap (\r -> reaches r model deps) $ myTrace "choiceReaches" [r | (x, r) <- deps, x == c]
+--       | "CHOICE" `isPrefixOf` c && v == "false"
+--       = []
+--       | otherwise
+--       = concatMap (\r -> reaches r model deps) $ myTrace "choiceReaches" [r | (x, r) <- deps, x == c]
+
+reaches root model deps = go root
+  where
+    go root
+      | isChoice && taken
+      = (root,val) : concatMap go [r | (x,r) <- deps, x == root]
+      | isChoice
+      = [(root,val)]
+      | otherwise
+      = (root,val) : concatMap go [r | (x,r) <- deps, x == root]
+      where
+        val      = fromJust $ lookup root model
+        isChoice = "CHOICE" `isPrefixOf` symbolString root
+        taken    = val == "true"
+
+myTrace s x = trace (s ++ ": " ++ show x) x
+                                   -- ++ [var x `eq` var y | cls <- equiv
                    --                      , x   <- cls
                    --                      , y   <- cls
                    --                      , x /= y]
@@ -237,38 +276,53 @@ execGen :: Gen a -> IO GenState
 execGen (Gen x) = execStateT x def
 
 data GenState
-  = GS { seed        :: Int
-       , variables   :: [Variable]
-       , choices     :: [String]
-       , constraints :: Constraint
-       , values      :: [String]
+  = GS { seed        :: !Int
+       , variables   :: ![Variable]
+       , choices     :: ![String]
+       , constraints :: !Constraint
+       , values      :: ![String]
+       , deps        :: ![(String, String)]
        } deriving (Show)
 
 instance Default GenState where
-  def = GS def def def def def
+  def = GS def def def def def def
 
 setValues vs = modify $ \s@(GS {..}) -> s { values = vs }
 
-fresh :: Sort -> Gen String
-fresh sort
+addDep from to = modify $ \s@(GS {..}) -> s { deps = (from,to):deps }
+
+-- | `fresh' generates a fresh variable and encodes the reachability
+-- relation between variables, e.g. `fresh xs sort` will return a new
+-- variable `x`, from which everything in `xs` is reachable.
+fresh :: [String] -> Sort -> Gen String
+fresh xs sort
   = do n <- gets seed
        modify $ \s@(GS {..}) -> s { seed = seed + 1 }
        let x = T.unpack (smt2 sort) ++ show n
        modify $ \s@(GS {..}) -> s { variables = (x,sort) : variables }
+       mapM_ (addDep x) xs
        return x
 
-freshChoice :: Gen String
-freshChoice
-  = do c <- fresh boolsort
+freshChoice :: [String] -> Gen String
+freshChoice xs
+  = do c <- fresh xs choicesort
        modify $ \s@(GS {..}) -> s { choices = c : choices }
        return c
 
+choicesort = FObj $ stringSymbol "CHOICE"
+
+-- choose :: String -> [String] -> Sort -> Gen String
+-- choose c xs sort
+--   = 
+
 freshChoose :: [String] -> Sort -> Gen String
 freshChoose xs sort
-  = do x <- fresh sort
+  = do x <- fresh [] sort
        cs <- forM xs $ \x' -> do
-               c <- freshChoice
+               c <- freshChoice [x']
                constrain $ prop c `iff` var x `eq` var x'
+--               addDep c x'
+               addDep x c
                return $ prop c
        constrain $ pOr cs
        constrain $ pAnd [ PNot $ pAnd [x, y] | [x, y] <- filter ((==2) . length) $ subsequences cs ]
@@ -299,8 +353,9 @@ class Constrain a where
   ctors  :: a -> [Variable]
 
 instance Constrain Int where
-  gen _ _  (RApp _ [] _ r) = fresh FInt >>= \x -> do constrain $ ofReft x (toReft r)
-                                                     return x
+  gen _ _  (RApp _ [] _ r) = fresh [] FInt >>= \x ->
+    do constrain $ ofReft x (toReft r)
+       return x
   stitch _                 = read <$> pop
   sorts _                  = []
   ctors _                  = []
@@ -318,7 +373,7 @@ instance (Constrain a) => Constrain [a] where
   -- stitch n = error "TODO: Constrain [a] stitch"
   stitch 0 = stitch_nil
   stitch d = do [c,n] <- popChoices 2
-                pop >>= io . print     -- the "actual" list, but we don't care about it
+                pop  -- the "actual" list, but we don't care about it
 --                io $ print [n,c]
                 cc    <- stitch_cons d
                 nn    <- stitch_nil
@@ -332,7 +387,7 @@ instance (Constrain a) => Constrain [a] where
   sorts _ = [listsort] ++ sorts (undefined :: a)
 
 gen_nil (RApp _ _ _ _)
-  = do x <- fresh listsort
+  = do x <- fresh [] listsort
        constrain $ len (var x) `eq` 0
        return x
 
@@ -344,9 +399,8 @@ gen_cons l@(a:_) n t@(RApp c [ta] [p] r)
   = do x  <- gen a (n-1) ta
        let ta' = applyRef p [x] ta
        let t'  = RApp c [ta'] [p] r
-       io $ print t'
        xs <- gen l (n-1) t'
-       z  <- fresh listsort
+       z  <- fresh [x,xs] listsort
 --       constrain $ var z `eq` cons (var x) (var xs)
        constrain $ len (var z) `eq` len (var xs) + 1
        return z
@@ -408,7 +462,7 @@ instance Integral Expr where
 --------------------------------------------------------------------------------
 
 t :: BareType
-t = rr "{v:[{v0:Int | (v0 >= 0)}]<{\\h t -> h < t}> | (len v) >= 3}"
+t = rr "{v:[{v0:Int | (v0 >= 0 && v0 < 5)}]<{\\h t -> h < t}> | (len v) >= 0}"
 
 t' :: BareType
 t' = rr "{v:[{v0:Int | (v0 >= 0 && v0 < 6)}] | true}"
@@ -465,7 +519,7 @@ instance Constrain a => Constrain (Tree a) where
   sorts _ = [treesort] ++ sorts (undefined :: a)
 
 gen_leaf _
-  = do x <- fresh treesort
+  = do x <- fresh [] treesort
        constrain $ size (var x) `eq` 0
        return x
 
@@ -480,7 +534,7 @@ gen_node foo@(Node a _ _) d t@(RApp c [ta] [pl,pr] r)
        let tr  = RApp c [tar] [pl,pr] r
        nl <- gen (foo) (d-1) tl
        nr <- gen (foo) (d-1) tr
-       z  <- fresh treesort
+       z  <- fresh [x,nl,nr] treesort
        constrain $ size (var z) `eq` size (var nl) + size (var nr) + 1
        return z
 
@@ -498,3 +552,24 @@ applyRef (RPoly xs p) vs t
   where
     r  = subst su $ rt_reft p
     su = mkSubst [(fst x, var v) | x <- xs | v <- vs]
+
+
+--------------------------------------------------------------------------------
+--- | Dependency Graph
+--------------------------------------------------------------------------------
+
+data Dep = Empty
+         | Choice String [Dep]
+         | Direct String Dep
+         deriving (Show, Eq)
+
+leaf = flip Direct Empty
+x20 = leaf "x20"
+x21 = leaf "x21"
+p10 = Direct "p10" x20
+p11 = Direct "p11" x21
+x10 = Choice "x10" [p10, p11]
+x11 = leaf "x11"
+p00 = Direct "p00" x10
+p01 = Direct "p01" x11
+x0  = Choice "x0" [p00, p01]
