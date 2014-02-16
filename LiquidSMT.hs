@@ -481,7 +481,7 @@ tree :: Tree Int
 tree = Leaf
 
 tt :: BareType
-tt = rr "{v:Tree <{\\r x -> x < r}, {\\r y -> r < y}> {v0 : Int | v0 >= 0} | (size v) > 0}"
+tt = rr "{v:Tree <{\\r x -> x < r}, {\\r y -> r < y}> {v0 : Int | (v0 >= 0 && v0 < 16)} | (size v) > 0}"
 
 data Tree a = Leaf | Node a (Tree a) (Tree a) deriving (Eq, Ord, Show)
 treesort = FObj $ stringSymbol "Tree"
