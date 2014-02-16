@@ -52,8 +52,8 @@ import qualified SMTLib2.Int as SMT
 
 io = liftIO
 
-driver :: Constrain a => Int -> BareType -> a -> IO [a]
-driver d t v = runGen $ do
+driver :: Constrain a => Int -> Int -> BareType -> a -> IO [a]
+driver n d t v = runGen $ do
        root <- gen v d t
        ctx <- io $ makeContext Z3
        let ctx' = ctx  -- {verbose = True}
@@ -67,8 +67,8 @@ driver d t v = runGen $ do
        mapM_ (\ x      -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
        -- declare measures
        -- should be part of type class..
-       io $ command ctx $ Declare (stringSymbol "len") [listsort] FInt
-       -- io $ command ctx $ Declare (stringSymbol "size") [treesort] FInt
+       -- io $ command ctx $ Declare (stringSymbol "len") [listsort] FInt
+       io $ command ctx $ Declare (stringSymbol "size") [treesort] FInt
        -- send assertions about nullary constructors, e.g. []
        -- this should be part of the type class..
        --command ctx $ Assert $ len nil `eq` 0
@@ -77,7 +77,7 @@ driver d t v = runGen $ do
        cs <- gets constraints
        deps <- gets deps
        mapM_ (io . command ctx .  Assert) cs
-       vals <- io $ allSat ctx' (symbol root) (map (symbol *** symbol) deps) vs
+       vals <- io $ take n <$> allSat ctx' (symbol root) (map (symbol *** symbol) deps) vs
        -- build up the haskell value
        xs <- forM vals $ \ vs -> do
          setValues vs
@@ -481,7 +481,7 @@ tree :: Tree Int
 tree = Leaf
 
 tt :: BareType
-tt = rr "{v:Tree <{\\r x -> x != r}, {\\r y -> r != y}> {v0 : Int | v0 >= 0} | (size v) = 2}"
+tt = rr "{v:Tree <{\\r x -> x < r}, {\\r y -> r < y}> {v0 : Int | v0 >= 0} | (size v) > 0}"
 
 data Tree a = Leaf | Node a (Tree a) (Tree a) deriving (Eq, Ord, Show)
 treesort = FObj $ stringSymbol "Tree"
@@ -494,24 +494,21 @@ instance Constrain a => Constrain (Tree a) where
   gen _ 0 t = gen_leaf t
   gen _ d t@(RApp c [ta] ps r)
     = do let t' = RApp c [ta] ps mempty
-         l  <- gen_leaf t'
-         nl <- gen_node (Node (undefined :: a) undefined undefined) d t'
-         nr <- gen_node (Node (undefined :: a) undefined undefined) d t'
-         z  <- freshChoose [l,nl,nr] treesort
+         l <- gen_leaf t'
+         n <- gen_node (Node (undefined :: a) undefined undefined) d t'
+         z <- freshChoose [l,n] treesort
          constrain $ ofReft z (toReft r)
          return z
 
   stitch 0 = stitch_leaf
   stitch d
-    = do [cnr,cnl,cl] <- popChoices 3
+    = do [cn,cl] <- popChoices 2
          void pop -- "actual" tree
-         nr <- stitch_node d
-         nl <- stitch_node d
+         n <- stitch_node d
          l  <- stitch_leaf
-         case (cnr,cnl,cl) of
-           (True,_,_) -> return nr
-           (_,True,_) -> return nl
-           (_,_,True) -> return l
+         case (cn,cl) of
+           (True,_) -> return n
+           (_,True) -> return l
 
   ctors _ = [ ("leaf", treesort)
             , ("node", FFunc 3 [FInt, treesort, treesort, treesort])
