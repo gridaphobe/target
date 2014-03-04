@@ -7,6 +7,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
+
 module LiquidSMT where
 
 import           Control.Applicative
@@ -15,6 +17,7 @@ import           Control.Monad.State
 import           Data.Char
 import           Data.Default
 import           Data.Function
+import qualified Data.HashMap.Strict as M
 import           Data.List
 import           Data.Maybe
 import           Data.Monoid
@@ -25,10 +28,11 @@ import           Debug.Trace
 import           Language.Fixpoint.Config (SMTSolver (..))
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.SmtLib2
-import           Language.Fixpoint.Types hiding (prop)
+import           Language.Fixpoint.Types hiding (prop, Def)
 import           Language.Haskell.Liquid.Parse
 import           Language.Haskell.Liquid.RefType
-import           Language.Haskell.Liquid.Types hiding (ctors, var)
+import           Language.Haskell.Liquid.Types hiding (ctors, var, env)
+import           Language.Haskell.TH.Syntax (Name)
 import           System.Exit
 import           System.IO.Unsafe
 import           Text.PrettyPrint.HughesPJ hiding (first)
@@ -52,28 +56,23 @@ import qualified SMTLib2.Int as SMT
 
 io = liftIO
 
-driver :: Constrain a => Int -> Int -> BareType -> a -> IO [a]
-driver n d t v = runGen $ do
+driver :: Constrain a => Int -> Int -> BareType -> a -> DataConEnv -> IO [a]
+driver n d t v env = runGen env $ do
        root <- gen v d t
        ctx <- io $ makeContext Z3
        let ctx' = ctx  -- {verbose = True}
        -- declare sorts
        io $ smtWrite ctx "(define-sort CHOICE () Bool)"
-       mapM_ (\ s      -> io . command ctx $ Define s) (sorts v)
+       --mapM_ (\ s      -> io . command ctx $ Define s) (sorts v)
        -- declare data constructors
-       --mapM_ (\ (x,t)  -> io . command ctx $ makeDecl (symbol x) t) cts
+       -- mapM_ (\ (x,t)  -> io . command ctx $ makeDecl (symbol x) t) cts
        -- declare variables
        vs <- gets variables
        mapM_ (\ x      -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
        -- declare measures
        -- should be part of type class..
-       -- io $ command ctx $ Declare (stringSymbol "len") [listsort] FInt
-       io $ command ctx $ Declare (stringSymbol "size") [treesort] FInt
-       -- send assertions about nullary constructors, e.g. []
-       -- this should be part of the type class..
-       --command ctx $ Assert $ len nil `eq` 0
-       --smtWrite ctx "(assert (forall ((x Int)) (=> (= x nil) (= (len x) 0))))"
-       --smtWrite ctx "(assert (forall ((x Int) (y Int) (xs Int)) (=> (= x (cons y xs)) (= (len x) (+ 1 (len xs))))))"
+       io $ command ctx $ Declare (stringSymbol "len") [listsort] FInt
+       -- io $ command ctx $ Declare (stringSymbol "size") [treesort] FInt
        cs <- gets constraints
        deps <- gets deps
        mapM_ (io . command ctx .  Assert) cs
@@ -82,20 +81,14 @@ driver n d t v = runGen $ do
        xs <- forM vals $ \ vs -> do
          setValues vs
          stitch d
-       --cleanupContext ctx
+       io $ cleanupContext ctx
        return xs
   where
-    -- (cs, vs) = runGen $ constrain d v t
     unints vs = [symbol v | (v,t) <- vs, t `elem` interps]
-    interps = [FInt, boolsort, choicesort]
-    -- cts       = ctors v
-    -- -- -- nullary constructors, needed later
-    -- consts   = filter (notFun . snd) cts
-    -- notFun (FFunc _ _) = False
-    -- notFun _           = True
+    interps   = [FInt, boolsort, choicesort]
     allSat ctx root deps vs
       = do resp <- command ctx CheckSat
---           print resp
+           print resp
            case resp of
              Error e -> error $ T.unpack e
              Unsat   -> return []
@@ -110,29 +103,6 @@ driver n d t v = runGen $ do
     refute root model deps vs = let realized = reaches root model deps
                                 in [var x `eq` (ESym $ SL v) | (x,v) <- realized, x `elem` unints vs]
 
-    -- FIXME: this is going to be super slow!!
---reaches :: String -> [(String, String)] -> [(String,String)] -> [(String, String)]
--- reaches root model deps = [ ((v,"true"):xvs) ++ concat xvs'  | (x,v) <- deps
---                                   , root == x
---                                   , let b = lookup v model
---                                   , fromMaybe "" b == "true"
---                                   , (c,z) <- deps
---                                   , v == c
---                                   , let xvs = filter ((==z).fst) model
---                                         xvs' = reaches z model deps
---                                   ]
--- reaches root model deps = (root,rootVal) : choices
---                        ++ concatMap choiceReaches choices
---   where
---     rootVal = fromJust $ lookup root model
---     choices = myTrace "choices" [(c,v) | (x,c) <- deps, x == root, let v = fromJust $ lookup c model]
---     choiceReaches (c,v)
---       | "CHOICE" `isPrefixOf` c && v == "true"
---       = concatMap (\r -> reaches r model deps) $ myTrace "choiceReaches" [r | (x, r) <- deps, x == c]
---       | "CHOICE" `isPrefixOf` c && v == "false"
---       = []
---       | otherwise
---       = concatMap (\r -> reaches r model deps) $ myTrace "choiceReaches" [r | (x, r) <- deps, x == c]
 
 reaches root model deps = go root
   where
@@ -148,18 +118,15 @@ reaches root model deps = go root
         isChoice = "CHOICE" `isPrefixOf` symbolString root
         taken    = val == "true"
 
+
 myTrace s x = trace (s ++ ": " ++ show x) x
-                                   -- ++ [var x `eq` var y | cls <- equiv
-                   --                      , x   <- cls
-                   --                      , y   <- cls
-                   --                      , x /= y]
 
 makeDecl x (FFunc _ ts) = Declare x (init ts) (last ts)
 makeDecl x t            = Declare x []        t
 
 type Constraint = [Pred]
 type Variable   = ( String -- ^ the name
-                  , Sort   -- ^ the `sort'
+                  , Sort   -- ^ the `Sort'
                   )
 type Value      = String
 
@@ -169,88 +136,8 @@ instance Symbolic Variable where
 instance SMTLIB2 Constraint where
   smt2 = smt2 . PAnd
 
--- class Constrain a where
---   constrain :: Int -> a -> BareType -> Gen (Constraint, [Variable])
---   construct :: Int -> Cons a
---   ctors     :: a -> [(Symbol, Sort)]
---   sorts     :: a -> [Sort]
 
--- type Gen  = State Int
--- type Cons = State [(String,Value)]
-
--- fresh :: Gen Int
--- fresh = do i <- get
---            modify (+1)
---            return i
-
--- freshen :: Sort -> Gen Variable
--- freshen x = fresh >>= return . (x,) . (T.unpack (smt2 x) ++) . show
-
--- runGen :: Gen a -> a
--- runGen x = evalState x 0
-
--- pop :: Cons (String,Value)
--- pop = do (sv:svs) <- get
---          put svs
---          return sv
-
--- runCons :: [(String,Value)] -> Cons a -> a
--- runCons svs act = evalState act svs
-
--- instance Constrain Int where
---   constrain _ _ (RApp _ [] _ r) = do x <- freshen FInt
---                                      return $ (ofReft (snd x) $ toReft r, [x])
---   construct _ = do (_,v) <- pop
---                    return $ read v
---   ctors _ = []
---   sorts _ = []
-
--- instance Constrain a => Constrain [a] where
---   constrain d _ (RApp _ [a] ps r) = act -- (concat cs, concat vs)
---     where
---       concat4 (a,b,c,d) = (concat a, concat b, concat c, concat d)
---       unzip4 [] = ([],[],[],[])
---       unzip4 ((a,b,c,d):ts) = let (as,bs,cs,ds) = unzip4 ts
---                               in (a:as,b:bs,c:cs,d:ds)
---       act = do (cs,ls,vs,xs) <- concat4 . unzip4 <$> unfoldrNM d build ([nil],[])
---                l <- freshen $ FObj $ stringSymbol "GHC.Types.List"
---                let c  = pOr $ map (var l `eq`) (nil : ls)
---                    cr = ofReft (snd l) $ toReft r
---                    -- cxs = foldr buildAbs [] vs
---                return (cr ++ c:cs, l:xs)
-
---       buildAbs :: Expr -> [Expr] -> Pred
---       buildAbs h ts = pAnd [h `rel` t | t <- ts]
---         where
---           rel x y = pAnd [subst su p | RPoly [(sx,_)] (RVar _ r) <- ps
---                                      , let Reft (sy, ras) = toReft r
---                                      , RConc p <- ras
---                                      , let su = mkSubst [(sx,x), (sy,y)]
---                                      ]
---       -- build :: ([Expr],[Expr]) -> Gen ((Constraint, [Expr], [Expr], [String]), ([Expr], [Expr]))
---       build (l:ls,vs)
---         = do l' <- freshen $ FObj $ stringSymbol "GHC.Types.List"
---              (cs, x:xs) <- constrain d (undefined :: a) a
---              let v = var x
---                  lv = var $ snd l'
---                  c = pAnd [ lv `eq` cons v l
---                           , len lv `eq` (len l + 1)
---                           , buildAbs v vs]
---              return ((c:cs, lv:l:ls, v:vs, l':x:xs), (lv:l:ls, v:vs))
-
---   construct d = do (_,x) <- pop
---                    ls    <- unfoldrNM d build []
---                    n     <- fromJust . lookup "nil" <$> get
---                    return $ fromJust $ lookup (traceShow x x) ((n, []):ls)
---     where
---       build l = do (_,v) <- pop
---                    x::a  <- construct d
---                    return ((v,x:l),x:l)
---   ctors _ = [(stringSymbol "nil", listsort), (stringSymbol "cons", FFunc 2 [FInt, listsort, listsort])]
---          ++ ctors (undefined :: a)
---   sorts _ = [FObj $ stringSymbol "GHC.Types.List"] ++ sorts (undefined :: a)
-
-listsort = FObj $ stringSymbol "GHC.Types.List"
+listsort = FObj $ stringSymbol "Int"
 boolsort = FObj $ stringSymbol "Bool"
 
 unfoldrM :: Monad m => (a -> m (b, a)) -> a -> m [b]
@@ -269,11 +156,11 @@ unfoldrNM d f z
 newtype Gen a = Gen (StateT GenState IO a)
   deriving (Functor, Applicative, Monad, MonadIO, MonadState GenState)
 
-runGen :: Gen a -> IO a
-runGen (Gen x) = evalStateT x def
+runGen :: DataConEnv -> Gen a -> IO a
+runGen e (Gen x) = evalStateT x (initGS e)
 
-execGen :: Gen a -> IO GenState
-execGen (Gen x) = execStateT x def
+execGen :: DataConEnv -> Gen a -> IO GenState
+execGen e (Gen x) = execStateT x (initGS e)
 
 data GenState
   = GS { seed        :: !Int
@@ -282,10 +169,15 @@ data GenState
        , constraints :: !Constraint
        , values      :: ![String]
        , deps        :: ![(String, String)]
+       , ctorEnv     :: !DataConEnv
        } deriving (Show)
 
-instance Default GenState where
-  def = GS def def def def def def
+-- instance Default GenState where
+--   def = GS def def def def def def def
+
+initGS env = GS def def def def def def env
+
+type DataConEnv = [(String, BareType)]
 
 setValues vs = modify $ \s@(GS {..}) -> s { values = vs }
 
@@ -311,21 +203,26 @@ freshChoice xs
 
 choicesort = FObj $ stringSymbol "CHOICE"
 
--- choose :: String -> [String] -> Sort -> Gen String
--- choose c xs sort
---   = 
-
 freshChoose :: [String] -> Sort -> Gen String
 freshChoose xs sort
   = do x <- fresh [] sort
        cs <- forM xs $ \x' -> do
                c <- freshChoice [x']
                constrain $ prop c `iff` var x `eq` var x'
---               addDep c x'
                addDep x c
                return $ prop c
        constrain $ pOr cs
        constrain $ pAnd [ PNot $ pAnd [x, y] | [x, y] <- filter ((==2) . length) $ subsequences cs ]
+       return x
+
+
+make :: Name -> [String] -> Sort -> Gen String
+make c vs s
+  = do x  <- fresh vs s
+       t <- (fromJust . lookup (show c)) <$> gets ctorEnv
+       let (xs, _, rt) = bkArrowDeep t
+           su          = mkSubst $ myTrace "su" $ zip (map symbol xs) (map var vs)
+       constrain $ myTrace "make" $ ofReft x $ subst su $ toReft $ rt_reft rt
        return x
 
 constrain :: Pred -> Gen ()
@@ -370,11 +267,9 @@ instance (Constrain a) => Constrain [a] where
          constrain $ ofReft x3 (toReft r)
          return x3
 
-  -- stitch n = error "TODO: Constrain [a] stitch"
   stitch 0 = stitch_nil
   stitch d = do [c,n] <- popChoices 2
                 pop  -- the "actual" list, but we don't care about it
---                io $ print [n,c]
                 cc    <- stitch_cons d
                 nn    <- stitch_nil
                 case (n,c) of
@@ -387,9 +282,7 @@ instance (Constrain a) => Constrain [a] where
   sorts _ = [listsort] ++ sorts (undefined :: a)
 
 gen_nil (RApp _ _ _ _)
-  = do x <- fresh [] listsort
-       constrain $ len (var x) `eq` 0
-       return x
+  = make '[] [] listsort
 
 stitch_nil
   = do pop >> return []
@@ -400,12 +293,9 @@ gen_cons l@(a:_) n t@(RApp c [ta] [p] r)
        let ta' = applyRef p [x] ta
        let t'  = RApp c [ta'] [p] r
        xs <- gen l (n-1) t'
-       z  <- fresh [x,xs] listsort
---       constrain $ var z `eq` cons (var x) (var xs)
-       constrain $ len (var z) `eq` len (var xs) + 1
-       return z
+       make '(:) [x,xs] listsort
 
---stitch_cons :: Constrain [a] => Int -> Gen [a]
+-- stitch_cons :: Constrain [a] => Int -> Gen [a]
 stitch_cons d
   = do z  <- pop
        xs <- stitch (d-1)
@@ -424,6 +314,7 @@ iff = PIff
 infix 3 `imp`
 imp = PImp
 
+
 app :: Symbolic a => a -> [Expr] -> Expr
 app f es = EApp (dummyLoc $ symbol f) es
 
@@ -432,15 +323,6 @@ var = EVar . symbol
 
 prop :: Symbolic a => a -> Pred
 prop = PBexp . EVar . symbol
-
-len :: Expr -> Expr
-len x = app ("len" :: String) [x]
-
--- nil :: Expr
--- nil = var ("nil" :: String)
-
-cons :: Expr -> Expr -> Expr
-cons x xs = app ("cons" :: String) [x,xs]
 
 
 instance Num Expr where
@@ -483,10 +365,24 @@ tree = Leaf
 tt :: BareType
 tt = rr "{v:Tree <{\\r x -> x < r}, {\\r y -> r < y}> {v0 : Int | (v0 >= 0 && v0 < 16)} | (size v) > 0}"
 
+specs :: String
+specs = unlines [ "measure len :: [a] -> Int"
+                , "len ([])   = 0"
+                , "len (x:xs) = 1 + len(xs)"
+
+                , "measure size :: Tree a -> Int"
+                , "size (Leaf)       = 0"
+                , "size (Node x l r) = 1 + size(l) + size(r)"
+                ]
+
+nilT  = rr "{v:[a] | (len v) = 0}"
+consT = rr "x:a -> xs:[a] -> {v:[a] | (len v) = 1 + (len xs)}"
+env :: DataConEnv
+env = [("GHC.Types.[]",nilT),("GHC.Types.:",consT)]
+
 data Tree a = Leaf | Node a (Tree a) (Tree a) deriving (Eq, Ord, Show)
 treesort = FObj $ stringSymbol "Tree"
-size :: Expr -> Expr
-size x = EApp (dummyLoc $ stringSymbol "size") [x]
+
 treeList Leaf = []
 treeList (Node x l r) = treeList l ++ [x] ++ treeList r
 
@@ -516,9 +412,7 @@ instance Constrain a => Constrain (Tree a) where
   sorts _ = [treesort] ++ sorts (undefined :: a)
 
 gen_leaf _
-  = do x <- fresh [] treesort
-       constrain $ size (var x) `eq` 0
-       return x
+  = make 'Leaf [] treesort
 
 stitch_leaf = pop >> return Leaf
 
@@ -531,9 +425,7 @@ gen_node foo@(Node a _ _) d t@(RApp c [ta] [pl,pr] r)
        let tr  = RApp c [tar] [pl,pr] r
        nl <- gen (foo) (d-1) tl
        nr <- gen (foo) (d-1) tr
-       z  <- fresh [x,nl,nr] treesort
-       constrain $ size (var z) `eq` size (var nl) + size (var nr) + 1
-       return z
+       make 'Node [x,nl,nr] treesort
 
 stitch_node d
   = do z <- pop
