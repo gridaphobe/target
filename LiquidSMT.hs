@@ -1,7 +1,8 @@
-{-# LANGUAGE ParallelListComp #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE ParallelListComp #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -13,6 +14,7 @@ module LiquidSMT where
 
 import           Control.Applicative
 import           Control.Arrow hiding (app)
+import           Control.Exception.Base
 import           Control.Monad.State
 import           Data.Char
 import           Data.Default
@@ -32,14 +34,11 @@ import           Language.Fixpoint.Types hiding (prop, Def)
 import           Language.Haskell.Liquid.Parse
 import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Types hiding (ctors, var, env)
-import           Language.Haskell.TH.Syntax (Name)
+import qualified Language.Haskell.TH as TH
 import           System.Exit
 import           System.IO.Unsafe
 import           Text.PrettyPrint.HughesPJ hiding (first)
-
-import qualified SMTLib2 as SMT
-import qualified SMTLib2.Core as SMT
-import qualified SMTLib2.Int as SMT
+import           Text.Printf
 
 -- instance (SMTLIB2 a) => SMTLIB2 [a] where
 --   smt2 = T.concat . map smt2
@@ -102,7 +101,6 @@ driver n d t v env = runGen env $ do
     --                   in [var x `eq` (ESym $ SL v) | (x,v) <- model, x `elem` unints vs]
     refute root model deps vs = let realized = reaches root model deps
                                 in [var x `eq` (ESym $ SL v) | (x,v) <- realized, x `elem` unints vs]
-
 
 reaches root model deps = go root
   where
@@ -216,7 +214,7 @@ freshChoose xs sort
        return x
 
 
-make :: Name -> [String] -> Sort -> Gen String
+make :: TH.Name -> [String] -> Sort -> Gen String
 make c vs s
   = do x  <- fresh vs s
        t <- (fromJust . lookup (show c)) <$> gets ctorEnv
@@ -243,9 +241,216 @@ popChoices n = fmap read <$> popN n
     read "false" = False
     read e       = error $ "popChoices: " ++ e
 
+
+class Testable a where
+  test :: a -> Int -> BareType -> Gen ()
+
+instance (Show a, Constrain a, Constrain b, Show b) => Testable (a -> b) where
+  test f d (RFun x i o r) = do
+    a <- gen (undefined :: a) d i
+    vals <- take 10 <$> allSat (symbol a)
+    -- build up the haskell value
+    (xvs :: [a]) <- forM vals $ \ vs -> do
+      setValues vs
+      stitch d
+    io $ print xvs
+    io $ forM_ xvs $ \xv -> do
+      r <- evaluate (f xv)
+      -- TODO: CONVERT `xv' TO `Expr' and symbolically evaluate
+      print $ evalReft (M.fromList [(show x, toExpr xv)]) (toReft $ rt_reft o) (toExpr r)
+      --undefined
+
+instance (Show a, Show b, Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
+  test f d (RFun xa ta (RFun xb tb to _) _) = do
+    a <- gen (undefined :: a) d ta
+    let tb' = subst (mkSubst [(xa, var a)]) tb
+    b <- gen (undefined :: b) d tb'
+    vals <- take 10 <$> allSat (symbol a)
+    -- build up the haskell value
+    (xvs :: [(a,b)]) <- forM vals $ \ vs -> do
+      setValues vs
+      b <- stitch d
+      a <- stitch d
+      return (a,b)
+    io $ forM_ xvs $ \(a,b) -> do
+      print (a,b)
+      r <- evaluate (f a b)
+      -- TODO: CONVERT `xv' TO `Expr' and symbolically evaluate
+      print $ evalReft (M.fromList [(show xa, toExpr a),(show xb, toExpr b)]) (toReft $ rt_reft to) (toExpr r)
+      --undefined
+
+allSat :: Symbol -> Gen [[String]]
+allSat root = setup >>= go 10
+  where
+    setup = do
+       ctx <- io $ makeContext Z3
+       -- declare sorts
+       io $ smtWrite ctx "(define-sort CHOICE () Bool)"
+       -- declare variables
+       vs <- gets variables
+       mapM_ (\ x      -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
+       -- declare measures
+       -- should be part of type class..
+       io $ command ctx $ Declare (stringSymbol "len") [listsort] FInt
+       cs <- gets constraints
+       deps <- map (symbol *** symbol) <$> gets deps
+       mapM_ (io . command ctx .  Assert) cs
+       return (ctx,vs,deps)
+
+    go 0 _ = return []
+    go n (ctx,vs,deps) = do
+       resp <- io $ command ctx CheckSat
+       io $ print resp
+       case resp of
+         Error e -> error $ T.unpack e
+         Unsat   -> return []
+         Sat     -> do
+           Values model <- io $ command ctx (GetValue $ map symbol vs)
+           let cs = refute root model deps vs
+           io $ command ctx $ Assert $ PNot $ pAnd cs
+           (map snd model:) <$> go (n-1) (ctx,vs,deps)
+
+    -- refute model vs = let equiv = map (map fst) . filter ((>1) . length) . groupBy ((==) `on` snd) . sortBy (comparing snd) $ model
+    --                   in [var x `eq` (ESym $ SL v) | (x,v) <- model, x `elem` unints vs]
+    unints vs = [symbol v | (v,t) <- vs, t `elem` interps]
+    interps   = [FInt, boolsort, choicesort]
+    refute root model deps vs = let realized = reaches root model deps
+                                in [var x `eq` (ESym $ SL v) | (x,v) <- realized, x `elem` unints vs]
+
+--makeChecker1 :: (a -> b) -> BareType -> (a -> IO Bool)
+makeChecker1 f t a = check1 r (x,a) rt
+  where
+    ([x],_,rt) = bkArrowDeep t
+    r = f a
+
+-- makeChecker2 :: (a -> b -> c) -> BareType -> (a -> b -> IO Bool)
+-- makeChecker2 f t = \a b -> let r = f a b in check r t
+
+-- makeChecker3 :: (a -> b -> c -> d) -> BareType -> (a -> b -> c -> IO Bool)
+-- makeChecker3 f t = \a b c -> let r = f a b c in check r t
+
+--check :: a -> BareType -> IO Bool
+check1 x (sa,a) t
+  = do v <- evaluate (Right x) `catch` \(_ :: SomeException) -> return $ Left "CRASH"
+       b <- evaluate (evalReft undefined (toReft t) x)
+            `catch` \(_ :: SomeException) -> return False
+       let k = if b
+               then "SAFE" :: String
+               else "UNSAFE"
+       printf "%s:\tx = %d, f x = %s\n" k (show x) (show v)
+
+
+evalReft :: M.HashMap String Expr -> Reft -> Expr -> Bool
+evalReft m (Reft (S v, rs)) x = and [ evalPred p (M.insert v x m)
+                                    | RConc p <- rs
+                                    ]
+
+evalPred PTrue           m = True
+evalPred PFalse          m = False
+evalPred (PAnd ps)       m = and [evalPred p m | p <- ps]
+evalPred (POr ps)        m = or  [evalPred p m | p <- ps]
+evalPred (PNot p)        m = not $ evalPred p m
+evalPred (PImp p q)      m = undefined
+evalPred (PIff p q)      m = undefined
+evalPred (PBexp e)       m = undefined -- ofExpr e
+evalPred (PAtom b e1 e2) m = evalBrel b (evalExpr e1 m) (evalExpr e2 m)
+evalPred (PAll ss p)     m = undefined
+evalPred PTop            m = undefined
+
+evalBrel Eq = (==)
+evalBrel Ne = (/=)
+evalBrel Gt = (>)
+evalBrel Ge = (>=)
+evalBrel Lt = (<)
+evalBrel Le = (<=)
+
+applyMeasure :: Measure BareType LocSymbol -> Expr -> M.HashMap String Expr -> Expr
+applyMeasure m (EApp c xs) env = evalExpr e' env
+  where
+    eq = fromJust $ find ((==c) . ctor) $ -- myTrace ("eqns: " ++ show c ) $
+         eqns m
+    (E e) = body eq
+    e' = subst (mkSubst $ zip (binds eq) xs) e
+applyMeasure m e           env = error $ printf "applyMeasure(%s, %s)" (showpp m) (showpp e)
+
+evalExpr :: Expr -> M.HashMap String Expr -> Expr
+evalExpr (ECon i)       m = ECon i
+evalExpr (EVar x)       m = m M.! showpp x
+evalExpr (EBin b e1 e2) m = evalBop b (evalExpr e1 m) (evalExpr e2 m)
+evalExpr (EApp f es)    m
+  | val f == S "len"      = applyMeasure specs (evalExpr (head es) m) m
+  | otherwise             = EApp f $ map (flip evalExpr m) es
+
+evalBop Plus (ECon (I x)) (ECon (I y)) = ECon . I $ x + y
+evalBop b    e1           e2           = error $ printf "evalBop(%s, %s, %s)" (show b) (show e1) (show e2)
+
+-- fromPred :: Pred -> M.HashMap String Integer -> Bool
+fromPred PTrue           m = True
+fromPred PFalse          m = False
+fromPred (PAnd ps)       m = and [fromPred p m | p <- ps]
+fromPred (POr ps)        m = or  [fromPred p m | p <- ps]
+fromPred (PNot p)        m = not $ fromPred p m
+fromPred (PImp p q)      m = undefined
+fromPred (PIff p q)      m = undefined
+fromPred (PBexp e)       m = undefined -- ofExpr e
+fromPred (PAtom b e1 e2) m = fromBrel b (fromExpr e1 m) (fromExpr e2 m)
+fromPred (PAll ss p)     m = undefined
+fromPred PTop            m = undefined
+
+fromBrel Eq = (==)
+fromBrel Ne = (/=)
+fromBrel Gt = (>)
+fromBrel Ge = (>=)
+fromBrel Lt = (<)
+fromBrel Le = (<=)
+
+fromExpr (EVar (S s))   m = m M.! s
+fromExpr (EBin b e1 e2) m = fromBop b (fromExpr e1 m) (fromExpr e2 m)
+fromExpr (ECon (I i))   m = i
+
+fromBop Plus  = (+)
+fromBop Minus = (-)
+fromBop Times = (*)
+fromBop Div   = div
+fromBop Mod   = mod
+
+toPred (RConc p) = p
+
+-- type family Args a
+
+-- type instance Args (a -> b) = a
+-- type instance Args (a -> b -> c) = (a,b)
+
+-- class Checkable a where
+--   type Args a
+--   makeChecker :: a -> BareType -> (Args a -> Bool)
+
+-- instance Checkable (a -> b) where
+--   type Args (a -> b) = a
+--   makeChecker f t = \x -> let r = f x in check r t
+
+-- instance Checkable (a -> b -> c) where
+--   type Args (a -> b -> c) = (a,b)
+--   makeChecker f t = \(a,b) -> let r = f a b in check r t
+
+-- class Checkable fun args | fun -> args where
+--   makeChecker :: fun -> BareType -> (args -> Bool)
+
+-- instance Checkable (a -> b) a where
+--   makeChecker f t = \a -> let r = f a in check r t
+
+-- instance Checkable (a -> b -> c) (a,b) where
+--   makeChecker f t = \(a,b) -> let r = f a b in check r t
+
+--instance Checkable
+
+-- instance (Constrain a, Constrain b) => Testable (a -> b) where
+--   test x _ = error "WTF"
+
 class Constrain a where
   gen    :: a -> Int -> BareType -> Gen String
   stitch :: Int -> Gen a
+  toExpr :: a -> Expr
   sorts  :: a -> [Sort]
   ctors  :: a -> [Variable]
 
@@ -254,6 +459,7 @@ instance Constrain Int where
     do constrain $ ofReft x (toReft r)
        return x
   stitch _                 = read <$> pop
+  toExpr i = ECon $ I $ fromIntegral i
   sorts _                  = []
   ctors _                  = []
 
@@ -262,7 +468,7 @@ instance (Constrain a) => Constrain [a] where
   gen _ d t@(RApp c [ta] ps r)
     = do let t' = RApp c [ta] ps mempty
          x1 <- gen_nil t' -- (undefined :: [a]) (d-1) t
-         x2 <- gen_cons ((undefined :: a) : []) d t'
+         x2 <- gen_cons (undefined :: [a]) d t'
          x3 <- freshChoose [x1,x2] listsort
          constrain $ ofReft x3 (toReft r)
          return x3
@@ -272,10 +478,15 @@ instance (Constrain a) => Constrain [a] where
                 pop  -- the "actual" list, but we don't care about it
                 cc    <- stitch_cons d
                 nn    <- stitch_nil
+                -- io $ print (n,c)
                 case (n,c) of
                   (True,_) -> return nn
                   (_,True) -> return cc
 
+  toExpr []     = app  (stringSymbol "[]") -- (show '[])
+                       []
+  toExpr (x:xs) = app (stringSymbol ":") -- (show '(:))
+                       [toExpr x, toExpr xs]
   ctors _ = [ ("nil", listsort)
             , ("cons", FFunc 2 [FInt, listsort, listsort])
             ] ++ ctors (undefined :: a)
@@ -287,15 +498,15 @@ gen_nil (RApp _ _ _ _)
 stitch_nil
   = do pop >> return []
 
-gen_cons :: Constrain a => [a] -> Int -> BareType -> Gen String
-gen_cons l@(a:_) n t@(RApp c [ta] [p] r)
-  = do x  <- gen a (n-1) ta
+gen_cons :: forall a. Constrain a => [a] -> Int -> BareType -> Gen String
+gen_cons _ n t@(RApp c [ta] [p] r)
+  = do x  <- gen (undefined :: a) (n-1) ta
        let ta' = applyRef p [x] ta
        let t'  = RApp c [ta'] [p] r
-       xs <- gen l (n-1) t'
+       xs <- gen (undefined :: [a]) (n-1) t'
        make '(:) [x,xs] listsort
 
--- stitch_cons :: Constrain [a] => Int -> Gen [a]
+stitch_cons :: Constrain a => Int -> Gen [a]
 stitch_cons d
   = do z  <- pop
        xs <- stitch (d-1)
@@ -344,7 +555,7 @@ instance Integral Expr where
 --------------------------------------------------------------------------------
 
 t :: BareType
-t = rr "{v:[{v0:Int | (v0 >= 0 && v0 < 5)}]<{\\h t -> h < t}> | (len v) >= 0}"
+t = rr "{v:[{v0:Int | (v0 >= 0 && v0 < 5)}]<{\\h t -> h < t}> | (len v) >= 3}"
 
 t' :: BareType
 t' = rr "{v:[{v0:Int | (v0 >= 0 && v0 < 6)}] | true}"
@@ -365,14 +576,14 @@ tree = Leaf
 tt :: BareType
 tt = rr "{v:Tree <{\\r x -> x < r}, {\\r y -> r < y}> {v0 : Int | (v0 >= 0 && v0 < 16)} | (size v) > 0}"
 
-specs :: String
-specs = unlines [ "measure len :: [a] -> Int"
-                , "len ([])   = 0"
-                , "len (x:xs) = 1 + len(xs)"
+specs :: Measure BareType LocSymbol
+specs = rr $ unlines [ "len :: [a] -> Int"
+                     , "len ([])   = 0"
+                     , "len (x:xs) = 1 + len(xs)"
 
-                , "measure size :: Tree a -> Int"
-                , "size (Leaf)       = 0"
-                , "size (Node x l r) = 1 + size(l) + size(r)"
+                -- , "measure size :: Tree a -> Int"
+                -- , "size (Leaf)       = 0"
+                -- , "size (Node x l r) = 1 + size(l) + size(r)"
                 ]
 
 nilT  = rr "{v:[a] | (len v) = 0}"
