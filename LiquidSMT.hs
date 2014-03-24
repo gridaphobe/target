@@ -219,8 +219,8 @@ make c vs s
   = do x  <- fresh vs s
        t <- (fromJust . lookup (show c)) <$> gets ctorEnv
        let (xs, _, rt) = bkArrowDeep t
-           su          = mkSubst $ myTrace "su" $ zip (map symbol xs) (map var vs)
-       constrain $ myTrace "make" $ ofReft x $ subst su $ toReft $ rt_reft rt
+           su          = mkSubst $ zip (map symbol xs) (map var vs)
+       constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
        return x
 
 constrain :: Pred -> Gen ()
@@ -248,7 +248,7 @@ class Testable a where
 instance (Show a, Constrain a, Constrain b, Show b) => Testable (a -> b) where
   test f d (RFun x i o r) = do
     a <- gen (undefined :: a) d i
-    vals <- take 10 <$> allSat (symbol a)
+    vals <- take 10 <$> allSat [symbol a]
     -- build up the haskell value
     (xvs :: [a]) <- forM vals $ \ vs -> do
       setValues vs
@@ -265,7 +265,7 @@ instance (Show a, Show b, Constrain a, Constrain b, Constrain c) => Testable (a 
     a <- gen (undefined :: a) d ta
     let tb' = subst (mkSubst [(xa, var a)]) tb
     b <- gen (undefined :: b) d tb'
-    vals <- take 10 <$> allSat (symbol a)
+    vals <- take 10 <$> allSat [symbol a, symbol b]
     -- build up the haskell value
     (xvs :: [(a,b)]) <- forM vals $ \ vs -> do
       setValues vs
@@ -279,8 +279,8 @@ instance (Show a, Show b, Constrain a, Constrain b, Constrain c) => Testable (a 
       print $ evalReft (M.fromList [(show xa, toExpr a),(show xb, toExpr b)]) (toReft $ rt_reft to) (toExpr r)
       --undefined
 
-allSat :: Symbol -> Gen [[String]]
-allSat root = setup >>= go 10
+allSat :: [Symbol] -> Gen [[String]]
+allSat roots = setup >>= go 10
   where
     setup = do
        ctx <- io $ makeContext Z3
@@ -300,13 +300,12 @@ allSat root = setup >>= go 10
     go 0 _ = return []
     go n (ctx,vs,deps) = do
        resp <- io $ command ctx CheckSat
-       io $ print resp
        case resp of
          Error e -> error $ T.unpack e
          Unsat   -> return []
          Sat     -> do
            Values model <- io $ command ctx (GetValue $ map symbol vs)
-           let cs = refute root model deps vs
+           let cs = myTrace "refuted" $ refute roots model deps vs
            io $ command ctx $ Assert $ PNot $ pAnd cs
            (map snd model:) <$> go (n-1) (ctx,vs,deps)
 
@@ -314,8 +313,8 @@ allSat root = setup >>= go 10
     --                   in [var x `eq` (ESym $ SL v) | (x,v) <- model, x `elem` unints vs]
     unints vs = [symbol v | (v,t) <- vs, t `elem` interps]
     interps   = [FInt, boolsort, choicesort]
-    refute root model deps vs = let realized = reaches root model deps
-                                in [var x `eq` (ESym $ SL v) | (x,v) <- realized, x `elem` unints vs]
+    refute roots model deps vs = let realized = myTrace "realized" $ concat [reaches root model deps | root <- roots]
+                                 in [var x `eq` (ESym $ SL v) | (x,v) <- realized, x `elem` unints vs]
 
 --makeChecker1 :: (a -> b) -> BareType -> (a -> IO Bool)
 makeChecker1 f t a = check1 r (x,a) rt
