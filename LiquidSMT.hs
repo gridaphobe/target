@@ -183,7 +183,7 @@ class Testable a where
   test :: a -> Int -> SpecType -> Gen ()
 
 instance (Constrain a, Constrain b) => Testable (a -> b) where
-  test f d (bkUniv -> (_,_,(RFun x i o r))) = do
+  test f d (bkUniv -> (_,_,_,(RFun x i o r))) = do
     a <- gen (undefined :: a) d i
     vals <- allSat [symbol a]
     -- build up the haskell value
@@ -196,7 +196,7 @@ instance (Constrain a, Constrain b) => Testable (a -> b) where
       io . print =<< evalReft (M.fromList [(show x, toExpr xv)]) (toReft $ rt_reft o) (toExpr r)
 
 instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
-  test f d (bkUniv -> (_,_,(RFun xa ta (RFun xb tb to _) _))) = do
+  test f d (bkUniv -> (_,_,_,(RFun xa ta (RFun xb tb to _) _))) = do
     a <- gen (undefined :: a) d ta
     let tb' = subst (mkSubst [(xa, var a)]) tb
     b <- gen (undefined :: b) d tb'
@@ -490,10 +490,16 @@ testOne f name path
        let ty = val $ fromJust $ lookup (name) $ map (first showpp) $ tySigs sp
        runGen sp $ test f 5 ty
 
-mytake :: Int -> [a] -> [a]
-mytake 0 xs     = xs
-mytake _ []     = []
-mytake n (x:xs) = x : mytake (n-1) xs
+mkTest :: TH.Name -> TH.ExpQ
+mkTest f = do loc <- TH.location
+              let name = show f
+                  file = TH.loc_filename loc
+              [| testOne $(TH.varE f) $(TH.stringE name) $(TH.stringE file) |]
+
+-- mytake :: Int -> [a] -> [a]
+-- mytake 0 xs     = xs
+-- mytake _ []     = []
+-- mytake n (x:xs) = x : mytake (n-1) xs
 
 --------------------------------------------------------------------------------
 --- | Dependency Graph
