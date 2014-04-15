@@ -1,8 +1,8 @@
 {-@ LIQUID "-g-package-db" @-}
 {-@ LIQUID "-g.cabal-sandbox/x86_64-osx-ghc-7.6.3-packages.conf.d" @-}
 {-@ LIQUID "-g-no-user-package-db" @-}
-{-@ LIQUID "-g-hide-package" @-}
-{-@ LIQUID "-gmonads-tf" @-}
+{- LIQUID "-g-hide-package" @-}
+{- LIQUID "-gmonads-tf" @-}
 
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ScopedTypeVariables #-}

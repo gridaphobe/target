@@ -146,7 +146,7 @@ freshChoose xs sort
                addDep x c
                return $ prop c
        constrain $ pOr cs
-       constrain $ pAnd [ PNot $ pAnd [x, y] 
+       constrain $ pAnd [ PNot $ pAnd [x, y]
                         | [x, y] <- filter ((==2) . length) $ subsequences cs ]
        return x
 
@@ -327,10 +327,13 @@ instance Constrain () where
   toExpr _  = app (stringSymbol "()") []
 
 instance Constrain Int where
-  gen _ _  (RApp _ [] _ r) = fresh [] FInt >>= \x ->
+  gen _ d (RApp _ [] _ r) = fresh [] FInt >>= \x ->
     do constrain $ ofReft x (toReft r)
+       -- use the unfolding depth to constrain the range of Ints, like QuickCheck
+       constrain $ var x `ge` (0 - fromIntegral d)
+       constrain $ var x `le` fromIntegral d
        return x
-  stitch _                 = read <$> pop
+  stitch _ = read <$> pop
   toExpr i = ECon $ I $ fromIntegral i
 
 instance (Constrain a) => Constrain [a] where
@@ -381,44 +384,9 @@ stitch_cons d
        x  <- stitch (d-1)
        return (x:xs)
 
-ofReft :: String -> Reft -> Pred
-ofReft s (Reft (v, rs))
-  = let x = mkSubst [(v, var s)]
-    in pAnd [subst x p | RConc p <- rs]
-
-infix 4 `eq`
-eq  = PAtom Eq
-infix 3 `iff`
-iff = PIff
-infix 3 `imp`
-imp = PImp
-
-
-app :: Symbolic a => a -> [Expr] -> Expr
-app f es = EApp (dummyLoc $ symbol f) es
-
-var :: Symbolic a => a -> Expr
-var = EVar . symbol
-
-prop :: Symbolic a => a -> Pred
-prop = PBexp . EVar . symbol
-
-
-instance Num Expr where
-  fromInteger = ECon . I . fromInteger
-  (+) = EBin Plus
-  (-) = EBin Minus
-  (*) = EBin Times
-
-instance Real Expr
-instance Enum Expr
-
-instance Integral Expr where
-  div = EBin Div
-  mod = EBin Mod
-
 
 data Tree a = Leaf | Node a (Tree a) (Tree a) deriving (Eq, Ord, Show)
+
 treesort = FObj $ stringSymbol "Tree"
 
 treeList Leaf = []
@@ -466,6 +434,49 @@ stitch_node d
        nl <- stitch (d-1)
        x <- stitch (d-1)
        return (Node x nl nr)
+
+
+ofReft :: String -> Reft -> Pred
+ofReft s (Reft (v, rs))
+  = let x = mkSubst [(v, var s)]
+    in pAnd [subst x p | RConc p <- rs]
+
+
+infix 4 `eq`
+eq  = PAtom Eq
+infix 5 `ge`
+ge  = PAtom Ge
+infix 5 `le`
+le  = PAtom Le
+infix 3 `iff`
+iff = PIff
+infix 3 `imp`
+imp = PImp
+
+
+app :: Symbolic a => a -> [Expr] -> Expr
+app f es = EApp (dummyLoc $ symbol f) es
+
+var :: Symbolic a => a -> Expr
+var = EVar . symbol
+
+prop :: Symbolic a => a -> Pred
+prop = PBexp . EVar . symbol
+
+
+instance Num Expr where
+  fromInteger = ECon . I . fromInteger
+  (+) = EBin Plus
+  (-) = EBin Minus
+  (*) = EBin Times
+
+instance Real Expr
+instance Enum Expr
+
+instance Integral Expr where
+  div = EBin Div
+  mod = EBin Mod
+
 
 
 -- applyRef :: Ref -> [Variable] -> RType
@@ -520,3 +531,34 @@ x11 = leaf "x11"
 p00 = Direct "p00" x10
 p01 = Direct "p01" x11
 x0  = Choice "x0" [p00, p01]
+
+
+--------------------------------------------------------------------------------
+--- | Template Haskell
+--------------------------------------------------------------------------------
+
+-- ref :: ?? -> Q [Dec]
+
+infix 6 ~>
+(~>) :: Bind a b c d -> RType a b c d -> RType a b c d
+(x,i) ~> o = RFun x i o undefined
+
+type Bind a b c d = (Symbol, RType a b c d)
+
+infix 5 -:
+(-:) :: Symbol -> RType a b c d -> Bind a b c d
+x-:t = (x,t)
+
+instance IsString Symbol where
+  fromString = symbol
+
+
+-- quoteRTypeDec s
+--   = do -- loc <- TH.location
+--        -- let pos =  (TH.loc_filename loc,
+--        --             fst (TH.loc_start loc),
+--        --             snd (TH.loc_start loc))
+--        let t :: SpecType = rr s
+--        let ht = TH.ConT ''Int
+--        let sig = TH.SigD (TH.mkName "foo") ht
+--        return [sig]
