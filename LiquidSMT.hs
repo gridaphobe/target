@@ -9,7 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
+{- LANGUAGE TemplateHaskell #-}
 
 module LiquidSMT where
 
@@ -25,6 +25,7 @@ import           Data.List hiding (sort)
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Ord
+import           Data.Proxy
 import           Data.String
 import qualified Data.Text.Lazy as T
 import           Debug.Trace
@@ -73,8 +74,8 @@ makeDecl x (FFunc _ ts) = Declare x (init ts) (last ts)
 makeDecl x t            = Declare x []        t
 
 type Constraint = [Pred]
-type Variable   = ( String -- ^ the name
-                  , Sort   -- ^ the `Sort'
+type Variable   = ( String -- the name
+                  , Sort   -- the `Sort'
                   )
 type Value      = String
 
@@ -157,10 +158,10 @@ freshChoose xs sort
        return x
 
 
-make :: TH.Name -> [String] -> Sort -> Gen String
+-- make :: TH.Name -> [String] -> Sort -> Gen String
 make c vs s
   = do x  <- fresh vs s
-       t <- (fromJust . lookup (show c)) <$> gets ctorEnv
+       t <- (fromJust . lookup c) <$> gets ctorEnv
        let (xs, _, rt) = bkArrowDeep t
            su          = mkSubst $ zip (map symbol xs) (map var vs)
        constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
@@ -190,7 +191,7 @@ class Testable a where
 
 instance (Constrain a, Constrain b) => Testable (a -> b) where
   test f d (bkUniv -> (_,_,_,(RFun x i o r))) = do
-    a <- gen (undefined :: a) d i
+    a <- gen (Proxy :: Proxy a) d i
     vals <- allSat [symbol a]
     -- build up the haskell value
     (xvs :: [a]) <- forM vals $ \ vs -> do
@@ -203,9 +204,9 @@ instance (Constrain a, Constrain b) => Testable (a -> b) where
 
 instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
   test f d (bkUniv -> (_,_,_,(RFun xa ta (RFun xb tb to _) _))) = do
-    a <- gen (undefined :: a) d ta
+    a <- gen (Proxy :: Proxy a) d ta
     let tb' = subst (mkSubst [(xa, var a)]) tb
-    b <- gen (undefined :: b) d tb'
+    b <- gen (Proxy :: Proxy b) d tb'
     vals <- allSat [symbol a, symbol b]
     -- build up the haskell value
     (xvs :: [(a,b)]) <- forM vals $ \ vs -> do
@@ -323,9 +324,12 @@ evalBop b    e1           e2           = error $ printf "evalBop(%s, %s, %s)" (s
 
 
 class Show a => Constrain a where
-  gen    :: a -> Int -> SpecType -> Gen String
+  gen    :: Proxy a -> Int -> SpecType -> Gen String
   stitch :: Int -> Gen a
   toExpr :: a -> Expr
+
+reproxyElem :: proxy (f a) -> Proxy a
+reproxyElem = reproxy
 
 instance Constrain () where
   gen _ _ _ = fresh [] FInt
@@ -344,10 +348,10 @@ instance Constrain Int where
 
 instance (Constrain a) => Constrain [a] where
   gen _ 0 t = gen_nil t
-  gen _ d t@(RApp c [ta] ps r)
+  gen p d t@(RApp c [ta] ps r)
     = do let t' = RApp c [ta] ps mempty
          x1 <- gen_nil t'
-         x2 <- gen_cons (undefined :: [a]) d t'
+         x2 <- gen_cons p d t'
          x3 <- freshChoose [x1,x2] listsort
          constrain $ ofReft x3 (toReft r)
          return x3
@@ -367,14 +371,14 @@ instance (Constrain a) => Constrain [a] where
                       [toExpr x, toExpr xs]
 
 gen_nil (RApp _ _ _ _)
-  = make '[] [] listsort
+  = make "GHC.Types.[]" [] listsort
 
 stitch_nil
   = do pop >> return []
 
-gen_cons :: forall a. Constrain a => [a] -> Int -> SpecType -> Gen String
-gen_cons _ d t@(RApp c [ta] ps r)
-  = make2 '(:) (undefined :: a, undefined :: [a]) t listsort d
+gen_cons :: forall a. Constrain a => Proxy [a] -> Int -> SpecType -> Gen String
+gen_cons p d t@(RApp c [ta] ps r)
+  = make2 "GHC.Types.:" (reproxyElem p, p) t listsort d
   -- = do let [tx,t'] = applyPreds t
   --      x  <- gen (undefined :: a)   (d-1) (snd tx)
   --      xs <- gen (undefined :: [a]) (d-1) ()
@@ -396,15 +400,29 @@ stitch_cons d
        return (x:xs)
 
 
-make2 :: forall a b. (Constrain a, Constrain b) => TH.Name -> (a, b) -> SpecType -> Sort -> Int -> Gen String
-make2 c _ t s d
-  = do dcp <- fromJust . lookup (dropModuleNames $ show c) <$> gets dconEnv
+-- make2 :: forall a b. (Constrain a, Constrain b)
+--       => TH.Name -> (Proxy a, Proxy b) -> SpecType -> Sort -> Int -> Gen String
+make2 c (pa,pb) t s d
+  = do dcp <- fromJust . lookup (dropModuleNames c) <$> gets dconEnv
        tyi <- gets tyconInfo
        let [t1,t2] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
-       x1 <- gen (undefined :: a) (d-1) (snd t1)
+       x1 <- gen pa (d-1) (snd t1)
        let su = mkSubst [(fst t1, var x1)]
-       x2 <- gen (undefined :: b) (d-1) (subst su $ snd t2)
+       x2 <- gen pb (d-1) (subst su $ snd t2)
        make c [x1,x2] s
+
+-- make3 :: forall a b c. (Constrain a, Constrain b, Constrain c)
+--       => TH.Name -> (Proxy a, Proxy b, Proxy c) -> SpecType -> Sort -> Int -> Gen String
+make3 c (pa,pb,pc) t s d
+  = do dcp <- fromJust . lookup (dropModuleNames c) <$> gets dconEnv
+       tyi <- gets tyconInfo
+       let [t1,t2,t3] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
+       x1 <- gen pa (d-1) (snd t1)
+       let su = mkSubst [(fst t1, var x1)]
+       x2 <- gen pb (d-1) (subst su $ snd t2)
+       let su = mkSubst [(fst t1, var x1),(fst t2, var x2)]
+       x3 <- gen pc (d-1) (subst su $ snd t3)
+       make c [x1,x2,x3] s
 
 -- applyPreds :: SpecType -> DataConP -> [SpecType]
 applyPreds sp dc@(DataConP {..}) = map (second tx) args
@@ -432,10 +450,10 @@ treeList (Node x l r) = treeList l ++ [x] ++ treeList r
 
 instance Constrain a => Constrain (Tree a) where
   gen _ 0 t = gen_leaf t
-  gen _ d t@(RApp c [ta] ps r)
+  gen p d t@(RApp c [ta] ps r)
     = do let t' = RApp c [ta] ps mempty
          l <- gen_leaf t'
-         n <- gen_node (Node (undefined :: a) undefined undefined) d t'
+         n <- gen_node p d t'
          z <- freshChoose [l,n] treesort
          constrain $ ofReft z (toReft r)
          return z
@@ -450,21 +468,25 @@ instance Constrain a => Constrain (Tree a) where
            (True,_) -> return n
            (_,True) -> return l
 
+  toExpr Leaf         = app (stringSymbol "LiquidSMT.Leaf") []
+  toExpr (Node x l r) = app (stringSymbol "LiquidSMT.Node") [toExpr x, toExpr l, toExpr r]
+
 gen_leaf _
-  = make 'Leaf [] treesort
+  = make "LiquidSMT.Leaf" [] treesort
 
 stitch_leaf = pop >> return Leaf
 
-gen_node :: Constrain a => Tree a -> Int -> SpecType -> Gen String
-gen_node foo@(Node a _ _) d t@(RApp c [ta] [pl,pr] r)
-  = do x <- gen (a) (d-1) ta
-       let tal = applyRef pl [x] ta
-       let tl  = RApp c [tal] [pl,pr] r
-       let tar = applyRef pr [x] ta
-       let tr  = RApp c [tar] [pl,pr] r
-       nl <- gen (foo) (d-1) tl
-       nr <- gen (foo) (d-1) tr
-       make 'Node [x,nl,nr] treesort
+gen_node :: forall a. Constrain a => Proxy (Tree a) -> Int -> SpecType -> Gen String
+gen_node p d t@(RApp _ _ _ _)
+  -- = do x <- gen (Proxy :: Proxy a) (d-1) ta
+  --      let tal = applyRef pl [x] ta
+  --      let tl  = RApp c [tal] [pl,pr] r
+  --      let tar = applyRef pr [x] ta
+  --      let tr  = RApp c [tar] [pl,pr] r
+  --      nl <- gen p (d-1) tl
+  --      nr <- gen p (d-1) tr
+  --      make 'Node [x,nl,nr] treesort
+  = make3 "LiquidSMT.Node" (reproxyElem p, p, p) t treesort d
 
 stitch_node d
   = do z <- pop
@@ -507,14 +529,21 @@ instance Num Expr where
   (+) = EBin Plus
   (-) = EBin Minus
   (*) = EBin Times
+  abs = error "abs of Liquid.Fixpoint.Types.Expr"
+  signum = error "signum of Liquid.Fixpoint.Types.Expr"
 
-instance Real Expr
-instance Enum Expr
+instance Real Expr where
+  toRational (ECon (I i)) = fromIntegral i
+
+instance Enum Expr where
+  toEnum = ECon . I . fromIntegral
+  fromEnum (ECon (I i)) = fromInteger i
 
 instance Integral Expr where
   div = EBin Div
   mod = EBin Mod
-
+  quotRem x y = (x `div` y, x `mod` y)
+  toInteger (ECon (I i)) = i
 
 
 -- applyRef :: Ref -> [Variable] -> RType
@@ -539,11 +568,11 @@ testOne f name path
        let ty = val $ fromJust $ lookup (name) $ map (first showpp) $ tySigs sp
        runGen sp $ test f 5 ty
 
-mkTest :: TH.Name -> TH.ExpQ
-mkTest f = do loc <- TH.location
-              let name = show f
-                  file = TH.loc_filename loc
-              [| testOne $(TH.varE f) $(TH.stringE name) $(TH.stringE file) |]
+-- mkTest :: TH.Name -> TH.ExpQ
+-- mkTest f = do loc <- TH.location
+--               let name = show f
+--                   file = TH.loc_filename loc
+--               [| testOne $(TH.varE f) $(TH.stringE name) $(TH.stringE file) |]
 
 -- mytake :: Int -> [a] -> [a]
 -- mytake 0 xs     = xs

@@ -4,7 +4,7 @@
 {- LIQUID "-g-hide-package" @-}
 {- LIQUID "-gmonads-tf" @-}
 
-{-# LANGUAGE TemplateHaskell #-}
+{- LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
@@ -18,5 +18,5 @@ mytake n (x:xs) = x : mytake (n-1) xs
 
 
 
-main = testOne (mytake) (show 'mytake) "List.hs"
+main = testOne (mytake) ("Main.mytake") "List.hs"
 -- main = $(mkTest 'mytake)
