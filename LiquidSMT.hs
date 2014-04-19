@@ -31,6 +31,7 @@ import           Debug.Trace
 import           GHC
 import           Name
 import           Language.Fixpoint.Config (SMTSolver (..))
+import           Language.Fixpoint.Names
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.SmtLib2
 import           Language.Fixpoint.Types hiding (prop, Def)
@@ -38,6 +39,7 @@ import           Language.Haskell.Liquid.CmdLine
 import           Language.Haskell.Liquid.GhcInterface
 import           Language.Haskell.Liquid.GhcMisc
 import           Language.Haskell.Liquid.Parse
+import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Types hiding (var, env)
 import qualified Language.Haskell.TH as TH
@@ -102,13 +104,17 @@ data GenState
        , constraints :: !Constraint
        , values      :: ![String]
        , deps        :: ![(String, String)]
+       , dconEnv     :: ![(String, DataConP)]
        , ctorEnv     :: !DataConEnv
        , measEnv     :: !MeasureEnv
+       , tyconInfo   :: !(M.HashMap TyCon RTyCon)
        } deriving (Show)
 
-initGS sp = GS def def def def def def sigs (measures sp)
+initGS sp = GS def def def def def def dcons sigs (measures sp) tyi
   where
-    sigs = map (showpp *** val) (ctors sp)
+    dcons = map (showpp *** id) (dconsP sp)
+    sigs  = map (showpp *** val) (ctors sp)
+    tyi   = makeTyConInfo (tconsP sp)
 
 type DataConEnv = [(String, SpecType)]
 type MeasureEnv = [Measure SpecType DataCon]
@@ -358,7 +364,7 @@ instance (Constrain a) => Constrain [a] where
   toExpr []     = app (stringSymbol "[]") -- (show '[])
                       []
   toExpr (x:xs) = app (stringSymbol ":") -- (show '(:))
-                       [toExpr x, toExpr xs]
+                      [toExpr x, toExpr xs]
 
 gen_nil (RApp _ _ _ _)
   = make '[] [] listsort
@@ -367,14 +373,19 @@ stitch_nil
   = do pop >> return []
 
 gen_cons :: forall a. Constrain a => [a] -> Int -> SpecType -> Gen String
-gen_cons _ n t@(RApp c [ta] ps r)
-  = do x  <- gen (undefined :: a) (n-1) ta
-       let ta' = case ps of
-                   []  -> ta
-                   [p] -> applyRef p [x] ta
-       let t'  = RApp c [ta'] ps r
-       xs <- gen (undefined :: [a]) (n-1) t'
-       make '(:) [x,xs] listsort
+gen_cons _ d t@(RApp c [ta] ps r)
+  = make2 '(:) (undefined :: a, undefined :: [a]) t listsort d
+  -- = do let [tx,t'] = applyPreds t
+  --      x  <- gen (undefined :: a)   (d-1) (snd tx)
+  --      xs <- gen (undefined :: [a]) (d-1) ()
+  -- = do -- let [tx,t'] = applyPreds t
+  --      x  <- gen (undefined :: a) (d-1) ta
+  --      let ta' = case ps of
+  --                  []  -> ta
+  --                  [p] -> applyRef p [x] ta
+  --      let t'  = RApp c [ta'] ps r
+  --      xs <- gen (undefined :: [a]) (d-1) t'
+  --      make '(:) [x,xs] listsort
 gen_cons _ _ t = error $ show t
 
 stitch_cons :: Constrain a => Int -> Gen [a]
@@ -383,6 +394,33 @@ stitch_cons d
        xs <- stitch (d-1)
        x  <- stitch (d-1)
        return (x:xs)
+
+
+make2 :: forall a b. (Constrain a, Constrain b) => TH.Name -> (a, b) -> SpecType -> Sort -> Int -> Gen String
+make2 c _ t s d
+  = do dcp <- fromJust . lookup (dropModuleNames $ show c) <$> gets dconEnv
+       tyi <- gets tyconInfo
+       let [t1,t2] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
+       x1 <- gen (undefined :: a) (d-1) (snd t1)
+       let su = mkSubst [(fst t1, var x1)]
+       x2 <- gen (undefined :: b) (d-1) (subst su $ snd t2)
+       make c [x1,x2] s
+
+-- applyPreds :: SpecType -> DataConP -> [SpecType]
+applyPreds sp dc@(DataConP {..}) = map (second tx) args
+  where
+    args  = reverse tyArgs
+    su    = [(tv, toRSort t, t) | tv <- freeTyVars | t <- rt_args sp]
+    sup   = [(p, r) | p <- freePred | r <- rt_pargs sp]
+    tx    = (\t -> replacePreds "applyPreds" t sup) . onRefs (monosToPoly sup) . subsTyVars_meet su
+
+onRefs f t = t { rt_pargs = f <$> rt_pargs t}
+
+monosToPoly su r = foldr monoToPoly r su
+
+monoToPoly (p, r) (RMono _ (U _ (Pr [up]) _)) | pname p == pname up
+  = r
+monoToPoly _ m = m
 
 
 data Tree a = Leaf | Node a (Tree a) (Tree a) deriving (Eq, Ord, Show)

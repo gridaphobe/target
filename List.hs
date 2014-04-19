@@ -17,5 +17,6 @@ mytake _ []     = []
 mytake n (x:xs) = x : mytake (n-1) xs
 
 
--- main = testOne (mytake) (show 'mytake) "List.hs"
-main = $(mkTest 'mytake)
+
+main = testOne (mytake) (show 'mytake) "List.hs"
+-- main = $(mkTest 'mytake)
