@@ -190,7 +190,7 @@ class Testable a where
   test :: a -> Int -> SpecType -> Gen ()
 
 instance (Constrain a, Constrain b) => Testable (a -> b) where
-  test f d (bkUniv -> (_,_,_,(RFun x i o r))) = do
+  test f d (stripQuals -> (RFun x i o r)) = do
     a <- gen (Proxy :: Proxy a) d i
     vals <- allSat [symbol a]
     -- build up the haskell value
@@ -202,8 +202,12 @@ instance (Constrain a, Constrain b) => Testable (a -> b) where
       r <- io $ evaluate (f xv)
       io . print =<< evalReft (M.fromList [(show x, toExpr xv)]) (toReft $ rt_reft o) (toExpr r)
 
+fourth4 (_,_,_,d) = d
+
+stripQuals = snd . bkClass . fourth4 . bkUniv
+
 instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
-  test f d (bkUniv -> (_,_,_,(RFun xa ta (RFun xb tb to _) _))) = do
+  test f d (stripQuals -> (RFun xa ta (RFun xb tb to _) _)) = do
     a <- gen (Proxy :: Proxy a) d ta
     let tb' = subst (mkSubst [(xa, var a)]) tb
     b <- gen (Proxy :: Proxy b) d tb'
@@ -252,9 +256,12 @@ allSat roots = setup >>= go 100
 
     ints vs = [symbol v | (v,t) <- vs, t `elem` interps]
     interps = [FInt, boolsort, choicesort]
-    refute roots model deps vs = [ var x `eq` (ESym $ SL v)
+    refute roots model deps vs = [ var x `eq` (ESym $ SL v')
                                  | (x,v) <- realized
-                                 , x `elem` ints vs]
+                                 , x `elem` ints vs
+                                 , let v' = if "-" `isPrefixOf` v
+                                            then "("++v++")"
+                                            else v]
       where
         realized = concat [reaches root model deps | root <- roots]
 
@@ -288,6 +295,7 @@ evalPred (PIff p q)      m = and <$> sequence [ evalPred (p `imp` q) m
                                               , evalPred (q `imp` p) m
                                               ]
 evalPred (PAtom b e1 e2) m = evalBrel b <$> evalExpr e1 m <*> evalExpr e2 m
+evalPred (PBexp e)       m = (==0) <$> evalExpr e m
 evalPred p               m = error $ "evalPred: " ++ show p
 -- evalPred (PBexp e)       m = undefined -- ofExpr e
 -- evalPred (PAll ss p)     m = undefined
@@ -301,16 +309,23 @@ evalBrel Lt = (<)
 evalBrel Le = (<=)
 
 applyMeasure :: Measure SpecType DataCon -> Expr -> M.HashMap String Expr -> Gen Expr
-applyMeasure m (EApp c xs) env = evalExpr e' env
+applyMeasure m (EApp c xs) env = evalBody eq xs env
   where
     eq = fromJust $ find ((==val c) . symbol . show . ctor) $ eqns m
     (E e) = body eq
     e' = subst (mkSubst $ zip (binds eq) xs) e
 applyMeasure m e           env = error $ printf "applyMeasure(%s, %s)" (showpp m) (showpp e)
 
+evalBody eq xs env = go $ body eq
+  where
+    go (E e) = evalExpr (subst su e) env
+    go (P p) = evalPred (subst su p) env >>= \b -> return $ if b then 0 else 1
+    su = mkSubst $ zip (binds eq) xs
+
+
 evalExpr :: Expr -> M.HashMap String Expr -> Gen Expr
 evalExpr (ECon i)       m = return $ ECon i
-evalExpr (EVar x)       m = return $ m M.! showpp x
+evalExpr (EVar x)       m = return $ (myTrace "m" m) M.! (myTrace "x" $ showpp x)
 evalExpr (EBin b e1 e2) m = evalBop b <$> evalExpr e1 m <*> evalExpr e2 m
 evalExpr (EApp f es)    m
   = do ms <- find ((==f) . name) <$> gets measEnv
@@ -337,8 +352,8 @@ instance Constrain () where
   toExpr _  = app (stringSymbol "()") []
 
 instance Constrain Int where
-  gen _ d (RApp _ [] _ r) = fresh [] FInt >>= \x ->
-    do constrain $ ofReft x (toReft r)
+  gen _ d t = fresh [] FInt >>= \x ->
+    do constrain $ ofReft x (toReft $ rt_reft t)
        -- use the unfolding depth to constrain the range of Ints, like QuickCheck
        constrain $ var x `ge` (0 - fromIntegral d)
        constrain $ var x `le` fromIntegral d
@@ -379,17 +394,6 @@ stitch_nil
 gen_cons :: forall a. Constrain a => Proxy [a] -> Int -> SpecType -> Gen String
 gen_cons p d t@(RApp c [ta] ps r)
   = make2 "GHC.Types.:" (reproxyElem p, p) t listsort d
-  -- = do let [tx,t'] = applyPreds t
-  --      x  <- gen (undefined :: a)   (d-1) (snd tx)
-  --      xs <- gen (undefined :: [a]) (d-1) ()
-  -- = do -- let [tx,t'] = applyPreds t
-  --      x  <- gen (undefined :: a) (d-1) ta
-  --      let ta' = case ps of
-  --                  []  -> ta
-  --                  [p] -> applyRef p [x] ta
-  --      let t'  = RApp c [ta'] ps r
-  --      xs <- gen (undefined :: [a]) (d-1) t'
-  --      make '(:) [x,xs] listsort
 gen_cons _ _ t = error $ show t
 
 stitch_cons :: Constrain a => Int -> Gen [a]
@@ -403,7 +407,7 @@ stitch_cons d
 -- make2 :: forall a b. (Constrain a, Constrain b)
 --       => TH.Name -> (Proxy a, Proxy b) -> SpecType -> Sort -> Int -> Gen String
 make2 c (pa,pb) t s d
-  = do dcp <- fromJust . lookup (dropModuleNames c) <$> gets dconEnv
+  = do dcp <- fromJust . lookup c <$> gets ctorEnv
        tyi <- gets tyconInfo
        let [t1,t2] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
        x1 <- gen pa (d-1) (snd t1)
@@ -414,7 +418,7 @@ make2 c (pa,pb) t s d
 -- make3 :: forall a b c. (Constrain a, Constrain b, Constrain c)
 --       => TH.Name -> (Proxy a, Proxy b, Proxy c) -> SpecType -> Sort -> Int -> Gen String
 make3 c (pa,pb,pc) t s d
-  = do dcp <- fromJust . lookup (dropModuleNames c) <$> gets dconEnv
+  = do dcp <- fromJust . lookup c <$> gets ctorEnv
        tyi <- gets tyconInfo
        let [t1,t2,t3] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
        x1 <- gen pa (d-1) (snd t1)
@@ -424,14 +428,45 @@ make3 c (pa,pb,pc) t s d
        x3 <- gen pc (d-1) (subst su $ snd t3)
        make c [x1,x2,x3] s
 
+make4 c (p1,p2,p3,p4) t s d
+  = do dcp <- fromJust . lookup c <$> gets ctorEnv
+       tyi <- gets tyconInfo
+       let [t1,t2,t3,t4] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
+       x1 <- gen p1 (d-1) (snd t1)
+       let su = mkSubst [(fst t1, var x1)]
+       x2 <- gen p2 (d-1) (subst su $ snd t2)
+       let su = mkSubst [(fst t1, var x1),(fst t2, var x2)]
+       x3 <- gen p3 (d-1) (subst su $ snd t3)
+       let su = mkSubst [(fst t1, var x1),(fst t2, var x2),(fst t3, var x3)]
+       x4 <- gen p4 (d-1) (subst su $ snd t4)
+       make c [x1,x2,x3,x4] s
+
+make5 c (p1,p2,p3,p4,p5) t s d
+  = do dcp <- fromJust . lookup c <$> gets ctorEnv
+       tyi <- gets tyconInfo
+       let [t1,t2,t3,t4,t5] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
+       x1 <- gen p1 (d-1) (snd t1)
+       let su = mkSubst [(fst t1, var x1)]
+       x2 <- gen p2 (d-1) (subst su $ snd t2)
+       let su = mkSubst [(fst t1, var x1),(fst t2, var x2)]
+       x3 <- gen p3 (d-1) (subst su $ snd t3)
+       let su = mkSubst [(fst t1, var x1),(fst t2, var x2),(fst t3, var x3)]
+       x4 <- gen p4 (d-1) (subst su $ snd t4)
+       let su = mkSubst [(fst t1, var x1),(fst t2, var x2),(fst t3, var x3),(fst t4, var x4)]
+       x5 <- gen p5 (d-1) (subst su $ snd t5)
+       make c [x1,x2,x3,x4,x5] s
+
 -- applyPreds :: SpecType -> DataConP -> [SpecType]
-applyPreds sp dc@(DataConP {..}) = map (second tx) args
+applyPreds sp dc = zip xs (map tx ts)
   where
-    args  = reverse tyArgs
-    su    = [(tv, toRSort t, t) | tv <- freeTyVars | t <- rt_args sp]
-    sup   = [(p, r) | p <- freePred | r <- rt_pargs sp]
+    (as, ps, _, t) = bkUniv dc
+    (xs, ts, rt)   = bkArrow . snd $ bkClass t
+    -- args  = reverse tyArgs
+    su    = [(tv, toRSort t, t) | tv <- as | t <- rt_args sp]
+    sup   = [(p, r) | p <- ps | r <- rt_pargs sp]
     tx    = (\t -> replacePreds "applyPreds" t sup) . onRefs (monosToPoly sup) . subsTyVars_meet su
 
+onRefs f t@(RVar _ _) = t
 onRefs f t = t { rt_pargs = f <$> rt_pargs t}
 
 monosToPoly su r = foldr monoToPoly r su
