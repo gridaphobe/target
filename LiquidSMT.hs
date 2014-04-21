@@ -21,6 +21,7 @@ import           Data.Char
 import           Data.Default
 import           Data.Function
 import qualified Data.HashMap.Strict as M
+import qualified Data.HashSet as S
 import           Data.List hiding (sort)
 import           Data.Maybe
 import           Data.Monoid
@@ -28,6 +29,7 @@ import           Data.Ord
 import           Data.Proxy
 import           Data.String
 import qualified Data.Text.Lazy as T
+import qualified Data.Vector as V
 import           Debug.Trace
 import           GHC
 import           Name
@@ -56,15 +58,16 @@ reaches root model deps = go root
   where
     go root
       | isChoice && taken
-      = (root,val) : concatMap go [r | (x,r) <- deps, x == root]
+      = (root,val) `V.cons` V.concatMap go (reached deps) -- [r | (x,r) <- deps, x == root]
       | isChoice
-      = [(root,val)]
+      = V.fromList [(root,val)]
       | otherwise
-      = (root,val) : concatMap go [r | (x,r) <- deps, x == root]
+      = (root,val) `V.cons` V.concatMap go (reached deps) -- [r | (x,r) <- deps, x == root]
       where
-        val      = fromJust $ lookup root model
+        val      = model M.! root
         isChoice = "CHOICE" `isPrefixOf` symbolString root
         taken    = val == "true"
+        reached  = V.map snd . V.filter ((==root).fst)
 
 
 myTrace s x = trace (s ++ ": " ++ show x) x
@@ -225,7 +228,7 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
   test f d t = error $ show t
 
 allSat :: [Symbol] -> Gen [[String]]
-allSat roots = setup >>= go 100
+allSat roots = setup >>= go
   where
     setup = do
        ctx <- io $ makeContext Z3
@@ -238,43 +241,30 @@ allSat roots = setup >>= go 100
        ms <- gets measEnv
        mapM_ (\ m -> io . command ctx $ makeDecl (val $ name m) (rTypeSort mempty $ sort m)) ms
        cs <- gets constraints
-       deps <- map (symbol *** symbol) <$> gets deps
+       deps <- V.fromList . map (symbol *** symbol) <$> gets deps
        mapM_ (io . command ctx .  Assert) cs
        return (ctx,vs,deps)
 
-    go 0 _ = return []
-    go n (ctx,vs,deps) = do
+    go _ = return []
+    go (ctx,vs,deps) = do
        resp <- io $ command ctx CheckSat
        case resp of
          Error e -> error $ T.unpack e
-         Unsat   -> return []
+         Unsat   -> io (cleanupContext ctx) >> return []
          Sat     -> do
            Values model <- io $ command ctx (GetValue $ map symbol vs)
-           let cs = refute roots model deps vs
+           let cs = V.toList $ refute roots (M.fromList model) deps vs
            io $ command ctx $ Assert $ PNot $ pAnd cs
-           (map snd model:) <$> go (n-1) (ctx,vs,deps)
+           (map snd model:) <$> go (ctx,vs,deps)
 
-    ints vs = [symbol v | (v,t) <- vs, t `elem` interps]
+    ints vs = S.fromList [symbol v | (v,t) <- vs, t `elem` interps]
     interps = [FInt, boolsort, choicesort]
-    refute roots model deps vs = [ var x `eq` (ESym $ SL v')
-                                 | (x,v) <- realized
-                                 , x `elem` ints vs
-                                 , let v' = if "-" `isPrefixOf` v
-                                            then "("++v++")"
-                                            else v]
+    refute roots model deps vs
+      = V.map    (\(x,v) -> var x `eq` ESym (SL v))
+      . V.filter (\(x,v) -> x `S.member` ints vs)
+      $ realized
       where
-        realized = concat [reaches root model deps | root <- roots]
-
-
---check :: a -> SpecType -> IO Bool
--- check1 x (sa,a) t
---   = do v <- evaluate (Right x) `catch` \(_ :: SomeException) -> return $ Left "CRASH"
---        b <- evaluate (evalReft undefined (toReft t) x)
---             `catch` \(_ :: SomeException) -> return False
---        let k = if b
---                then "SAFE" :: String
---                else "UNSAFE"
---        printf "%s:\tx = %d, f x = %s\n" k (show x) (show v)
+        realized = V.concat $ map (\root -> reaches root model deps) roots
 
 
 evalReft :: M.HashMap String Expr -> Reft -> Expr -> Gen Bool
@@ -325,7 +315,7 @@ evalBody eq xs env = go $ body eq
 
 evalExpr :: Expr -> M.HashMap String Expr -> Gen Expr
 evalExpr (ECon i)       m = return $ ECon i
-evalExpr (EVar x)       m = return $ (myTrace "m" m) M.! (myTrace "x" $ showpp x)
+evalExpr (EVar x)       m = return $ m M.! showpp x
 evalExpr (EBin b e1 e2) m = evalBop b <$> evalExpr e1 m <*> evalExpr e2 m
 evalExpr (EApp f es)    m
   = do ms <- find ((==f) . name) <$> gets measEnv

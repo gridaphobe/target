@@ -33,7 +33,8 @@ library
                        smtLib,
                        pretty,
                        data-default >= 0.5.3,
-                       tagged
+                       tagged,
+                       vector
   -- hs-source-dirs:      
   default-language:    Haskell2010
 
