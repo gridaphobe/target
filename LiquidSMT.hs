@@ -1,3 +1,5 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE TypeOperators #-}
@@ -55,7 +57,7 @@ import           Text.PrettyPrint.HughesPJ hiding (first)
 import           Text.Printf
 
 import           GHC.Generics
-
+import           Generics.Deriving.ConNames
 io = liftIO
 
 
@@ -352,7 +354,8 @@ class Show a => Constrain a where
   gen         :: Proxy a -> Int -> SpecType -> Gen String
   default gen :: (Generic a, GConstrain (Rep a))
               => Proxy a -> Int -> SpecType -> Gen String
-  gen p = ggen (reproxy p) . from
+  gen = undefined
+  --gen p = ggen (reproxy p :: Proxy (Rep a))
 
 
   stitch :: Int -> Gen a
@@ -370,6 +373,50 @@ instance Constrain Bool
 instance Constrain a => Constrain [a]
 instance (Constrain a, Constrain b) => Constrain (a,b)
 
+class GConstrainSum f where
+  ggenAlts :: Proxy (f a) -> Int -> SpecType -> Gen [String]
+
+instance (GConstrain f, GConstrainSum g) => GConstrainSum (f :+: g) where
+  ggenAlts (p :: Proxy ((f :+: g) a)) d t
+    = do x  <- ggen (reproxy p :: Proxy (f a)) d t
+         xs <- ggenAlts (reproxy p :: Proxy (g a)) d t
+         return $ x:xs
+
+instance (Constructor c, GConstrain f) => GConstrainSum (C1 c f) where
+  ggenAlts (p :: Proxy (C1 c f a)) d t
+    = do x <- ggen (reproxy p :: Proxy (f a)) d t
+         return [x]
+
+class GConstrainProd f where
+  ggenArgs :: Proxy (f a) -> Int -> [(Symbol,SpecType)] -> Gen [String]
+
+instance (GConstrain f, GConstrainProd g) => GConstrainProd (f :*: g) where
+  ggenArgs (p :: Proxy ((f :*: g) a)) d (t:ts)
+    = do x  <- ggen (reproxy p :: Proxy (f a)) (d-1) (snd t)
+         let su = mkSubst [(fst t, var x)]
+         xs <- ggenArgs (reproxy p :: Proxy (g a)) d (map (second (subst su)) ts)
+         return $ x:xs
+
+instance (Constructor c, GConstrain f, GConstrainProd f) => GConstrainProd (C1 c f) where
+  ggenArgs p d [t]
+    = do x <- ggen (Proxy :: Proxy (f a)) (d-1) (snd t)
+         return [x]
+
+instance (GConstrain f, GConstrainProd f) => GConstrainProd (S1 c f) where
+  ggenArgs (p :: Proxy (S1 c f a)) d [t]
+    = do x <- ggen p (d-1) (snd t)
+         return [x]
+
+instance GConstrainProd U1 where
+  ggenArgs (p :: Proxy (U1 a)) d [t]
+    = do x <- fresh [] FInt
+         return [x]
+
+instance Constrain f => GConstrainProd (K1 i f) where
+  ggenArgs (p :: Proxy (K1 i f a)) d [t]
+    = do x <- gen (reproxy p :: Proxy f) (d-1) (snd t)
+         return [x]
+
 class GConstrain f where
   ggen    :: Proxy (f a) -> Int -> SpecType -> Gen String
   gstitch :: Int -> Gen (f a)
@@ -383,41 +430,51 @@ instance GConstrain U1 where
   gtoExprs _ = []
 
 instance (GConstrain a, GConstrain b) => GConstrain (a :*: b) where
-  ggen p d t = undefined
+  ggen p d t = error ":*:"
   gstitch d  = undefined
-  gtoExpr c@(a :*: b)  = error ":*:"
+  gtoExpr (a :*: b)  = error ":*:"
   gtoExprs (a :*: b)  = gtoExprs a ++ gtoExprs b
 
-instance (GConstrain a, GConstrain b) => GConstrain (a :+: b) where
-  ggen p d t = undefined
+instance (GConstrain f, GConstrain g, GConstrainSum g) => GConstrain (f :+: g) where
+  ggen (p :: Proxy ((f :+: g) a)) d t
+    = do xs <- ggenAlts p d t
+         x  <- freshChoose xs FInt
+         constrain $ ofReft x $ toReft $ rt_reft t
+         return x
   gstitch d  = undefined
   gtoExpr c@(L1 x) = gtoExpr x -- app (symbol $ conName c) [gtoExpr x]
   gtoExpr c@(R1 x) = gtoExpr x -- app (symbol $ conName x) [gtoExpr x]
   gtoExprs (L1 x) = error "L1" -- gtoExprs x
   gtoExprs (R1 x) = error "R1" -- gtoExprs x
 
-instance (GConstrain a, Constructor c) => GConstrain (C1 c a) where
-  ggen p d t = undefined
+instance (Constructor c, GConstrain f, GConstrainProd f) => GConstrain (C1 c f) where
+  ggen p d t
+    = do let cn = conName (undefined :: C1 c f a)
+         dcp <- fromJust . lookup cn <$> gets ctorEnv
+         tyi <- gets tyconInfo
+         let ts = applyPreds (expandRApp (M.fromList []) tyi t) dcp
+         xs  <- ggenArgs p d ts
+         make cn xs FInt
   gstitch d  = undefined
   gtoExpr c@(M1 x)  = app (symbol $ conName c) (gtoExprs x)
   gtoExprs _ = error "C1"
 
-instance (GConstrain a, Datatype c) => GConstrain (D1 c a) where
-  ggen p d t = undefined --ggen (reproxy p :: Proxy f) d t
+instance (GConstrain f, Datatype c) => GConstrain (D1 c f) where
+  ggen (p :: Proxy (D1 c f a)) d t = ggen (reproxy p :: Proxy (f a)) d t
   gstitch d  = undefined
   gtoExpr c@(M1 x) = app (symbol $ GHC.Generics.moduleName c ++ "." ++ (show $ val d)) xs
     where
       (EApp d xs) = gtoExpr x -- app (symbol $ conName c) (gtoExprs x)
   gtoExprs (M1 c)  = error "D1"
 
-instance (GConstrain a) => GConstrain (S1 c a) where
-  ggen p d t = undefined
+instance (GConstrain f) => GConstrain (S1 c f) where
+  ggen p d t = error "S1"
   gstitch d  = undefined
   gtoExpr (M1 c)  = gtoExpr c -- app (symbol $ conName c) []
   gtoExprs (M1 c) = gtoExprs c
 
 instance (Constrain a) => GConstrain (K1 i a) where
-  ggen p d t = undefined
+  ggen p d t = error "K1"
   gstitch d  = undefined
   gtoExpr  (K1 x) = toExpr x
   gtoExprs (K1 x) = [toExpr x]
@@ -426,7 +483,7 @@ instance (Constrain a) => GConstrain (K1 i a) where
 instance Constrain () where
   gen _ _ _ = fresh [] FInt
   stitch _  = return ()
-  -- toExpr _  = app (stringSymbol "()") []
+  toExpr _  = app (stringSymbol "()") []
 
 instance Constrain Int where
   gen _ d t = fresh [] FInt >>= \x ->
@@ -563,7 +620,7 @@ apply4 c d
     cons :: Constrain a => Gen a
     cons = stitch (d-1)
 
-data Tree a = Leaf | Node a (Tree a) (Tree a) deriving (Eq, Ord, Show)
+data Tree a = Leaf | Node a (Tree a) (Tree a) deriving (Eq, Ord, Show, Generic)
 
 treesort = FObj $ stringSymbol "Int"
 
