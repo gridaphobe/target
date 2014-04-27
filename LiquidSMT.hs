@@ -1,3 +1,6 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -50,6 +53,8 @@ import           System.Exit
 import           System.IO.Unsafe
 import           Text.PrettyPrint.HughesPJ hiding (first)
 import           Text.Printf
+
+import           GHC.Generics
 
 io = liftIO
 
@@ -344,17 +349,84 @@ evalBop b    e1           e2           = error $ printf "evalBop(%s, %s, %s)" (s
 
 
 class Show a => Constrain a where
-  gen    :: Proxy a -> Int -> SpecType -> Gen String
+  gen         :: Proxy a -> Int -> SpecType -> Gen String
+  default gen :: (Generic a, GConstrain (Rep a))
+              => Proxy a -> Int -> SpecType -> Gen String
+  gen p = ggen (reproxy p) . from
+
+
   stitch :: Int -> Gen a
+  default stitch :: (Generic a, GConstrain (Rep a)) => Int -> Gen a
+  stitch d = to <$> gstitch d
+
   toExpr :: a -> Expr
+  default toExpr :: (Generic a, GConstrain (Rep a)) => a -> Expr
+  toExpr = gtoExpr . from
 
 reproxyElem :: proxy (f a) -> Proxy a
 reproxyElem = reproxy
 
+instance Constrain Bool
+instance Constrain a => Constrain [a]
+instance (Constrain a, Constrain b) => Constrain (a,b)
+
+class GConstrain f where
+  ggen    :: Proxy (f a) -> Int -> SpecType -> Gen String
+  gstitch :: Int -> Gen (f a)
+  gtoExpr :: f a -> Expr
+  gtoExprs :: f a -> [Expr]
+
+instance GConstrain U1 where
+  ggen p d t = fresh [] FInt
+  gstitch _  = pop >> return U1
+  gtoExpr c  = error "U1" --app (symbol $ conName c) []
+  gtoExprs _ = []
+
+instance (GConstrain a, GConstrain b) => GConstrain (a :*: b) where
+  ggen p d t = undefined
+  gstitch d  = undefined
+  gtoExpr c@(a :*: b)  = error ":*:"
+  gtoExprs (a :*: b)  = gtoExprs a ++ gtoExprs b
+
+instance (GConstrain a, GConstrain b) => GConstrain (a :+: b) where
+  ggen p d t = undefined
+  gstitch d  = undefined
+  gtoExpr c@(L1 x) = gtoExpr x -- app (symbol $ conName c) [gtoExpr x]
+  gtoExpr c@(R1 x) = gtoExpr x -- app (symbol $ conName x) [gtoExpr x]
+  gtoExprs (L1 x) = error "L1" -- gtoExprs x
+  gtoExprs (R1 x) = error "R1" -- gtoExprs x
+
+instance (GConstrain a, Constructor c) => GConstrain (C1 c a) where
+  ggen p d t = undefined
+  gstitch d  = undefined
+  gtoExpr c@(M1 x)  = app (symbol $ conName c) (gtoExprs x)
+  gtoExprs _ = error "C1"
+
+instance (GConstrain a, Datatype c) => GConstrain (D1 c a) where
+  ggen p d t = undefined --ggen (reproxy p :: Proxy f) d t
+  gstitch d  = undefined
+  gtoExpr c@(M1 x) = app (symbol $ GHC.Generics.moduleName c ++ "." ++ (show $ val d)) xs
+    where
+      (EApp d xs) = gtoExpr x -- app (symbol $ conName c) (gtoExprs x)
+  gtoExprs (M1 c)  = error "D1"
+
+instance (GConstrain a) => GConstrain (S1 c a) where
+  ggen p d t = undefined
+  gstitch d  = undefined
+  gtoExpr (M1 c)  = gtoExpr c -- app (symbol $ conName c) []
+  gtoExprs (M1 c) = gtoExprs c
+
+instance (Constrain a) => GConstrain (K1 i a) where
+  ggen p d t = undefined
+  gstitch d  = undefined
+  gtoExpr  (K1 x) = toExpr x
+  gtoExprs (K1 x) = [toExpr x]
+
+
 instance Constrain () where
   gen _ _ _ = fresh [] FInt
   stitch _  = return ()
-  toExpr _  = app (stringSymbol "()") []
+  -- toExpr _  = app (stringSymbol "()") []
 
 instance Constrain Int where
   gen _ d t = fresh [] FInt >>= \x ->
@@ -366,47 +438,47 @@ instance Constrain Int where
   stitch _ = read <$> pop
   toExpr i = ECon $ I $ fromIntegral i
 
-instance (Constrain a) => Constrain [a] where
-  gen _ 0 t = gen_nil t
-  gen p d t@(RApp c [ta] ps r)
-    = do let t' = RApp c [ta] ps mempty
-         x1 <- gen_nil t'
-         x2 <- gen_cons p d t'
-         x3 <- freshChoose [x1,x2] listsort
-         constrain $ ofReft x3 (toReft r)
-         return x3
+-- instance (Constrain a) => Constrain [a] where
+--   gen _ 0 t = gen_nil t
+--   gen p d t@(RApp c [ta] ps r)
+--     = do let t' = RApp c [ta] ps mempty
+--          x1 <- gen_nil t'
+--          x2 <- gen_cons p d t'
+--          x3 <- freshChoose [x1,x2] listsort
+--          constrain $ ofReft x3 (toReft r)
+--          return x3
 
-  stitch 0 = stitch_nil
-  stitch d = do [c,n] <- popChoices 2
-                pop  -- the "actual" list, but we don't care about it
-                cc    <- stitch_cons d
-                nn    <- stitch_nil
-                case (n,c) of
-                  (True,_) -> return nn
-                  (_,True) -> return cc
+--   stitch 0 = stitch_nil
+--   stitch d = do [c,n] <- popChoices 2
+--                 pop  -- the "actual" list, but we don't care about it
+--                 cc    <- stitch_cons d
+--                 nn    <- stitch_nil
+--                 case (n,c) of
+--                   (True,_) -> return nn
+--                   (_,True) -> return cc
 
-  toExpr []     = app (stringSymbol "[]") -- (show '[])
-                      []
-  toExpr (x:xs) = app (stringSymbol ":") -- (show '(:))
-                      [toExpr x, toExpr xs]
+--   toExpr []     = app (stringSymbol "[]") -- (show '[])
+--                       []
+--   toExpr (x:xs) = app (stringSymbol ":") -- (show '(:))
+--                       [toExpr x, toExpr xs]
 
-gen_nil (RApp _ _ _ _)
-  = make "GHC.Types.[]" [] listsort
+-- gen_nil (RApp _ _ _ _)
+--   = make "GHC.Types.[]" [] listsort
 
-stitch_nil
-  = do pop >> return []
+-- stitch_nil
+--   = do pop >> return []
 
-gen_cons :: forall a. Constrain a => Proxy [a] -> Int -> SpecType -> Gen String
-gen_cons p d t@(RApp c [ta] ps r)
-  = make2 "GHC.Types.:" (reproxyElem p, p) t listsort d
-gen_cons _ _ t = error $ show t
+-- gen_cons :: forall a. Constrain a => Proxy [a] -> Int -> SpecType -> Gen String
+-- gen_cons p d t@(RApp c [ta] ps r)
+--   = make2 "GHC.Types.:" (reproxyElem p, p) t listsort d
+-- gen_cons _ _ t = error $ show t
 
-stitch_cons :: Constrain a => Int -> Gen [a]
-stitch_cons d
-  = do z  <- pop
-       xs <- stitch (d-1)
-       x  <- stitch (d-1)
-       return (x:xs)
+-- stitch_cons :: Constrain a => Int -> Gen [a]
+-- stitch_cons d
+--   = do z  <- pop
+--        xs <- stitch (d-1)
+--        x  <- stitch (d-1)
+--        return (x:xs)
 
 
 -- make2 :: forall a b. (Constrain a, Constrain b)
