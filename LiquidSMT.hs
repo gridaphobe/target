@@ -112,13 +112,15 @@ data GenState
        , ctorEnv     :: !DataConEnv
        , measEnv     :: !MeasureEnv
        , tyconInfo   :: !(M.HashMap TyCon RTyCon)
+       , constrs     :: ![(String, String)]
        } deriving (Show)
 
-initGS sp = GS def def def def def def dcons sigs (measures sp) tyi
+initGS sp = GS def def def def def def dcons sigs (measures sp) tyi free
   where
     dcons = map (showpp *** id) (dconsP sp)
     sigs  = map (showpp *** val) (ctors sp)
     tyi   = makeTyConInfo (tconsP sp)
+    free  = map (showpp *** showpp) $ freeSyms sp
 
 type DataConEnv = [(String, SpecType)]
 type MeasureEnv = [Measure SpecType DataCon]
@@ -214,6 +216,7 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
     a <- gen (Proxy :: Proxy a) d ta
     let tb' = subst (mkSubst [(xa, var a)]) tb
     b <- gen (Proxy :: Proxy b) d tb'
+    cts <- gets constrs
     vals <- allSat [symbol a, symbol b]
     -- build up the haskell value
     (xvs :: [(a,b)]) <- forM vals $ \ vs -> do
@@ -224,7 +227,8 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
     forM_ xvs $ \(a,b) -> do
       io $ print (a,b)
       r <- io $ evaluate (f a b)
-      io . print =<< evalReft (M.fromList [(show xa, toExpr a),(show xb, toExpr b)]) (toReft $ rt_reft to) (toExpr r)
+      let env = map (second (flip app [])) cts ++ [(show xa, toExpr a),(show xb, toExpr b)]
+      io . print =<< evalReft (M.fromList env) (toReft $ rt_reft to) (toExpr r)
   test f d t = error $ show t
 
 allSat :: [Symbol] -> Gen [[String]]
@@ -234,6 +238,9 @@ allSat roots = setup >>= go
        ctx <- io $ makeContext Z3
        -- declare sorts
        io $ smtWrite ctx "(define-sort CHOICE () Bool)"
+       -- declare constructors
+       cts <- gets constrs
+       mapM_ (\ (_,c) -> io . command ctx $ Declare (symbol c) [] FInt) cts
        -- declare variables
        vs <- gets variables
        mapM_ (\ x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
@@ -242,10 +249,12 @@ allSat roots = setup >>= go
        mapM_ (\ m -> io . command ctx $ makeDecl (val $ name m) (rTypeSort mempty $ sort m)) ms
        cs <- gets constraints
        deps <- V.fromList . map (symbol *** symbol) <$> gets deps
-       mapM_ (io . command ctx .  Assert) cs
+       mapM_ (\c -> do {i <- gets seed; modify $ \s@(GS {..}) -> s { seed = seed + 1 };
+                        io . command ctx $ Assert (Just i) c})
+         cs
        return (ctx,vs,deps)
 
-    go _ = return []
+    go :: (Context, [(String,Sort)], V.Vector (Symbol,Symbol)) -> Gen [[String]]
     go (ctx,vs,deps) = do
        resp <- io $ command ctx CheckSat
        case resp of
@@ -254,7 +263,9 @@ allSat roots = setup >>= go
          Sat     -> do
            Values model <- io $ command ctx (GetValue $ map symbol vs)
            let cs = V.toList $ refute roots (M.fromList model) deps vs
-           io $ command ctx $ Assert $ PNot $ pAnd cs
+           i <- gets seed
+           modify $ \s@(GS {..}) -> s { seed = seed + 1 }
+           io $ command ctx $ Assert (Just i) $ PNot $ pAnd cs
            (map snd model:) <$> go (ctx,vs,deps)
 
     ints vs = S.fromList [symbol v | (v,t) <- vs, t `elem` interps]
@@ -302,8 +313,6 @@ applyMeasure :: Measure SpecType DataCon -> Expr -> M.HashMap String Expr -> Gen
 applyMeasure m (EApp c xs) env = evalBody eq xs env
   where
     eq = fromJust $ find ((==val c) . symbol . show . ctor) $ eqns m
-    (E e) = body eq
-    e' = subst (mkSubst $ zip (binds eq) xs) e
 applyMeasure m e           env = error $ printf "applyMeasure(%s, %s)" (showpp m) (showpp e)
 
 evalBody eq xs env = go $ body eq
@@ -323,6 +332,12 @@ evalExpr (EApp f es)    m
          Nothing -> EApp f <$> mapM (flip evalExpr m) es
          Just ms -> do e' <- (evalExpr (head es) m)
                        applyMeasure ms e' m
+evalExpr (EIte p e1 e2) m
+  = do b <- evalPred p m
+       if b
+         then evalExpr e1 m
+         else evalExpr e2 m
+evalExpr e              m = error $ printf "evalExpr(%s)" (show e)
 
 evalBop Plus (ECon (I x)) (ECon (I y)) = ECon . I $ x + y
 evalBop b    e1           e2           = error $ printf "evalBop(%s, %s, %s)" (show b) (show e1) (show e2)
@@ -345,8 +360,8 @@ instance Constrain Int where
   gen _ d t = fresh [] FInt >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
        -- use the unfolding depth to constrain the range of Ints, like QuickCheck
-       constrain $ var x `ge` (0 - fromIntegral d)
-       constrain $ var x `le` fromIntegral d
+       constrain $ var x `ge` (0 - fromIntegral 5)
+       constrain $ var x `le` fromIntegral 5
        return x
   stitch _ = read <$> pop
   toExpr i = ECon $ I $ fromIntegral i
@@ -461,14 +476,24 @@ onRefs f t = t { rt_pargs = f <$> rt_pargs t}
 
 monosToPoly su r = foldr monoToPoly r su
 
-monoToPoly (p, r) (RMono _ (U _ (Pr [up]) _)) | pname p == pname up
+monoToPoly (p, r) (RMono _ (U _ (Pr [up]) _))
+  | pname p == pname up
   = r
 monoToPoly _ m = m
 
 
+-- apply4 :: (Constrain a, Constrain b, Constrain c, Constrain d)
+--        => (a -> b -> c -> d -> e) -> Int -> Gen e
+apply4 c d
+  = do pop
+       c <$> cons <*> cons <*> cons <*> cons
+  where
+    cons :: Constrain a => Gen a
+    cons = stitch (d-1)
+
 data Tree a = Leaf | Node a (Tree a) (Tree a) deriving (Eq, Ord, Show)
 
-treesort = FObj $ stringSymbol "Tree"
+treesort = FObj $ stringSymbol "Int"
 
 treeList Leaf = []
 treeList (Node x l r) = treeList l ++ [x] ++ treeList r
@@ -591,7 +616,7 @@ testOne :: Testable f => f -> String -> FilePath -> IO ()
 testOne f name path
   = do sp <- getSpec path
        let ty = val $ fromJust $ lookup (name) $ map (first showpp) $ tySigs sp
-       runGen sp $ test f 5 ty
+       runGen sp $ test f 2 ty
 
 -- mkTest :: TH.Name -> TH.ExpQ
 -- mkTest f = do loc <- TH.location

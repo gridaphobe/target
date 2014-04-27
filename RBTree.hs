@@ -15,7 +15,7 @@ import Language.Haskell.Liquid.Types (RType(..))
 
 import Debug.Trace
 
-import Language.Haskell.Liquid.Prelude
+import Language.Haskell.Liquid.Prelude hiding (eq)
 
 data RBTree a = Leaf 
               | Node Color a !(RBTree a) !(RBTree a)
@@ -205,6 +205,8 @@ makeBlack (Node _ x l r) = Node B x l r
                    (left :: RBTree <l, r> (a <r key>))
   @-}
 
+{-@ data Color = B | R @-}
+
 -------------------------------------------------------------------------------
 -- Auxiliary Invariants -------------------------------------------------------
 -------------------------------------------------------------------------------
@@ -377,6 +379,8 @@ instance Constrain Color where
   gen _ _ t@(RApp c _ _ r)
     = do bb <- make "Main.B" [] colorsort
          rr <- make "Main.R" [] colorsort
+         constrain $ var bb `eq` var "Main.B"
+         constrain $ var rr `eq` var "Main.R"
          x <- freshChoose [bb,rr] colorsort
          constrain $ ofReft x (toReft r)
          return x
@@ -425,16 +429,17 @@ stitch_leaf
   = pop >> return Leaf
 
 gen_node p d t@(RApp c ts ps r)
-  = make4 "Main.Node" (pi, pa, p, p) t treesort d
-  where pi = Proxy :: Proxy Int
+  = make4 "Main.Node" (pc, pa, p, p) t treesort d
+  where pc = Proxy :: Proxy Color
         pa = reproxyElem p
 
 stitch_node d
-  = do pop
-       r <- stitch (d-1)
-       l <- stitch (d-1)
-       x <- stitch (d-1)
-       c <- stitch (d-1)
-       return $ Node c x l r
+  = apply4 Node d
+  -- = do pop
+  --      r <- stitch (d-1)
+  --      l <- stitch (d-1)
+  --      x <- stitch (d-1)
+  --      c <- stitch (d-1)
+  --      return $ Node c x l r
 
 main = testOne (add :: Int -> RBTree Int -> RBTree Int) "Main.add" "RBTree.hs"
