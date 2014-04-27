@@ -8,6 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
+import GHC.Generics
 import LiquidSMT
 
 {-@ mytake :: n:Nat -> xs:[Nat] -> {v:[Nat] | (Min (len v) n (len xs))} @-}
