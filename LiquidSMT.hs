@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {- LANGUAGE TemplateHaskell #-}
 
 module LiquidSMT where
@@ -31,7 +32,7 @@ import           Data.String
 import qualified Data.Text.Lazy as T
 import qualified Data.Vector as V
 import           Debug.Trace
-import           GHC
+import           GHC hiding (Failed)
 import           Name
 import           Language.Fixpoint.Config (SMTSolver (..))
 import           Language.Fixpoint.Names
@@ -44,7 +45,7 @@ import           Language.Haskell.Liquid.GhcMisc
 import           Language.Haskell.Liquid.Parse
 import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.RefType
-import           Language.Haskell.Liquid.Types hiding (var, env)
+import           Language.Haskell.Liquid.Types hiding (var, env, Result(..))
 import qualified Language.Haskell.TH as TH
 import           System.Exit
 import           System.IO.Unsafe
@@ -192,9 +193,12 @@ popChoices n = fmap read <$> popN n
     read "false" = False
     read e       = error $ "popChoices: " ++ e
 
+data Result = Passed !Int
+            | Failed !String
+            deriving (Show)
 
 class Testable a where
-  test :: a -> Int -> SpecType -> Gen ()
+  test :: a -> Int -> SpecType -> Gen Result
 
 instance (Constrain a, Constrain b) => Testable (a -> b) where
   test f d (stripQuals -> (RFun x i o r)) = do
@@ -205,11 +209,18 @@ instance (Constrain a, Constrain b) => Testable (a -> b) where
     (xvs :: [a]) <- forM vals $ \ vs -> do
       setValues vs
       stitch d
-    forM_ xvs $ \a -> do
-      io $ print a
-      r <- io $ evaluate (f a)
-      let env = map (second (flip app [])) cts ++ [(show x, toExpr a)]
-      io . print =<< evalReft (M.fromList env) (toReft $ rt_reft o) (toExpr r)
+    foldM (\case
+              r@(Failed s) -> const $ return r
+              (Passed n) -> \a -> do
+                r <- io $ evaluate (f a)
+                let env = map (second (`app` [])) cts ++ [(show x, toExpr a)]
+                sat <- evalReft (M.fromList env) (toReft $ rt_reft o) (toExpr r)
+                case sat of
+                  False -> return $ Failed $ show (x, a)
+                  True  -> return $ Passed (n+1))
+      (Passed 0) xvs
+  test f d t = error $ show t
+
 
 fourth4 (_,_,_,d) = d
 
@@ -228,11 +239,17 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
       b <- stitch d
       a <- stitch d
       return (a,b)
-    forM_ xvs $ \(a,b) -> do
-      io $ print (a,b)
-      r <- io $ evaluate (f a b)
-      let env = map (second (flip app [])) cts ++ [(show xa, toExpr a),(show xb, toExpr b)]
-      io . print =<< evalReft (M.fromList env) (toReft $ rt_reft to) (toExpr r)
+    foldM (\case
+              r@(Failed s) -> const $ return r
+              (Passed n) -> \(a,b) -> do
+                r <- io $ evaluate (f a b)
+                let env = map (second (`app` [])) cts
+                       ++ [(show xa, toExpr a),(show xb, toExpr b)]
+                sat <- evalReft (M.fromList env) (toReft $ rt_reft to) (toExpr r)
+                case sat of
+                  False -> return $ Failed $ show ((xa, a), (xb, b))
+                  True  -> return $ Passed (n+1))
+      (Passed 0) xvs
   test f d t = error $ show t
 
 instance (Constrain a, Constrain b, Constrain c, Constrain d)
@@ -252,12 +269,17 @@ instance (Constrain a, Constrain b, Constrain c, Constrain d)
       b <- stitch d
       a <- stitch d
       return (a,b,c)
-    forM_ xvs $ \(a,b,c) -> do
-      io $ print (a,b,c)
-      r <- io $ evaluate (f a b c)
-      let env = map (second (flip app [])) cts
-             ++ [(show xa, toExpr a),(show xb, toExpr b),(show xc, toExpr c)]
-      io . print =<< evalReft (M.fromList env) (toReft $ rt_reft to) (toExpr r)
+    foldM (\case
+              r@(Failed s) -> const $ return r
+              (Passed n) -> \(a,b,c) -> do
+                r <- io $ evaluate (f a b c)
+                let env = map (second (`app` [])) cts
+                       ++ [(show xa, toExpr a),(show xb, toExpr b),(show xc, toExpr c)]
+                sat <- evalReft (M.fromList env) (toReft $ rt_reft to) (toExpr r)
+                case sat of
+                  False -> return $ Failed $ show ((xa, a), (xb, b))
+                  True  -> return $ Passed (n+1))
+      (Passed 0) xvs
   test f d t = error $ show t
 
 allSat :: [Symbol] -> Gen [[String]]
@@ -649,21 +671,25 @@ getSpec target
          Left err -> error $ show err
          Right i  -> return $ spec i
 
-testModule :: FilePath -> [Gen ()] -> IO ()
+testModule :: FilePath -> [Gen Result] -> IO ()
 testModule mod ts
   = do sp <- getSpec mod
-       mapM_ (runGen sp) ts
+       forM_ ts $ \t -> do
+         res <- runGen sp t
+         case res of
+           Passed n -> printf "OK. Passed %d tests\n\n" n
+           Failed x -> printf "Found counter-example: %s\n\n" x
 
-testFun :: Testable f => f -> String -> Gen ()
+testFun :: Testable f => f -> String -> Gen Result
 testFun f name
   = do ty <- fromJust . lookup name <$> gets sigs
-       io $ printf "Testing %s :: %s\n" name (showpp ty)
+       io $ printf "Testing %s\n" name -- (showpp ty)
        test f 3 ty
 
-testOne :: Testable f => f -> String -> FilePath -> IO ()
+testOne :: Testable f => f -> String -> FilePath -> IO Result
 testOne f name path
   = do sp <- getSpec path
-       let ty = val $ fromJust $ lookup (name) $ map (first showpp) $ tySigs sp
+       let ty = val $ fromJust $ lookup name $ map (first showpp) $ tySigs sp
        runGen sp $ test f 2 ty
 
 -- mkTest :: TH.Name -> TH.ExpQ
