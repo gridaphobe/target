@@ -435,11 +435,22 @@ gen_node p d t@(RApp c ts ps r)
 
 stitch_node d
   = apply4 Node d
-  -- = do pop
-  --      r <- stitch (d-1)
-  --      l <- stitch (d-1)
-  --      x <- stitch (d-1)
-  --      c <- stitch (d-1)
-  --      return $ Node c x l r
 
-main = testOne (add :: Int -> RBTree Int -> RBTree Int) "Main.add" "RBTree.hs"
+-- main = testOne (add :: Int -> RBTree Int -> RBTree Int) "Main.add" "RBTree.hs"
+
+tests = [ testFun (add :: Int -> RBTree Int -> RBTree Int) "Main.add"
+        , testFun (ins :: Int -> RBTree Int -> RBTree Int) "Main.ins"
+        , testFun (remove :: Int -> RBTree Int -> RBTree Int) "Main.remove"
+        , testFun (del :: Int -> RBTree Int -> RBTree Int) "Main.del"
+        , testFun (append :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "Main.append"
+        , testFun (deleteMin :: RBTree Int -> RBTree Int) "Main.deleteMin"
+        -- , testFun (deleteMin' :: Int -> RBTree Int -> RBTree Int -> (Int, RBTree Int)) "Main.deleteMin'"
+        , testFun (lbalS :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "Main.lbalS"
+        , testFun (rbalS :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "Main.rbalS"
+        , testFun (lbal :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "Main.lbal"
+        , testFun (rbal :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "Main.rbal"
+        , testFun (makeRed :: RBTree Int -> RBTree Int) "Main.makeRed"
+        , testFun (makeBlack :: RBTree Int -> RBTree Int) "Main.makeBlack"
+        ]
+
+main = testModule "RBTree.hs" tests

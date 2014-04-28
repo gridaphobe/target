@@ -113,14 +113,16 @@ data GenState
        , measEnv     :: !MeasureEnv
        , tyconInfo   :: !(M.HashMap TyCon RTyCon)
        , constrs     :: ![(String, String)]
+       , sigs        :: ![(String, SpecType)]
        } deriving (Show)
 
-initGS sp = GS def def def def def def dcons sigs (measures sp) tyi free
+initGS sp = GS def def def def def def dcons cts (measures sp) tyi free sigs
   where
     dcons = map (showpp *** id) (dconsP sp)
-    sigs  = map (showpp *** val) (ctors sp)
+    cts   = map (showpp *** val) (ctors sp)
     tyi   = makeTyConInfo (tconsP sp)
     free  = map (showpp *** showpp) $ freeSyms sp
+    sigs  = map (showpp *** val) $ tySigs sp
 
 type DataConEnv = [(String, SpecType)]
 type MeasureEnv = [Measure SpecType DataCon]
@@ -197,15 +199,17 @@ class Testable a where
 instance (Constrain a, Constrain b) => Testable (a -> b) where
   test f d (stripQuals -> (RFun x i o r)) = do
     a <- gen (Proxy :: Proxy a) d i
+    cts <- gets constrs
     vals <- allSat [symbol a]
     -- build up the haskell value
     (xvs :: [a]) <- forM vals $ \ vs -> do
       setValues vs
       stitch d
-    io $ print xvs
-    forM_ xvs $ \xv -> do
-      r <- io $ evaluate (f xv)
-      io . print =<< evalReft (M.fromList [(show x, toExpr xv)]) (toReft $ rt_reft o) (toExpr r)
+    forM_ xvs $ \a -> do
+      io $ print a
+      r <- io $ evaluate (f a)
+      let env = map (second (flip app [])) cts ++ [(show x, toExpr a)]
+      io . print =<< evalReft (M.fromList env) (toReft $ rt_reft o) (toExpr r)
 
 fourth4 (_,_,_,d) = d
 
@@ -228,6 +232,31 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
       io $ print (a,b)
       r <- io $ evaluate (f a b)
       let env = map (second (flip app [])) cts ++ [(show xa, toExpr a),(show xb, toExpr b)]
+      io . print =<< evalReft (M.fromList env) (toReft $ rt_reft to) (toExpr r)
+  test f d t = error $ show t
+
+instance (Constrain a, Constrain b, Constrain c, Constrain d)
+         => Testable (a -> b -> c -> d) where
+  test f d (stripQuals -> (RFun xa ta (RFun xb tb (RFun xc tc to _) _) _)) = do
+    a <- gen (Proxy :: Proxy a) d ta
+    let tb' = subst (mkSubst [(xa, var a)]) tb
+    b <- gen (Proxy :: Proxy b) d tb'
+    let tc' = subst (mkSubst [(xa, var a), (xb, var b)]) tc
+    c <- gen (Proxy :: Proxy c) d tc'
+    cts <- gets constrs
+    vals <- allSat [symbol a, symbol b, symbol c]
+    -- build up the haskell value
+    (xvs :: [(a,b,c)]) <- forM vals $ \ vs -> do
+      setValues vs
+      c <- stitch d
+      b <- stitch d
+      a <- stitch d
+      return (a,b,c)
+    forM_ xvs $ \(a,b,c) -> do
+      io $ print (a,b,c)
+      r <- io $ evaluate (f a b c)
+      let env = map (second (flip app [])) cts
+             ++ [(show xa, toExpr a),(show xb, toExpr b),(show xc, toExpr c)]
       io . print =<< evalReft (M.fromList env) (toReft $ rt_reft to) (toExpr r)
   test f d t = error $ show t
 
@@ -339,8 +368,12 @@ evalExpr (EIte p e1 e2) m
          else evalExpr e2 m
 evalExpr e              m = error $ printf "evalExpr(%s)" (show e)
 
-evalBop Plus (ECon (I x)) (ECon (I y)) = ECon . I $ x + y
-evalBop b    e1           e2           = error $ printf "evalBop(%s, %s, %s)" (show b) (show e1) (show e2)
+evalBop Plus  (ECon (I x)) (ECon (I y)) = ECon . I $ x + y
+evalBop Minus (ECon (I x)) (ECon (I y)) = ECon . I $ x - y
+evalBop Times (ECon (I x)) (ECon (I y)) = ECon . I $ x * y
+evalBop Div   (ECon (I x)) (ECon (I y)) = ECon . I $ x `div` y
+evalBop Mod   (ECon (I x)) (ECon (I y)) = ECon . I $ x `mod` y
+evalBop b     e1           e2           = error $ printf "evalBop(%s, %s, %s)" (show b) (show e1) (show e2)
 
 
 class Show a => Constrain a where
@@ -360,8 +393,8 @@ instance Constrain Int where
   gen _ d t = fresh [] FInt >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
        -- use the unfolding depth to constrain the range of Ints, like QuickCheck
-       constrain $ var x `ge` (0 - fromIntegral 5)
-       constrain $ var x `le` fromIntegral 5
+       constrain $ var x `ge` (0 - fromIntegral 3)
+       constrain $ var x `le` fromIntegral 3
        return x
   stitch _ = read <$> pop
   toExpr i = ECon $ I $ fromIntegral i
@@ -486,7 +519,11 @@ monoToPoly _ m = m
 --        => (a -> b -> c -> d -> e) -> Int -> Gen e
 apply4 c d
   = do pop
-       c <$> cons <*> cons <*> cons <*> cons
+       v4 <- cons
+       v3 <- cons
+       v2 <- cons
+       v1 <- cons
+       return $ c v1 v2 v3 v4
   where
     cons :: Constrain a => Gen a
     cons = stitch (d-1)
@@ -611,6 +648,17 @@ getSpec target
        case info of
          Left err -> error $ show err
          Right i  -> return $ spec i
+
+testModule :: FilePath -> [Gen ()] -> IO ()
+testModule mod ts
+  = do sp <- getSpec mod
+       mapM_ (runGen sp) ts
+
+testFun :: Testable f => f -> String -> Gen ()
+testFun f name
+  = do ty <- fromJust . lookup name <$> gets sigs
+       io $ printf "Testing %s :: %s\n" name (showpp ty)
+       test f 3 ty
 
 testOne :: Testable f => f -> String -> FilePath -> IO ()
 testOne f name path
