@@ -10,13 +10,13 @@ module Main where
 
 import LiquidSMT
 
-{-@ mytake :: n:Nat -> xs:[Nat] -> {v:[Nat] | (Min (len v) n (len xs))} @-}
+{-@ mytake :: n:Nat -> xs:[Nat]<{\x y -> x < y}> -> {v:[Nat]<{\x y -> x < y}> | (Min (len v) n (len xs))} @-}
 mytake :: Int -> [Int] -> [Int]
 mytake 0 xs     = []
 mytake _ []     = []
 mytake n (x:xs) = x : mytake (n-1) xs
 
 
+tests = [ testFun mytake "Main.mytake" 2 ]
 
-main = testOne (mytake) ("Main.mytake") "List.hs"
--- main = $(mkTest 'mytake)
+main = testModule "List.hs" tests

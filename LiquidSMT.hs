@@ -115,9 +115,11 @@ data GenState
        , tyconInfo   :: !(M.HashMap TyCon RTyCon)
        , constrs     :: ![(String, String)]
        , sigs        :: ![(String, SpecType)]
+       , depth       :: !Int
+       , chosen      :: !(Maybe String)
        } deriving (Show)
 
-initGS sp = GS def def def def def def dcons cts (measures sp) tyi free sigs
+initGS sp = GS def def def def def def dcons cts (measures sp) tyi free sigs def Nothing
   where
     dcons = map (showpp *** id) (dconsP sp)
     cts   = map (showpp *** val) (ctors sp)
@@ -131,6 +133,17 @@ type MeasureEnv = [Measure SpecType DataCon]
 setValues vs = modify $ \s@(GS {..}) -> s { values = vs }
 
 addDep from to = modify $ \s@(GS {..}) -> s { deps = (from,to):deps }
+
+addConstraint p = modify $ \s@(GS {..}) -> s { constraints = p:constraints }
+
+withFreshChoice act
+  = do c  <- freshChoice []
+       mc <- gets chosen
+       modify $ \s -> s { chosen = Just c }
+       x  <- act
+       modify $ \s -> s { chosen = mc }
+       addDep c x
+       return (x,c)
 
 -- | `fresh' generates a fresh variable and encodes the reachability
 -- relation between variables, e.g. `fresh xs sort` will return a new
@@ -152,18 +165,18 @@ freshChoice xs
 
 choicesort = FObj $ stringSymbol "CHOICE"
 
-freshChoose :: [String] -> Sort -> Gen String
-freshChoose xs sort
-  = do x <- fresh [] sort
-       cs <- forM xs $ \x' -> do
-               c <- freshChoice [x']
+freshChoose :: [(String,String)] -> Sort -> Gen String
+freshChoose xcs sort
+  = do x' <- fresh [] sort
+       cs <- forM xcs $ \(x,c) -> do
+               -- c <- freshChoice [x']
                constrain $ prop c `iff` var x `eq` var x'
-               addDep x c
+               addDep x' c
                return $ prop c
        constrain $ pOr cs
        constrain $ pAnd [ PNot $ pAnd [x, y]
-                        | [x, y] <- filter ((==2) . length) $ subsequences cs ]
-       return x
+                            | [x, y] <- filter ((==2) . length) $ subsequences cs ]
+       return x'
 
 
 -- make :: TH.Name -> [String] -> Sort -> Gen String
@@ -176,10 +189,21 @@ make c vs s
        return x
 
 constrain :: Pred -> Gen ()
-constrain p = modify $ \s@(GS {..}) -> s { constraints = p : constraints }
+constrain p
+  = do -- b <- fresh [] choicesort
+       -- let pdep = prop b `iff` p
+       -- modify $ \s@(GS {..}) -> s { constraints = pdep : constraints }
+       mc <- gets chosen
+       case mc of
+         Nothing -> addConstraint p -- modify $ \s@(GS {..}) -> s { constraints = p : constraints }
+         Just c  -> let p' = prop c `imp` p
+                    in addConstraint p' -- modify $ \s@(GS {..}) -> s { constraints = p' : constraints }
+         -- (c:_) -> let 
+       -- modify $ \s@(GS {..}) -> s { constraints = p : constraints }
 
 pop :: Gen String
 pop = do v <- gets $ head . values
+         io $ printf "pop: %s\n" v
          modify $ \s@(GS {..}) -> s { values = tail values}
          return v
 
@@ -201,7 +225,7 @@ class Testable a where
   test :: a -> Int -> SpecType -> Gen Result
 
 instance (Constrain a, Constrain b) => Testable (a -> b) where
-  test f d (stripQuals -> (RFun x i o r)) = do
+  test f d (stripQuals -> (RFun x i o _)) = do
     a <- gen (Proxy :: Proxy a) d i
     cts <- gets constrs
     vals <- allSat [symbol a]
@@ -210,7 +234,7 @@ instance (Constrain a, Constrain b) => Testable (a -> b) where
       setValues vs
       stitch d
     foldM (\case
-              r@(Failed s) -> const $ return r
+              r@(Failed _) -> const $ return r
               (Passed n) -> \a -> do
                 r <- io $ evaluate (f a)
                 let env = map (second (`app` [])) cts ++ [(show x, toExpr a)]
@@ -240,7 +264,7 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
       a <- stitch d
       return (a,b)
     foldM (\case
-              r@(Failed s) -> const $ return r
+              r@(Failed _) -> const $ return r
               (Passed n) -> \(a,b) -> do
                 r <- io $ evaluate (f a b)
                 let env = map (second (`app` [])) cts
@@ -248,7 +272,8 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
                 sat <- evalReft (M.fromList env) (toReft $ rt_reft to) (toExpr r)
                 case sat of
                   False -> return $ Failed $ show ((xa, a), (xb, b))
-                  True  -> return $ Passed (n+1))
+                  True  -> do io $ printf "SAFE:\n%s\n%s\n\n" (show a) (show b)
+                              return $ Passed (n+1))
       (Passed 0) xvs
   test f d t = error $ show t
 
@@ -270,15 +295,16 @@ instance (Constrain a, Constrain b, Constrain c, Constrain d)
       a <- stitch d
       return (a,b,c)
     foldM (\case
-              r@(Failed s) -> const $ return r
+              r@(Failed _) -> const $ return r
               (Passed n) -> \(a,b,c) -> do
                 r <- io $ evaluate (f a b c)
                 let env = map (second (`app` [])) cts
                        ++ [(show xa, toExpr a),(show xb, toExpr b),(show xc, toExpr c)]
                 sat <- evalReft (M.fromList env) (toReft $ rt_reft to) (toExpr r)
                 case sat of
-                  False -> return $ Failed $ show ((xa, a), (xb, b))
-                  True  -> return $ Passed (n+1))
+                  False -> return $ Failed $ show ((xa, a), (xb, b), (xc, c))
+                  True  -> do io $ printf "SAFE:\n%s\n%s\n%s\n\n" (show a) (show b) (show c)
+                              return $ Passed (n+1))
       (Passed 0) xvs
   test f d t = error $ show t
 
@@ -408,37 +434,40 @@ reproxyElem = reproxy
 
 instance Constrain () where
   gen _ _ _ = fresh [] FInt
-  stitch _  = return ()
+  stitch _  = pop >> return ()
   toExpr _  = app (stringSymbol "()") []
 
 instance Constrain Int where
-  gen _ d t = fresh [] FInt >>= \x ->
+  gen _ _ t = fresh [] FInt >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
        -- use the unfolding depth to constrain the range of Ints, like QuickCheck
-       constrain $ var x `ge` (0 - fromIntegral 3)
-       constrain $ var x `le` fromIntegral 3
+       d <- gets depth
+       constrain $ var x `ge` fromIntegral (negate d)
+       constrain $ var x `le` fromIntegral d
        return x
   stitch _ = read <$> pop
   toExpr i = ECon $ I $ fromIntegral i
 
 instance (Constrain a) => Constrain [a] where
-  gen _ 0 t = gen_nil t
+  gen _ 0 t = fst <$> gen_nil t
   gen p d t@(RApp c [ta] ps r)
     = do let t' = RApp c [ta] ps mempty
-         x1 <- gen_nil t'
-         x2 <- gen_cons p d t'
-         x3 <- freshChoose [x1,x2] listsort
-         constrain $ ofReft x3 (toReft r)
-         return x3
+         c1 <- gen_nil t'
+         c2 <- gen_cons p d t'
+         x  <- freshChoose [c1,c2] listsort
+         constrain $ ofReft x (toReft r)
+         return x
 
-  stitch 0 = stitch_nil
-  stitch d = do [c,n] <- popChoices 2
-                pop  -- the "actual" list, but we don't care about it
+  stitch 0 = stitch_nil >>= \n -> pop >> return n
+  stitch d = do pop  -- the "actual" list, but we don't care about it
                 cc    <- stitch_cons d
+                [c]   <- popChoices 1
                 nn    <- stitch_nil
+                [n]   <- popChoices 1
                 case (n,c) of
                   (True,_) -> return nn
                   (_,True) -> return cc
+                  _        -> return $ error "SHOULD NOT HAPPEN!!!"
 
   toExpr []     = app (stringSymbol "[]") -- (show '[])
                       []
@@ -446,14 +475,14 @@ instance (Constrain a) => Constrain [a] where
                       [toExpr x, toExpr xs]
 
 gen_nil (RApp _ _ _ _)
-  = make "GHC.Types.[]" [] listsort
+  = withFreshChoice $ make "GHC.Types.[]" [] listsort
 
 stitch_nil
-  = do pop >> return []
+  = pop >> return []
 
-gen_cons :: forall a. Constrain a => Proxy [a] -> Int -> SpecType -> Gen String
+gen_cons :: forall a. Constrain a => Proxy [a] -> Int -> SpecType -> Gen (String, String)
 gen_cons p d t@(RApp c [ta] ps r)
-  = make2 "GHC.Types.:" (reproxyElem p, p) t listsort d
+  = withFreshChoice $ make2 "GHC.Types.:" (reproxyElem p, p) t listsort d
 gen_cons _ _ t = error $ show t
 
 stitch_cons :: Constrain a => Int -> Gen [a]
@@ -558,7 +587,7 @@ treeList Leaf = []
 treeList (Node x l r) = treeList l ++ [x] ++ treeList r
 
 instance Constrain a => Constrain (Tree a) where
-  gen _ 0 t = gen_leaf t
+  gen _ 0 t = fst <$> gen_leaf t
   gen p d t@(RApp c [ta] ps r)
     = do let t' = RApp c [ta] ps mempty
          l <- gen_leaf t'
@@ -581,11 +610,11 @@ instance Constrain a => Constrain (Tree a) where
   toExpr (Node x l r) = app (stringSymbol "LiquidSMT.Node") [toExpr x, toExpr l, toExpr r]
 
 gen_leaf _
-  = make "LiquidSMT.Leaf" [] treesort
+  = withFreshChoice $ make "LiquidSMT.Leaf" [] treesort
 
 stitch_leaf = pop >> return Leaf
 
-gen_node :: forall a. Constrain a => Proxy (Tree a) -> Int -> SpecType -> Gen String
+gen_node :: forall a. Constrain a => Proxy (Tree a) -> Int -> SpecType -> Gen (String,String)
 gen_node p d t@(RApp _ _ _ _)
   -- = do x <- gen (Proxy :: Proxy a) (d-1) ta
   --      let tal = applyRef pl [x] ta
@@ -595,7 +624,7 @@ gen_node p d t@(RApp _ _ _ _)
   --      nl <- gen p (d-1) tl
   --      nr <- gen p (d-1) tr
   --      make 'Node [x,nl,nr] treesort
-  = make3 "LiquidSMT.Node" (reproxyElem p, p, p) t treesort d
+  = withFreshChoice $ make3 "LiquidSMT.Node" (reproxyElem p, p, p) t treesort d
 
 stitch_node d
   = do z <- pop
@@ -680,11 +709,12 @@ testModule mod ts
            Passed n -> printf "OK. Passed %d tests\n\n" n
            Failed x -> printf "Found counter-example: %s\n\n" x
 
-testFun :: Testable f => f -> String -> Gen Result
-testFun f name
+testFun :: Testable f => f -> String -> Int -> Gen Result
+testFun f name d
   = do ty <- fromJust . lookup name <$> gets sigs
        io $ printf "Testing %s\n" name -- (showpp ty)
-       test f 3 ty
+       modify $ \s -> s { depth = d }
+       test f d ty
 
 testOne :: Testable f => f -> String -> FilePath -> IO Result
 testOne f name path
