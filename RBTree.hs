@@ -378,7 +378,7 @@ inv (Node c x l r) = Node c x (inv l) (inv r)
 -- Testing ---------------------------------------------------------------------
 --------------------------------------------------------------------------------
 
-colorsort = FObj $ stringSymbol "Int"
+colorsort = FObj $ stringSymbol "Color"
 
 instance Constrain Color where
   gen _ _ t@(RApp c _ _ r)

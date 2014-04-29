@@ -29,6 +29,7 @@ import           Data.Monoid
 import           Data.Ord
 import           Data.Proxy
 import           Data.String
+import           Data.Text.Format
 import qualified Data.Text.Lazy as T
 import qualified Data.Vector as V
 import           Debug.Trace
@@ -90,7 +91,7 @@ instance SMTLIB2 Constraint where
   smt2 = smt2 . PAnd
 
 
-listsort = FObj $ stringSymbol "Int"
+listsort = FObj $ stringSymbol "GHC.Types.List"
 boolsort = FObj $ stringSymbol "Bool"
 
 newtype Gen a = Gen (StateT GenState IO a)
@@ -117,9 +118,10 @@ data GenState
        , sigs        :: ![(String, SpecType)]
        , depth       :: !Int
        , chosen      :: !(Maybe String)
+       , sorts       :: !(S.HashSet T.Text)
        } deriving (Show)
 
-initGS sp = GS def def def def def def dcons cts (measures sp) tyi free sigs def Nothing
+initGS sp = GS def def def def def def dcons cts (measures sp) tyi free sigs def Nothing S.empty
   where
     dcons = map (showpp *** id) (dconsP sp)
     cts   = map (showpp *** val) (ctors sp)
@@ -152,6 +154,7 @@ fresh :: [String] -> Sort -> Gen String
 fresh xs sort
   = do n <- gets seed
        modify $ \s@(GS {..}) -> s { seed = seed + 1 }
+       modify $ \s@(GS {..}) -> s { sorts = S.insert (smt2 sort) sorts }
        let x = T.unpack (smt2 sort) ++ show n
        modify $ \s@(GS {..}) -> s { variables = (x,sort) : variables }
        mapM_ (addDep x) xs
@@ -314,7 +317,14 @@ allSat roots = setup >>= go
     setup = do
        ctx <- io $ makeContext Z3
        -- declare sorts
-       io $ smtWrite ctx "(define-sort CHOICE () Bool)"
+       ss  <- S.toList <$> gets sorts
+       let defSort b e = io $ smtWrite ctx (format "(define-sort {} () {})" (b,e))
+       forM_ ss $ \case
+         "Int"    -> return ()
+         "Bool"   -> return ()
+         "CHOICE" -> defSort ("CHOICE" :: T.Text) ("Bool" :: T.Text)
+         s        -> defSort s ("Int" :: T.Text)
+       -- io $ smtWrite ctx "(define-sort CHOICE () Bool)"
        -- declare constructors
        cts <- gets constrs
        mapM_ (\ (_,c) -> io . command ctx $ Declare (symbol c) [] FInt) cts
@@ -433,7 +443,7 @@ reproxyElem :: proxy (f a) -> Proxy a
 reproxyElem = reproxy
 
 instance Constrain () where
-  gen _ _ _ = fresh [] FInt
+  gen _ _ _ = fresh [] (FObj (S "UNIT"))
   stitch _  = pop >> return ()
   toExpr _  = app (stringSymbol "()") []
 
@@ -581,7 +591,7 @@ apply4 c d
 
 data Tree a = Leaf | Node a (Tree a) (Tree a) deriving (Eq, Ord, Show)
 
-treesort = FObj $ stringSymbol "Int"
+treesort = FObj $ stringSymbol "Tree"
 
 treeList Leaf = []
 treeList (Node x l r) = treeList l ++ [x] ++ treeList r
