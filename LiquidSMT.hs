@@ -147,7 +147,7 @@ withFreshChoice act
        addDep c x
        return (x,c)
 
--- | `fresh' generates a fresh variable and encodes the reachability
+-- | `fresh` generates a fresh variable and encodes the reachability
 -- relation between variables, e.g. `fresh xs sort` will return a new
 -- variable `x`, from which everything in `xs` is reachable.
 fresh :: [String] -> Sort -> Gen String
@@ -206,7 +206,6 @@ constrain p
 
 pop :: Gen String
 pop = do v <- gets $ head . values
-         io $ printf "pop: %s\n" v
          modify $ \s@(GS {..}) -> s { values = tail values}
          return v
 
@@ -275,8 +274,7 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
                 sat <- evalReft (M.fromList env) (toReft $ rt_reft to) (toExpr r)
                 case sat of
                   False -> return $ Failed $ show ((xa, a), (xb, b))
-                  True  -> do io $ printf "SAFE:\n%s\n%s\n\n" (show a) (show b)
-                              return $ Passed (n+1))
+                  True  -> return $ Passed (n+1))
       (Passed 0) xvs
   test f d t = error $ show t
 
@@ -306,8 +304,7 @@ instance (Constrain a, Constrain b, Constrain c, Constrain d)
                 sat <- evalReft (M.fromList env) (toReft $ rt_reft to) (toExpr r)
                 case sat of
                   False -> return $ Failed $ show ((xa, a), (xb, b), (xc, c))
-                  True  -> do io $ printf "SAFE:\n%s\n%s\n%s\n\n" (show a) (show b) (show c)
-                              return $ Passed (n+1))
+                  True  -> return $ Passed (n+1))
       (Passed 0) xvs
   test f d t = error $ show t
 
@@ -459,16 +456,26 @@ instance Constrain Int where
   toExpr i = ECon $ I $ fromIntegral i
 
 instance (Constrain a) => Constrain [a] where
-  gen _ 0 t = fst <$> gen_nil t
-  gen p d t@(RApp c [ta] ps r)
-    = do let t' = RApp c [ta] ps mempty
+  gen _ 0 t@(RApp c ts ps r)
+    = do let t' = RApp c ts ps mempty
+         c1 <- gen_nil t'
+         x  <- freshChoose [c1] listsort
+         constrain $ ofReft x (toReft r)
+         return x
+  gen p d t@(RApp c ts ps r)
+    = do let t' = RApp c ts ps mempty
          c1 <- gen_nil t'
          c2 <- gen_cons p d t'
          x  <- freshChoose [c1,c2] listsort
          constrain $ ofReft x (toReft r)
          return x
 
-  stitch 0 = stitch_nil >>= \n -> pop >> return n
+  stitch 0 = do pop  -- the "actual" list, but we don't care about it
+                nn    <- stitch_nil
+                [n]   <- popChoices 1
+                case n of
+                  True -> return nn
+                  _    -> return $ error "SHOULD NOT HAPPEN!!!"
   stitch d = do pop  -- the "actual" list, but we don't care about it
                 cc    <- stitch_cons d
                 [c]   <- popChoices 1
