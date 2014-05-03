@@ -362,6 +362,11 @@ evalBop b    e1           e2           = error $ printf "evalBop(%s, %s, %s)" (s
 
 
 class Show a => Constrain a where
+  getType :: Proxy a -> String
+  default getType :: (Generic a, GConstrain (Rep a))
+                  => Proxy a -> String
+  getType p = gtype (reproxy p :: Proxy (Rep a a))
+
   gen         :: Proxy a -> Int -> SpecType -> Gen String
   default gen :: (Generic a, GConstrain (Rep a))
               => Proxy a -> Int -> SpecType -> Gen String
@@ -386,18 +391,18 @@ instance Constrain a => Constrain [a]
 
 class GConstrainSum f where
   ggenAlts      :: Proxy (f a) -> Int -> SpecType -> Gen [String]
-  ggenAltsNoRec :: Proxy (f a) -> Int -> SpecType -> Gen [String]
+  ggenAltsNoRec :: Proxy (f a) -> String -> SpecType -> Gen [String]
 
-instance (Constructor c, GConstrainSum g) => GConstrainSum ((C1 c U1) :+: g) where
-  ggenAlts p d t
-    = do x  <- ggen (reproxy p :: Proxy (C1 c U1 a)) d t
-         xs <- ggenAlts (reproxy p :: Proxy (g a)) d t
-         return $ x:xs
-  ggenAltsNoRec p d t
-    = do x  <- ggen (reproxy p :: Proxy (C1 c U1 a)) d t
-         io $ print x
-         xs <- ggenAltsNoRec (reproxy p :: Proxy (g a)) d t
-         return $ x:xs
+-- instance (Constructor c, GConstrain (C1 c U1), GConstrainSum g) => GConstrainSum ((C1 c U1) :+: g) where
+--   ggenAlts p d t
+--     = do x  <- ggen (reproxy p :: Proxy (C1 c U1 a)) d t
+--          xs <- ggenAlts (reproxy p :: Proxy (g a)) d t
+--          return $ x:xs
+--   ggenAltsNoRec p d t
+--     = do x  <- ggen (reproxy p :: Proxy (C1 c U1 a)) d t
+--          io $ print x
+--          xs <- ggenAltsNoRec (reproxy p :: Proxy (g a)) d t
+--          return $ x:xs
 
 instance (GConstrain f, GConstrainSum g) => GConstrainSum (f :+: g) where
   ggenAlts p d t
@@ -408,8 +413,12 @@ instance (GConstrain f, GConstrainSum g) => GConstrainSum (f :+: g) where
     = do -- x  <- ggen (reproxy p :: Proxy (f a)) 0 t
          -- io $ print $ conName (undefined :: f a)
          -- myConName (reproxy p :: Proxy f)
+         if gisRecursive (reproxy p :: Proxy (f a)) d
+         then ggenAltsNoRec (reproxy p :: Proxy (g a)) d t
+         else do
+         x  <- ggen (reproxy p :: Proxy (f a)) 0 t
          xs <- ggenAltsNoRec (reproxy p :: Proxy (g a)) d t
-         return $ xs
+         return $ x:xs
 
 -- myConName :: (Constructor c, GConstrain f) => Proxy (C1 c f) -> Gen ()
 -- myConName p = io $ print $ conName (undefined :: C1 c f a)
@@ -418,69 +427,55 @@ instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
   ggenAlts p d t
     = do x <- ggen p d t
          return [x]
-  ggenAltsNoRec p d t = return []
-
--- class GConstrainSumNoRec f where
---   ggenAltsNoRec :: Proxy (f a) -> SpecType -> Gen [String]
-
-
--- instance (GConstrainSumNoRec g) => GConstrainSumNoRec (f :+: g) where
---   ggenAltsNoRec (p :: Proxy ((f :+: g) a)) t
---     = do -- x  <- ggen (reproxy p :: Proxy (f a)) 0 t
---          xs <- ggenAltsNoRec (reproxy p :: Proxy (g a)) t
---          return $ xs
-
-
--- instance (Constructor c) => GConstrainSumNoRec (C1 c U1) where
---   ggenAltsNoRec p t
---     = do x <- ggen p 0 t
---          return [x]
--- instance (Constructor c) => GConstrainSumNoRec (C1 c (S1 s U1)) where
---   ggenAltsNoRec p t
---     = do x <- ggen p 0 t
---          return [x]
-
--- instance (Constructor c, GConstrainProd f) => GConstrainSumNoRec (C1 c f) where
---   ggenAltsNoRec p t = return []
+  ggenAltsNoRec p d t
+    = if gisRecursive p d
+      then return []
+      else do
+      x <- ggen p 0 t
+      return [x]
 
 class GConstrainProd f where
+  gconArgTys :: Proxy (f a) -> [String]
   ggenArgs :: Proxy (f a) -> Int -> [(Symbol,SpecType)] -> Gen [String]
 
 instance (GConstrain f, GConstrainProd g) => GConstrainProd (f :*: g) where
+  gconArgTys p = gtype (reproxy p :: Proxy (f a)) : gconArgTys (reproxy p :: Proxy (g a))
   ggenArgs (p :: Proxy ((f :*: g) a)) d (t:ts)
     = do x  <- ggen (reproxy p :: Proxy (f a)) (d-1) (snd t)
          let su = mkSubst [(fst t, var x)]
          xs <- ggenArgs (reproxy p :: Proxy (g a)) d (map (second (subst su)) ts)
          return $ x:xs
 
--- instance (Constructor c, GConstrain f, GConstrainProd f) => GConstrainProd (C1 c f) where
---   ggenArgs p d ts
---     = do xs <- ggenArgs (Proxy :: Proxy (f a)) (d-1) ts
---          return xs
-
 instance (GConstrain f) => GConstrainProd (S1 c f) where
+  gconArgTys p = [gtype (reproxy p :: Proxy (f a))]
   ggenArgs (p :: Proxy (S1 c f a)) d [t]
     = do x <- ggen (reproxy p :: Proxy (f a)) (d-1) (snd t)
          return [x]
 
 instance GConstrainProd U1 where
+  gconArgTys p = []
   ggenArgs (p :: Proxy (U1 a)) d []
     = do x <- fresh [] FInt
          return [x]
 
-instance Constrain f => GConstrainProd (K1 i f) where
+instance (Constrain f, GConstrain (Rep f)) => GConstrainProd (K1 i f) where
+  gconArgTys p = [gtype (reproxy p :: Proxy (Rep f f))]
   ggenArgs (p :: Proxy (K1 i f a)) d [t]
     = do x <- gen (reproxy p :: Proxy f) (d-1) (snd t)
          return [x]
 
 class GConstrain f where
-  ggen    :: Proxy (f a) -> Int -> SpecType -> Gen String
-  gstitch :: Int -> Gen (f a)
+  gisRecursive :: Proxy (f a) -> String -> Bool
+  gtype        :: Proxy (f a) -> String
+  ggen         :: Proxy (f a) -> Int    -> SpecType -> Gen String
+  ggenNoRec    :: Proxy (f a) -> String -> SpecType -> Gen String
+  gstitch      :: Int -> Gen (f a)
   -- gtoExpr :: f a -> Expr
   -- gtoExprs :: f a -> [Expr]
 
 instance GConstrain U1 where
   ggen p d t = fresh [] FInt
+  ggenNoRec p d t = fresh [] FInt
   gstitch _  = pop >> return U1
   -- gtoExpr c  = error "U1" --app (symbol $ conName c) []
   -- gtoExprs _ = []
@@ -493,9 +488,9 @@ instance GConstrain U1 where
   -- gtoExprs (a :*: b)  = gtoExprs a ++ gtoExprs b
 
 instance (GConstrain f, GConstrainSum g) => GConstrain (f :+: g) where
-  ggen p 0 t
-    = do xs <- ggenAltsNoRec p 0 t
-         io $ print xs
+  ggenNoRec p d t
+    = do xs <- ggenAltsNoRec p d t
+         -- io $ print xs
          x  <- freshChoose xs FInt
          constrain $ ofReft x $ toReft $ rt_reft t
          return x
@@ -511,6 +506,8 @@ instance (GConstrain f, GConstrainSum g) => GConstrain (f :+: g) where
   -- gtoExprs (R1 x) = error "R1" -- gtoExprs x
 
 instance (Constructor c, GConstrainProd f) => GConstrain (C1 c f) where
+  gisRecursive p t = myTrace ("gisRecursive " ++ cn) $ any (==t) (gconArgTys (reproxy p :: Proxy (f a)))
+    where cn = conName (undefined :: C1 c f a)
   ggen p d t
     = do let cn = conName (undefined :: C1 c f a)
          mod <- gets modName
@@ -526,10 +523,25 @@ instance (Constructor c, GConstrainProd f) => GConstrain (C1 c f) where
   -- gtoExprs _ = error "C1"
 
 instance (Datatype c, GConstrain f) => GConstrain (D1 c f) where
+  gtype p = qualifiedDatatypeName (undefined :: D1 c f a)
+  ggen (p :: Proxy (D1 c f a)) 0 t
+    = inModule mod $ ggenNoRec (reproxy p :: Proxy (f a)) ty t
+    where
+      ty
+        = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
+      mod
+        = GHC.Generics.moduleName (undefined :: D1 c f a)
+      inModule m act
+        = do m' <- gets modName
+             modify $ \s -> s { modName = m }
+             r <- act
+             modify $ \s -> s { modName = m' }
+             return r
   ggen (p :: Proxy (D1 c f a)) d t
     = inModule mod $ ggen (reproxy p :: Proxy (f a)) d t
     where
-      mod = GHC.Generics.moduleName (undefined :: D1 c f a)
+      mod
+        = GHC.Generics.moduleName (undefined :: D1 c f a)
       inModule m act
         = do m' <- gets modName
              modify $ \s -> s { modName = m }
@@ -543,17 +555,61 @@ instance (Datatype c, GConstrain f) => GConstrain (D1 c f) where
   -- gtoExprs (M1 c)  = error "D1"
 
 instance (GConstrain f) => GConstrain (S1 c f) where
+  gtype p    = gtype (reproxy p :: Proxy (f a))
   ggen p d t = ggen (reproxy p :: Proxy (f a)) d t
   gstitch d  = error "S1"
   -- gtoExpr (M1 c)  = gtoExpr c -- app (symbol $ conName c) []
   -- gtoExprs (M1 c) = gtoExprs c
 
 instance (Constrain a) => GConstrain (K1 i a) where
+  gtype p    = getType (reproxy p :: Proxy a) --gtype (reproxy p :: Proxy (Rep a a))
   ggen p d t = gen (reproxy p :: Proxy a) d t
   gstitch d  = error "K1"
   -- gtoExpr  (K1 x) = toExpr x
   -- gtoExprs (K1 x) = [toExpr x]
 
+-- getType a = qualifiedDatatypeName $ from a
+
+-- isRec :: Datatype c => D1 c f a -> Bool
+isRec d@(M1 x) = any (==me) $ gtypes x
+  where
+    me = qualifiedDatatypeName d
+
+class Foo f where
+  gtypes :: f a -> [String]
+  ggetType :: f a -> String
+
+instance Datatype c => Foo (D1 c f) where
+  ggetType d = qualifiedDatatypeName d
+
+instance Foo U1 where
+  gtypes _ = []
+
+instance Foo f => Foo (C1 c f) where
+  gtypes (_::(C1 c f a)) = gtypes (undefined :: f a)
+
+instance (Foo f, Foo g) => Foo (f :*: g) where
+  gtypes (_::(f :*: g)a) = ggetType (undefined :: f a) : gtypes (undefined :: g a)
+-- types ((M1 (K1 f)) :*: g) = qualifiedDatatypeName f : types g
+
+instance (Foo f, Foo g) => Foo (f :+: g) where
+  -- gtypes _ = gtypes (undefined :: g a)
+  gtypes (L1 x) = gtypes x
+  gtypes (R1 x) = gtypes x
+
+instance Foo f => Foo (S1 c f) where
+  ggetType (_::S1 c f a) = ggetType (undefined :: f a)
+  gtypes (_::S1 c f a) = gtypes (undefined :: f a)
+
+instance (Generic a, Foo (Rep a)) => Foo (K1 i a) where
+  ggetType (_::K1 i a a1) = ggetType (undefined :: Rep a a1)
+  gtypes (_::K1 i a a1) = [ggetType (undefined :: Rep a a1)]
+
+
+-- instance (Generic a) => Foo (K1 i a) where
+--   getType (K1 x) = qualifiedDatatypeName $ from x
+
+qualifiedDatatypeName d = GHC.Generics.moduleName d ++ "." ++ datatypeName d
 
 instance Constrain () where
   gen _ _ _ = fresh [] FInt
