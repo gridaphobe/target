@@ -18,6 +18,6 @@ mytake _ []     = []
 mytake n (x:xs) = x : mytake (n-1) xs
 
 
-tests = [ testFun mytake "Main.mytake" 2 ]
+tests = [ testFun mytake "Main.mytake" 1 ]
 
 main = testModule "List.hs" tests

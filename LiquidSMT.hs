@@ -127,9 +127,10 @@ data GenState
        , chosen      :: !(Maybe String)
        , sorts       :: !(S.HashSet T.Text)
        , modName     :: !String
+       , makingTy    :: !Sort
        } deriving (Show)
 
-initGS sp = GS def def def def def def dcons cts (measures sp) tyi free sigs def Nothing S.empty ""
+initGS sp = GS def def def def def def dcons cts (measures sp) tyi free sigs def Nothing S.empty "" FInt
   where
     dcons = map (showpp *** id) (dconsP sp)
     cts   = map (showpp *** val) (ctors sp)
@@ -159,8 +160,12 @@ withFreshChoice act
 -- relation between variables, e.g. `fresh xs sort` will return a new
 -- variable `x`, from which everything in `xs` is reachable.
 fresh :: [String] -> Sort -> Gen String
-fresh xs sort
+fresh xs sort'
   = do n <- gets seed
+       let sort = case smt2 sort' of
+             "GHC.Types.[]"   -> FObj $ stringSymbol "GHC.Types.List"
+             "GHC.Types.Int"  -> FInt
+             s -> sort'
        modify $ \s@(GS {..}) -> s { seed = seed + 1 }
        modify $ \s@(GS {..}) -> s { sorts = S.insert (smt2 sort) sorts }
        let x = T.unpack (smt2 sort) ++ show n
@@ -341,12 +346,12 @@ allSat roots = setup >>= go
        -- declare sorts
        ss  <- S.toList <$> gets sorts
        let defSort b e = io $ smtWrite ctx (format "(define-sort {} () {})" (b,e))
+       -- FIXME: combine this with the code in `fresh`
        forM_ ss $ \case
-         "Int"    -> return ()
-         "Bool"   -> return ()
+         "Int" -> return ()
+         "GHC.Types.Bool"   -> defSort ("GHC.Types.Bool" :: T.Text) ("Bool" :: T.Text)
          "CHOICE" -> defSort ("CHOICE" :: T.Text) ("Bool" :: T.Text)
          s        -> defSort s ("Int" :: T.Text)
-       -- io $ smtWrite ctx "(define-sort CHOICE () Bool)"
        -- declare constructors
        cts <- gets constrs
        mapM_ (\ (_,c) -> io . command ctx $ Declare (symbol c) [] FInt) cts
@@ -363,7 +368,7 @@ allSat roots = setup >>= go
          cs
        return (ctx,vs,deps)
 
-    go :: (Context, [(String,Sort)], V.Vector (Symbol,Symbol)) -> Gen [[String]]
+    go :: (Context, [Variable], V.Vector (Symbol,Symbol)) -> Gen [[String]]
     go (ctx,vs,deps) = do
        resp <- io $ command ctx CheckSat
        case resp of
@@ -485,8 +490,8 @@ instance Constrain a => Constrain [a]
 -- instance (Constrain a, Constrain b) => Constrain (a,b)
 
 class GConstrainSum f where
-  ggenAlts      :: Proxy (f a) -> Int -> SpecType -> Gen [String]
-  ggenAltsNoRec :: Proxy (f a) -> String -> SpecType -> Gen [String]
+  ggenAlts      :: Proxy (f a) -> Int    -> SpecType -> Gen [(String,String)]
+  ggenAltsNoRec :: Proxy (f a) -> String -> SpecType -> Gen [(String,String)]
 
 -- instance (Constructor c, GConstrain (C1 c U1), GConstrainSum g) => GConstrainSum ((C1 c U1) :+: g) where
 --   ggenAlts p d t
@@ -501,7 +506,7 @@ class GConstrainSum f where
 
 instance (GConstrain f, GConstrainSum g) => GConstrainSum (f :+: g) where
   ggenAlts p d t
-    = do x  <- ggen (reproxy p :: Proxy (f a)) d t
+    = do x  <- withFreshChoice $ ggen (reproxy p :: Proxy (f a)) d t
          xs <- ggenAlts (reproxy p :: Proxy (g a)) d t
          return $ x:xs
   ggenAltsNoRec p d t
@@ -511,23 +516,23 @@ instance (GConstrain f, GConstrainSum g) => GConstrainSum (f :+: g) where
          if gisRecursive (reproxy p :: Proxy (f a)) d
          then ggenAltsNoRec (reproxy p :: Proxy (g a)) d t
          else do
-         x  <- ggen (reproxy p :: Proxy (f a)) 0 t
-         xs <- ggenAltsNoRec (reproxy p :: Proxy (g a)) d t
-         return $ x:xs
+           x  <- withFreshChoice $ ggen (reproxy p :: Proxy (f a)) 0 t
+           xs <- ggenAltsNoRec (reproxy p :: Proxy (g a)) d t
+           return $ x:xs
 
 -- myConName :: (Constructor c, GConstrain f) => Proxy (C1 c f) -> Gen ()
 -- myConName p = io $ print $ conName (undefined :: C1 c f a)
 
 instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
   ggenAlts p d t
-    = do x <- ggen p d t
+    = do x <- withFreshChoice $ ggen p d t
          return [x]
   ggenAltsNoRec p d t
     = if gisRecursive p d
       then return []
       else do
-      x <- ggen p 0 t
-      return [x]
+        x <- withFreshChoice $ ggen p 0 t
+        return [x]
 
 class GConstrainProd f where
   gconArgTys :: Proxy (f a) -> [String]
@@ -550,7 +555,7 @@ instance (GConstrain f) => GConstrainProd (S1 c f) where
 instance GConstrainProd U1 where
   gconArgTys p = []
   ggenArgs (p :: Proxy (U1 a)) d []
-    = do x <- fresh [] FInt
+    = do x <- fresh [] =<< gets makingTy
          return [x]
 
 instance (Constrain f, GConstrain (Rep f)) => GConstrainProd (K1 i f) where
@@ -569,8 +574,8 @@ class GConstrain f where
   -- gtoExprs :: f a -> [Expr]
 
 instance GConstrain U1 where
-  ggen p d t = fresh [] FInt
-  ggenNoRec p d t = fresh [] FInt
+  ggen p d t = fresh [] =<< gets makingTy
+  ggenNoRec p d t = fresh [] =<< gets makingTy
   gstitch _  = pop >> return U1
   -- gtoExpr c  = error "U1" --app (symbol $ conName c) []
   -- gtoExprs _ = []
@@ -586,12 +591,12 @@ instance (GConstrain f, GConstrainSum g) => GConstrain (f :+: g) where
   ggenNoRec p d t
     = do xs <- ggenAltsNoRec p d t
          -- io $ print xs
-         x  <- freshChoose xs FInt
+         x  <- freshChoose xs =<< gets makingTy
          constrain $ ofReft x $ toReft $ rt_reft t
          return x
   ggen p d t
     = do xs <- ggenAlts p d t
-         x  <- freshChoose xs FInt
+         x  <- freshChoose xs =<< gets makingTy
          constrain $ ofReft x $ toReft $ rt_reft t
          return x
   gstitch d  = error ":+:"
@@ -601,7 +606,7 @@ instance (GConstrain f, GConstrainSum g) => GConstrain (f :+: g) where
   -- gtoExprs (R1 x) = error "R1" -- gtoExprs x
 
 instance (Constructor c, GConstrainProd f) => GConstrain (C1 c f) where
-  gisRecursive p t = myTrace ("gisRecursive " ++ cn) $ any (==t) (gconArgTys (reproxy p :: Proxy (f a)))
+  gisRecursive p t = any (==t) (gconArgTys (reproxy p :: Proxy (f a)))
     where cn = conName (undefined :: C1 c f a)
   ggen p d t
     = do let cn = conName (undefined :: C1 c f a)
@@ -612,37 +617,38 @@ instance (Constructor c, GConstrainProd f) => GConstrain (C1 c f) where
          let ts = applyPreds (expandRApp (M.fromList []) tyi t) dcp
          -- io $ print ts
          xs  <- ggenArgs (reproxy p :: Proxy (f a)) d ts
-         make (mod++"."++cn) xs FInt
+         make (mod++"."++cn) xs =<< gets makingTy
   gstitch d  = error "C1"
   -- gtoExpr c@(M1 x)  = app (symbol $ conName c) (gtoExprs x)
   -- gtoExprs _ = error "C1"
 
+inModule m act
+  = do m' <- gets modName
+       modify $ \s -> s { modName = m }
+       r <- act
+       modify $ \s -> s { modName = m' }
+       return r
+making ty act
+  = do ty' <- gets makingTy
+       modify $ \s -> s { makingTy = ty }
+       r <- act
+       modify $ \s -> s { makingTy = ty' }
+       return r
+
 instance (Datatype c, GConstrain f) => GConstrain (D1 c f) where
   gtype p = qualifiedDatatypeName (undefined :: D1 c f a)
   ggen (p :: Proxy (D1 c f a)) 0 t
-    = inModule mod $ ggenNoRec (reproxy p :: Proxy (f a)) ty t
+    = inModule mod . making sort $ ggenNoRec (reproxy p :: Proxy (f a)) ty t
     where
-      ty
-        = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
-      mod
-        = GHC.Generics.moduleName (undefined :: D1 c f a)
-      inModule m act
-        = do m' <- gets modName
-             modify $ \s -> s { modName = m }
-             r <- act
-             modify $ \s -> s { modName = m' }
-             return r
+      mod = GHC.Generics.moduleName (undefined :: D1 c f a)
+      ty  = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
+      sort = FObj $ symbol ty
   ggen (p :: Proxy (D1 c f a)) d t
-    = inModule mod $ ggen (reproxy p :: Proxy (f a)) d t
+    = inModule mod . making sort $ ggen (reproxy p :: Proxy (f a)) d t
     where
-      mod
-        = GHC.Generics.moduleName (undefined :: D1 c f a)
-      inModule m act
-        = do m' <- gets modName
-             modify $ \s -> s { modName = m }
-             r <- act
-             modify $ \s -> s { modName = m' }
-             return r
+      mod = GHC.Generics.moduleName (undefined :: D1 c f a)
+      ty  = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
+      sort = FObj $ symbol ty
   gstitch d  = error "D1"
   -- gtoExpr c@(M1 x) = app (symbol $ GHC.Generics.moduleName c ++ "." ++ (show $ val d)) xs
   --   where
@@ -663,46 +669,6 @@ instance (Constrain a) => GConstrain (K1 i a) where
   -- gtoExpr  (K1 x) = toExpr x
   -- gtoExprs (K1 x) = [toExpr x]
 
--- getType a = qualifiedDatatypeName $ from a
-
--- isRec :: Datatype c => D1 c f a -> Bool
-isRec d@(M1 x) = any (==me) $ gtypes x
-  where
-    me = qualifiedDatatypeName d
-
-class Foo f where
-  gtypes :: f a -> [String]
-  ggetType :: f a -> String
-
-instance Datatype c => Foo (D1 c f) where
-  ggetType d = qualifiedDatatypeName d
-
-instance Foo U1 where
-  gtypes _ = []
-
-instance Foo f => Foo (C1 c f) where
-  gtypes (_::(C1 c f a)) = gtypes (undefined :: f a)
-
-instance (Foo f, Foo g) => Foo (f :*: g) where
-  gtypes (_::(f :*: g)a) = ggetType (undefined :: f a) : gtypes (undefined :: g a)
--- types ((M1 (K1 f)) :*: g) = qualifiedDatatypeName f : types g
-
-instance (Foo f, Foo g) => Foo (f :+: g) where
-  -- gtypes _ = gtypes (undefined :: g a)
-  gtypes (L1 x) = gtypes x
-  gtypes (R1 x) = gtypes x
-
-instance Foo f => Foo (S1 c f) where
-  ggetType (_::S1 c f a) = ggetType (undefined :: f a)
-  gtypes (_::S1 c f a) = gtypes (undefined :: f a)
-
-instance (Generic a, Foo (Rep a)) => Foo (K1 i a) where
-  ggetType (_::K1 i a a1) = ggetType (undefined :: Rep a a1)
-  gtypes (_::K1 i a a1) = [ggetType (undefined :: Rep a a1)]
-
-
--- instance (Generic a) => Foo (K1 i a) where
---   getType (K1 x) = qualifiedDatatypeName $ from x
 
 qualifiedDatatypeName d = GHC.Generics.moduleName d ++ "." ++ datatypeName d
 
