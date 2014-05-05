@@ -3,3 +3,5 @@ cabal.sandbox.config
 dist/
 *.o
 *.hi
+.hpc
+.liquid
