@@ -1,5 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 {-@ LIQUID "-g-package-db" @-}
 {-@ LIQUID "-g.cabal-sandbox/x86_64-osx-ghc-7.6.3-packages.conf.d" @-}
@@ -19,6 +20,8 @@ import LiquidSMT hiding (Tree(..), gen_leaf, stitch_leaf, gen_node, stitch_node)
 
 import Debug.Trace
 
+import GHC.Generics
+
 import Control.Arrow hiding (app)
 import Control.Monad.State
 import qualified Data.HashMap.Strict as M
@@ -30,11 +33,11 @@ import Language.Haskell.Liquid.Types (tySigs)
 
 data RBTree a = Leaf 
               | Node Color a !(RBTree a) !(RBTree a)
-              deriving (Show)
+              deriving (Show,Generic)
 
 data Color = B -- ^ Black
            | R -- ^ Red
-           deriving (Eq,Show)
+           deriving (Eq,Show,Generic)
 
 ---------------------------------------------------------------------------
 -- | Add an element -------------------------------------------------------
@@ -212,15 +215,26 @@ bh (Node c x l r) = (bh l) + (if (c == R) then 0 else 1)
 
 -- | Binary Search Ordering
 
+--FIXME: issue with name clash "c :: Color" from auto-gen'd measures
 {-@ data RBTree a <l :: a -> a -> Prop, r :: a -> a -> Prop>
             = Leaf
-            | Node (c    :: Color)
+            | Node (cc   :: Color)
                    (key  :: a)
                    (left :: RBTree <l, r> (a <l key>))
                    (left :: RBTree <l, r> (a <r key>))
   @-}
 
 {-@ data Color = B | R @-}
+{-
+measure isBC :: Color -> Prop
+isBC (B) = true
+isBC (R) = false
+@-}
+{-
+measure isRC :: Color -> Prop
+isRC (B) = false
+isRC (R) = true
+@-}
 
 -------------------------------------------------------------------------------
 -- Auxiliary Invariants -------------------------------------------------------
@@ -388,83 +402,87 @@ inv (Node c x l r) = Node c x (inv l) (inv r)
 -- Testing ---------------------------------------------------------------------
 --------------------------------------------------------------------------------
 
-colorsort = FObj $ stringSymbol "Color"
+instance Constrain Color
+instance Constrain a => Constrain (RBTree a)
 
-instance Constrain Color where
-  gen _ _ t@(RApp c _ _ r)
-    = do bb <- withFreshChoice $ make "Main.B" [] colorsort
-         rr <- withFreshChoice $ make "Main.R" [] colorsort
-         constrain $ var (fst bb) `eq` var "Main.B"
-         constrain $ var (fst rr) `eq` var "Main.R"
-         x <- freshChoose [bb,rr] colorsort
-         constrain $ ofReft x (toReft r)
-         return x
+-- colorsort = FObj $ stringSymbol "Color"
 
-  stitch _
-    = do pop
-         rr    <- pop >> return R
-         [r]   <- popChoices 1
-         bb    <- pop >> return B
-         [b]   <- popChoices 1
-         case (b,r) of
-           (True,_) -> return bb
-           (_,True) -> return rr
-           _        -> return $ error "CAN NOT HAPPEN"
+-- instance Constrain Color where
+--   gen _ _ t@(RApp c _ _ r)
+--     = do bb <- withFreshChoice $ make "Main.B" [] colorsort
+--          rr <- withFreshChoice $ make "Main.R" [] colorsort
+--          constrain $ var (fst bb) `eq` var "Main.B"
+--          constrain $ var (fst rr) `eq` var "Main.R"
+--          x <- freshChoose [bb,rr] colorsort
+--          constrain $ ofReft x (toReft r)
+--          return x
 
-  toExpr B = app (stringSymbol "Main.B") []
-  toExpr R = app (stringSymbol "Main.R") []
+--   stitch _
+--     = do pop
+--          rr    <- pop >> return R
+--          [r]   <- popChoices 1
+--          bb    <- pop >> return B
+--          [b]   <- popChoices 1
+--          case (b,r) of
+--            (True,_) -> return bb
+--            (_,True) -> return rr
+--            _        -> return $ error "CAN NOT HAPPEN"
 
-instance Constrain a => Constrain (RBTree a) where
-  -- gen _ _ t | trace (show t) False = undefined
-  gen _ 0 t@(RApp c ts ps r)
-    = do let t' = RApp c ts ps mempty
-         c1 <- gen_leaf t'
-         x  <- freshChoose [c1] treesort
-         constrain $ ofReft x (toReft r)
-         return x
-  gen p d t@(RApp c ts ps r)
-    = do let t' = RApp c ts ps mempty
-         c1 <- gen_leaf t'
-         c2 <- gen_node p d t'
-         x  <- freshChoose [c1,c2] treesort
-         constrain $ ofReft x (toReft r)
-         return x
+--   toExpr B = app (stringSymbol "Main.B") []
+--   toExpr R = app (stringSymbol "Main.R") []
 
-  stitch 0
-    = do pop
-         ll  <- stitch_leaf
-         [l] <- popChoices 1
-         case l of
-           True -> return ll
-           _    -> return $ error "CAN NOT HAPPEN"
-  stitch d
-    = do pop
-         nn    <- stitch_node d
-         [n]   <- popChoices 1
-         ll    <- stitch_leaf
-         [l]   <- popChoices 1
-         case (l,n) of
-           (True,_) -> return ll
-           (_,True) -> return nn
-           _        -> return $ error "CAN NOT HAPPEN"
+-- instance Constrain a => Constrain (RBTree a) where
+--   getType _ = "Main.RBTree"
+--   -- gen _ _ t | trace (show t) False = undefined
+--   gen _ 0 t@(RApp c ts ps r)
+--     = do let t' = RApp c ts ps mempty
+--          c1 <- gen_leaf t'
+--          x  <- freshChoose [c1] treesort
+--          constrain $ ofReft x (toReft r)
+--          return x
+--   gen p d t@(RApp c ts ps r)
+--     = do let t' = RApp c ts ps mempty
+--          c1 <- gen_leaf t'
+--          c2 <- gen_node p d t'
+--          x  <- freshChoose [c1,c2] treesort
+--          constrain $ ofReft x (toReft r)
+--          return x
 
-  toExpr Leaf           = app (stringSymbol "Main.Leaf") []
-  toExpr (Node c x l r) = app (stringSymbol "Main.Node")
-                          [ toExpr c, toExpr x, toExpr l, toExpr r]
+--   stitch 0
+--     = do pop
+--          ll  <- stitch_leaf
+--          [l] <- popChoices 1
+--          case l of
+--            True -> return ll
+--            _    -> return $ error "CAN NOT HAPPEN"
+--   stitch d
+--     = do pop
+--          nn    <- stitch_node d
+--          [n]   <- popChoices 1
+--          ll    <- stitch_leaf
+--          [l]   <- popChoices 1
+--          case (l,n) of
+--            (True,_) -> return ll
+--            (_,True) -> return nn
+--            _        -> return $ error "CAN NOT HAPPEN"
 
-gen_leaf (RApp _ _ _ _)
-  = withFreshChoice $ make "Main.Leaf" [] treesort
+--   toExpr Leaf           = app (stringSymbol "Main.Leaf") []
+--   toExpr (Node c x l r) = app (stringSymbol "Main.Node")
+--                           [ toExpr c, toExpr x, toExpr l, toExpr r]
 
-stitch_leaf
-  = pop >> return Leaf
+-- gen_leaf (RApp _ _ _ _)
+--   = withFreshChoice $ make "Main.Leaf" [] treesort
 
-gen_node p d t@(RApp c ts ps r)
-  = withFreshChoice $ make4 "Main.Node" (pc, pa, p, p) t treesort d
-  where pc = Proxy :: Proxy Color
-        pa = reproxyElem p
+-- stitch_leaf
+--   = pop >> return Leaf
 
-stitch_node d
-  = apply4 Node d
+-- gen_node p d t@(RApp c ts ps r)
+--   = withFreshChoice $ make4 "Main.Node" (pc, pa, p, p) t treesort d
+--   where pc = Proxy :: Proxy Color
+--         pa = reproxyElem p
+
+-- stitch_node d
+--   = apply4 Node d
 
 -- main = testOne (add :: Int -> RBTree Int -> RBTree Int) "Main.add" "RBTree.hs"
 
@@ -483,7 +501,7 @@ tests = [ testFun (add :: Int -> RBTree Int -> RBTree Int) "Main.add"
         , testFun (makeBlack :: RBTree Int -> RBTree Int) "Main.makeBlack"
         ]
 
-main = testModule "RBTree.hs" $ map ($3) tests
+main = testModule "RBTree.hs" $ map ($2) tests
 
 {-@ foo :: RBT Int @-}
 foo :: RBTree Int
