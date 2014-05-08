@@ -221,20 +221,10 @@ bh (Node c x l r) = (bh l) + (if (c == R) then 0 else 1)
             | Node (cc   :: Color)
                    (key  :: a)
                    (left :: RBTree <l, r> (a <l key>))
-                   (left :: RBTree <l, r> (a <r key>))
+                   (right:: RBTree <l, r> (a <r key>))
   @-}
 
 {-@ data Color = B | R @-}
-{-
-measure isBC :: Color -> Prop
-isBC (B) = true
-isBC (R) = false
-@-}
-{-
-measure isRC :: Color -> Prop
-isRC (B) = false
-isRC (R) = true
-@-}
 
 -------------------------------------------------------------------------------
 -- Auxiliary Invariants -------------------------------------------------------
@@ -405,7 +395,7 @@ inv (Node c x l r) = Node c x (inv l) (inv r)
 instance Constrain Color
 instance Constrain a => Constrain (RBTree a)
 
--- colorsort = FObj $ stringSymbol "Color"
+-- colorsort = FObj $ stringSymbol "Main.Color"
 
 -- instance Constrain Color where
 --   gen _ _ t@(RApp c _ _ r)
@@ -492,7 +482,7 @@ tests = [ testFun (add :: Int -> RBTree Int -> RBTree Int) "Main.add"
         , testFun (del :: Int -> RBTree Int -> RBTree Int) "Main.del"
         , testFun (append :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "Main.append"
         , testFun (deleteMin :: RBTree Int -> RBTree Int) "Main.deleteMin"
-        -- , testFun (deleteMin' :: Int -> RBTree Int -> RBTree Int -> (Int, RBTree Int)) "Main.deleteMin'"
+        , testFun (deleteMin' :: Int -> RBTree Int -> RBTree Int -> (Int, RBTree Int)) "Main.deleteMin'"
         , testFun (lbalS :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "Main.lbalS"
         , testFun (rbalS :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "Main.rbalS"
         , testFun (lbal :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "Main.lbal"
@@ -503,7 +493,7 @@ tests = [ testFun (add :: Int -> RBTree Int -> RBTree Int) "Main.add"
 
 main = testModule "RBTree.hs" $ map ($2) tests
 
-{-@ foo :: RBT Int @-}
+{-@ foo :: RBTN Int {0} @-}
 foo :: RBTree Int
 foo = undefined
 
@@ -516,7 +506,7 @@ genAndTest _ name path
        runGen sp $ do
          modify $ \s -> s { depth = 2 }
          x <- gen (Proxy :: Proxy a) 2 ty
-         cts <- gets constrs
+         cts <- gets freesyms
          vals <- allSat [symbol x]
          (xvs :: [a]) <- forM vals $ \ vs -> do
            setValues vs

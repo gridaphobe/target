@@ -122,7 +122,8 @@ data GenState
        , ctorEnv     :: !DataConEnv
        , measEnv     :: !MeasureEnv
        , tyconInfo   :: !(M.HashMap TyCon RTyCon)
-       , constrs     :: ![(String, String)]
+       , freesyms    :: ![(String,String)]
+       , constructors :: ![Variable] -- (S.HashSet Variable)  --[(String, String)]
        , sigs        :: ![(String, SpecType)]
        , depth       :: !Int
        , chosen      :: !(Maybe String)
@@ -131,7 +132,7 @@ data GenState
        , makingTy    :: !Sort
        } deriving (Show)
 
-initGS sp = GS def def def def def def dcons cts (measures sp) tyi free sigs def Nothing S.empty "" FInt
+initGS sp = GS def def def def def def dcons cts (measures sp) tyi free [] sigs def Nothing S.empty "" FInt
   where
     dcons = map (showpp *** id) (dconsP sp)
     cts   = map (showpp *** val) (ctors sp)
@@ -147,6 +148,10 @@ setValues vs = modify $ \s@(GS {..}) -> s { values = vs }
 addDep from to = modify $ \s@(GS {..}) -> s { deps = (from,to):deps }
 
 addConstraint p = modify $ \s@(GS {..}) -> s { constraints = p:constraints }
+
+addConstructor c
+  = do -- modify $ \s@(GS {..}) -> s { constructors = S.insert c constructors }
+       modify $ \s@(GS {..}) -> s { constructors = nub $ c:constructors }
 
 withFreshChoice act
   = do c  <- freshChoice []
@@ -182,62 +187,41 @@ freshChoice xs
 
 choicesort = FObj $ stringSymbol "CHOICE"
 
--- <<<<<<< HEAD
 freshChoose :: [(String,String)] -> Sort -> Gen String
 freshChoose xcs sort
   = do x' <- fresh [] sort
        cs <- forM xcs $ \(x,c) -> do
-               -- c <- freshChoice [x']
--- =======
--- freshChoose :: [String] -> Sort -> Gen String
--- freshChoose [] sort = error "freshChoose"
--- freshChoose [x'] sort
---   = do x <- fresh [] sort
---        c <- freshChoice [x']
---        constrain $ prop c `iff` var x `eq` var x'
---        addDep x c
---        constrain $ prop c
---        return x
--- freshChoose xs sort
---   = do x <- fresh [] sort
---        cs <- forM xs $ \x' -> do
---                c <- freshChoice [x']
--- >>>>>>> 833023e7625e3287fa141201584d614d5776f90b
                constrain $ prop c `iff` var x `eq` var x'
                addDep x' c
                return $ prop c
        constrain $ pOr cs
        constrain $ pAnd [ PNot $ pAnd [x, y]
-                            | [x, y] <- filter ((==2) . length) $ subsequences cs ]
+                        | [x, y] <- filter ((==2) . length) $ subsequences cs ]
        return x'
 
 
 -- make :: TH.Name -> [String] -> Sort -> Gen String
 make c vs s
   = do x  <- fresh vs s
-       -- io $ print c
        t <- (safeFromJust "make" . lookup c) <$> gets ctorEnv
        let (xs, _, rt) = bkArrowDeep t
            su          = mkSubst $ zip (map symbol xs) (map var vs)
+       addConstructor (c, rTypeSort mempty t)
+       addConstraint $ var x `eq` app c (map var vs)
        constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
        return x
 
 constrain :: Pred -> Gen ()
 constrain p
-  = do -- b <- fresh [] choicesort
-       -- let pdep = prop b `iff` p
-       -- modify $ \s@(GS {..}) -> s { constraints = pdep : constraints }
-       mc <- gets chosen
+  = do mc <- gets chosen
        case mc of
-         Nothing -> addConstraint p -- modify $ \s@(GS {..}) -> s { constraints = p : constraints }
+         Nothing -> addConstraint p
          Just c  -> let p' = prop c `imp` p
-                    in addConstraint p' -- modify $ \s@(GS {..}) -> s { constraints = p' : constraints }
-         -- (c:_) -> let 
-       -- modify $ \s@(GS {..}) -> s { constraints = p : constraints }
+                    in addConstraint p'
 
 pop :: Gen String
-pop = do v <- gets $ head . values
-         modify $ \s@(GS {..}) -> s { values = tail values}
+pop = do (v:vs) <- gets values
+         modify $ \s@(GS {..}) -> s { values = vs }
          return v
 
 popN :: Int -> Gen [String]
@@ -260,7 +244,7 @@ class Testable a where
 instance (Constrain a, Constrain b) => Testable (a -> b) where
   test f d (stripQuals -> (RFun x i o _)) = do
     a <- gen (Proxy :: Proxy a) d i
-    cts <- gets constrs
+    cts <- gets freesyms
     vals <- allSat [symbol a]
     -- build up the haskell value
     (xvs :: [a]) <- forM vals $ \ vs -> do
@@ -288,7 +272,7 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
     a <- gen (Proxy :: Proxy a) d ta
     let tb' = subst (mkSubst [(xa, var a)]) tb
     b <- gen (Proxy :: Proxy b) d tb'
-    cts <- gets constrs
+    cts <- gets freesyms
     vals <- allSat [symbol a, symbol b]
     -- build up the haskell value
     (xvs :: [(a,b)]) <- forM vals $ \ vs -> do
@@ -317,7 +301,7 @@ instance (Constrain a, Constrain b, Constrain c, Constrain d)
     b <- gen (Proxy :: Proxy b) d tb'
     let tc' = subst (mkSubst [(xa, var a), (xb, var b)]) tc
     c <- gen (Proxy :: Proxy c) d tc'
-    cts <- gets constrs
+    cts <- gets freesyms
     vals <- allSat [symbol a, symbol b, symbol c]
     -- build up the haskell value
     (xvs :: [(a,b,c)]) <- forM vals $ \ vs -> do
@@ -354,8 +338,8 @@ allSat roots = setup >>= go
          "CHOICE" -> defSort ("CHOICE" :: T.Text) ("Bool" :: T.Text)
          s        -> defSort s ("Int" :: T.Text)
        -- declare constructors
-       cts <- gets constrs
-       mapM_ (\ (_,c) -> io . command ctx $ Declare (symbol c) [] FInt) cts
+       cts <- gets constructors
+       mapM_ (\ (c,t) -> io . command ctx $ makeDecl (symbol c) t) cts
        -- declare variables
        vs <- gets variables
        mapM_ (\ x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
@@ -493,7 +477,7 @@ reproxyElem = reproxy
 
 instance Constrain Bool
 instance Constrain a => Constrain [a]
--- instance (Constrain a, Constrain b) => Constrain (a,b)
+instance (Constrain a, Constrain b) => Constrain (a,b)
 
 class GConstrainSum f where
   ggenAlts      :: Proxy (f a) -> Int    -> SpecType -> Gen [(String,String)]
