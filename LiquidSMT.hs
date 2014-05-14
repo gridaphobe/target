@@ -471,12 +471,12 @@ evalBop b     e1           e2           = error $ printf "evalBop(%s, %s, %s)" (
 
 
 class Show a => Constrain a where
-  -- getType :: Proxy a -> String
-  -- default getType :: (Generic a, GConstrain (Rep a))
-  --                 => Proxy a -> String
-  -- getType p = gtype (reproxy p :: Proxy (Rep a a))
+  getType :: Proxy a -> String
+  default getType :: (Generic a, GConstrain (Rep a))
+                  => Proxy a -> String
+  getType p = gtype (reproxy p :: Proxy (Rep a a))
 
-  gen         :: Proxy a -> Int -> SpecType -> Gen String
+  gen :: Proxy a -> Int -> SpecType -> Gen String
   default gen :: (Generic a, GConstrain (Rep a))
               => Proxy a -> Int -> SpecType -> Gen String
   gen p = ggen (reproxy p :: Proxy (Rep a a))
@@ -504,86 +504,120 @@ instance (Constrain a, Constrain b) => Constrain (a,b)
 --- Sums
 --------------------------------------------------------------------------------
 class GConstrainSum f where
-  ggenAlts      :: Proxy (f a) -> Int    -> SpecType -> Gen [(String,String)]
-  -- ggenAltsNoRec :: Proxy (f a) -> String -> SpecType -> Gen [(String,String)]
-  gstitchAlts   :: Int -> Gen (f a)
-  -- gstitchAltsNoRec :: String -> Gen (f a,Bool)
+  -- gisRecursive  :: Proxy (f a) -> Sort -> Bool
+  ggenAlts      :: Proxy (f a) -> Int -> SpecType -> Gen [(String,String)]
+  gstitchAlts   :: Int -> Gen (f a, Bool)
+  gtoExprAlts   :: f a -> Expr
 
-instance (GConstrain f, GConstrainSum g) => GConstrainSum (f :+: g) where
-  ggenAlts p 0 t
-    = do ty <- gets making
-         if gisRecursive (reproxy p :: Proxy (f a)) ty
-           then ggenAlts (reproxy p :: Proxy (g a)) 0 t
-           else do
-             x  <- withFreshChoice $ ggen (reproxy p :: Proxy (f a)) 0 t
-             xs <- ggenAlts (reproxy p :: Proxy (g a)) 0 t
-             return $ x:xs
+instance (GConstrainSum f, GConstrainSum g) => GConstrainSum (f :+: g) where
+  -- gisRecursive _ _ = error "gisRecursive :+:"
+  -- ggenAlts p 0 t
+  --   = do ty <- gets makingTy
+  --        if gisRecursive (reproxy p :: Proxy (f a)) ty
+  --          then ggenAlts (reproxy p :: Proxy (g a)) 0 t
+  --          else do
+  --            x  <- withFreshChoice $ ggen (reproxy p :: Proxy (f a)) 0 t
+  --            xs <- ggenAlts (reproxy p :: Proxy (g a)) 0 t
+  --            return $ x:xs
+  -- ggenAlts p d t
+  --   = do x  <- withFreshChoice $ ggen (reproxy p :: Proxy (f a)) d t
+  --        xs <- ggenAlts (reproxy p :: Proxy (g a)) d t
+  --        return $ x:xs
   ggenAlts p d t
-    = do x  <- withFreshChoice $ ggen (reproxy p :: Proxy (f a)) d t
-         xs <- ggenAlts (reproxy p :: Proxy (g a)) d t
-         return $ x:xs
+    = do xs <- ggenAlts (reproxy p :: Proxy (f a)) d t
+         ys <- ggenAlts (reproxy p :: Proxy (g a)) d t
+         return $! xs++ys
 
-  gstitchAlts 0
-    = do (g,cg) <- gstitchAlts 0
-         ty     <- gets making
-         if gisRecursive (Proxy :: Proxy (f a)) ty
-         then return $ (R1 g, cg)
-         else do
-           f    <- gstitch 0
-           [cf] <- popChoices 1
-           case (cf,cg) of
-             (True,_) -> return $ (L1 f, cf)
-             (_,True) -> return $ (R1 g, cg)
-             _        -> return $ error "gstitch :+: CANNOT HAPPEN"
+  -- gstitchAlts 0
+  --   = do (g,cg) <- gstitchAlts 0
+  --        ty     <- gets makingTy
+  --        if gisRecursive (Proxy :: Proxy (f a)) ty
+  --        then return $ R1 g -- (R1 g, cg)
+  --        else do
+  --          f    <- gstitch 0
+  --          [cf] <- popChoices 1
+  --          case (cf,cg) of
+  --            (True,_) -> return $ L1 f -- (L1 f, cf)
+  --            (_,True) -> return $ R1 g -- (R1 g, cg)
+  --            _        -> return $ error "gstitch :+: CANNOT HAPPEN"
+  -- gstitchAlts d
+  --   = do g    <- gstitchAlts d
+  --        [cg] <- popChoices 1
+  --        f    <- gstitch d
+  --        [cf] <- popChoices 1
+  --        case (cf,cg) of
+  --          (True,_) -> return $ L1 f
+  --          (_,True) -> return $ R1 g
+  --          _        -> return $ error "gstitch :+: CANNOT HAPPEN"
   gstitchAlts d
-    = do g    <- gstitchAlts d
-         [cg] <- popChoices 1
-         f    <- gstitch d
-         [cf] <- popChoices 1
+    = do (g,cg) <- gstitchAlts d
+         (f,cf) <- gstitchAlts d
          case (cf,cg) of
-           (True,_) -> return $ L1 f
-           (_,True) -> return $ R1 g
-           _        -> return $ error "gstitch :+: CANNOT HAPPEN"
+           (True,_) -> return $ (L1 f, True)
+           (_,True) -> return $ (R1 g, True)
+           _        -> return $ error "gstitchAlts :+: CANNOT HAPPEN"
+
+  gtoExprAlts (L1 x) = gtoExprAlts x
+  gtoExprAlts (R1 x) = gtoExprAlts x
 
 
 instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
   ggenAlts p 0 t
-   = do ty <- gets making
+   = do ty <- gets makingTy
         if gisRecursive p ty
           then return []
-          else do
-            x <- withFreshChoice $ ggen p 0 t
-            return [x]
-  ggenAlts p d t
-    = do x <- withFreshChoice $ ggen p d t
-         return [x]
+          else ggenAlt p 0 t
+  ggenAlts p d t = ggenAlt p d t
 
   gstitchAlts 0
-    = do ty <- gets making
+    = do ty <- gets makingTy
          if gisRecursive (Proxy :: Proxy (C1 c f a)) ty
            then return $ (error "gstitchAlts C1 CANNOT HAPPEN",False)
            else do x <- M1 <$> (pop >> gstitchArgs 0)
                    [c] <- popChoices 1
                    return (x,c)
   gstitchAlts d
-   = M1 <$> (pop >> gstitchArgs d)
+    = do pop
+         x    <- gstitchArgs d
+         [cx] <- popChoices 1
+         return (M1 x, cx)
+
+  gtoExprAlts c@(M1 x)  = app (symbol $ conName c) (gtoExprs x)
+
+
+gisRecursive :: (Constructor c, GConstrainProd f)
+             => Proxy (C1 c f a) -> Sort -> Bool
+gisRecursive (p :: Proxy (C1 c f a)) t
+  = any (==(T.unpack $ smt2 t)) (gconArgTys (reproxy p :: Proxy (f a)))
+  where cn = conName (undefined :: C1 c f a)
+
+ggenAlt :: (Constructor c, GConstrainProd f)
+        => Proxy (C1 c f a) -> Int -> SpecType -> Gen [(String,String)]
+ggenAlt (p :: Proxy (C1 c f a)) d t
+  = fmap (:[]) $ withFreshChoice $ do
+      let cn = conName (undefined :: C1 c f a)
+      mod <- gets modName
+      dcp <- safeFromJust "ggenAlt" . lookup (mod++"."++cn) <$> gets ctorEnv
+      tyi <- gets tyconInfo
+      let ts = applyPreds (expandRApp (M.fromList []) tyi t) dcp
+      xs  <- ggenArgs (reproxy p :: Proxy (f a)) 0 ts
+      make (mod++"."++cn) xs =<< gets makingTy
 
 
 --------------------------------------------------------------------------------
 --- Products
 --------------------------------------------------------------------------------
 class GConstrainProd f where
-  gconArgTys :: Proxy (f a) -> [String]
-  ggenArgs :: Proxy (f a) -> Int -> [(Symbol,SpecType)] -> Gen [String]
+  gconArgTys  :: Proxy (f a) -> [String]
+  ggenArgs    :: Proxy (f a) -> Int -> [(Symbol,SpecType)] -> Gen [String]
   gstitchArgs :: Int -> Gen (f a)
-  gtoExprs :: (f a) -> [Expr]
+  gtoExprs    :: (f a) -> [Expr]
 
 instance (GConstrainProd f, GConstrainProd g) => GConstrainProd (f :*: g) where
   gconArgTys p = gconArgTys (reproxy p :: Proxy (f a)) ++ gconArgTys (reproxy p :: Proxy (g a))
 
   ggenArgs (p :: Proxy ((f :*: g) a)) d ts
     = do xs <- ggenArgs (reproxy p :: Proxy (f a)) d ts
-         -- let su = mkSubst [(fst t, var x)]
          let su = mkSubst $ zipWith (\x t -> (fst t, var x)) xs ts
          let ts' = drop (length xs) ts
          ys <- ggenArgs (reproxy p :: Proxy (g a)) d (map (second (subst su)) ts')
@@ -615,54 +649,53 @@ instance GConstrainProd U1 where
 --- Sums of Products
 --------------------------------------------------------------------------------
 class GConstrain f where
-  gisRecursive :: Proxy (f a) -> String -> Bool
   gtype        :: Proxy (f a) -> String
   ggen         :: Proxy (f a) -> Int    -> SpecType -> Gen String
   -- ggenNoRec    :: Proxy (f a) -> String -> SpecType -> Gen String
   gstitch      :: Int -> Gen (f a)
   -- gstitchNoRec :: String -> Gen (f a)
-  gtoExpr :: f a -> Expr
+  gtoExpr      :: f a -> Expr
 
-instance GConstrain U1 where
-  ggen p d t      = fresh [] =<< gets makingTy
-  -- ggenNoRec p d t = fresh [] =<< gets makingTy
-  gstitch _       = return U1
-  -- gstitchNoRec _  = return U1
-  gtoExpr c       = error "U1"
+-- instance GConstrain U1 where
+--   ggen p d t      = fresh [] =<< gets makingTy
+--   -- ggenNoRec p d t = fresh [] =<< gets makingTy
+--   gstitch _       = return U1
+--   -- gstitchNoRec _  = return U1
+--   gtoExpr c       = error "U1"
 
 
-instance (GConstrain f, GConstrain g, GConstrainSum g) => GConstrain (f :+: g) where
-  -- ggenNoRec p d t
-  --   = do xs <- ggenAltsNoRec p d t
-  --        x  <- freshChoose xs =<< gets makingTy
-  --        constrain $ ofReft x $ toReft $ rt_reft t
-  --        return x
-  ggen p d t
-    = do xs <- ggenAlts p d t
-         x  <- freshChoose xs =<< gets makingTy
-         constrain $ ofReft x $ toReft $ rt_reft t
-         return x
-  gstitch d = gstitchAlts d
-  -- gstitchNoRec d = fst <$> gstitchAltsNoRec d
-  gtoExpr c@(L1 x) = gtoExpr x
-  gtoExpr c@(R1 x) = gtoExpr x
+-- instance (GConstrainSum f, GConstrainSum g) => GConstrain (f :+: g) where
+--   -- ggenNoRec p d t
+--   --   = do xs <- ggenAltsNoRec p d t
+--   --        x  <- freshChoose xs =<< gets makingTy
+--   --        constrain $ ofReft x $ toReft $ rt_reft t
+--   --        return x
+--   ggen p d t
+--     = do xs <- ggenAlts p d t
+--          x  <- freshChoose xs =<< gets makingTy
+--          constrain $ ofReft x $ toReft $ rt_reft t
+--          return x
+--   gstitch d = fst <$> gstitchAlts d
+--   -- gstitchNoRec d = fst <$> gstitchAltsNoRec d
+--   gtoExpr c@(L1 x) = gtoExprAlt x
+--   gtoExpr c@(R1 x) = gtoExprAlt x
 
-instance (Constructor c, GConstrainProd f) => GConstrain (C1 c f) where
-  gisRecursive p t = any (==t) (gconArgTys (reproxy p :: Proxy (f a)))
-    where cn = conName (undefined :: C1 c f a)
-  ggen p d t
-    = do let cn = conName (undefined :: C1 c f a)
-         mod <- gets modName
-         dcp <- safeFromJust "ggen" . lookup (mod++"."++cn) <$> gets ctorEnv
-         tyi <- gets tyconInfo
-         let ts = applyPreds (expandRApp (M.fromList []) tyi t) dcp
-         xs  <- ggenArgs (reproxy p :: Proxy (f a)) d ts
-         make (mod++"."++cn) xs =<< gets makingTy
+-- instance (Constructor c, GConstrainProd f) => GConstrain (C1 c f) where
+--   -- gisRecursive p t = any (==(T.unpack $ smt2 t)) (gconArgTys (reproxy p :: Proxy (f a)))
+--   --   where cn = conName (undefined :: C1 c f a)
+--   ggen p d t
+--     = do let cn = conName (undefined :: C1 c f a)
+--          mod <- gets modName
+--          dcp <- safeFromJust "ggen" . lookup (mod++"."++cn) <$> gets ctorEnv
+--          tyi <- gets tyconInfo
+--          let ts = applyPreds (expandRApp (M.fromList []) tyi t) dcp
+--          xs  <- ggenArgs (reproxy p :: Proxy (f a)) d ts
+--          make (mod++"."++cn) xs =<< gets makingTy
 
-  gstitch d    = M1 <$> (pop >> gstitchArgs d)
-  -- gstitchNoRec _ = M1 <$> (pop >> gstitchArgs 0)
+--   gstitch d    = M1 <$> (pop >> gstitchArgs d)
+--   -- gstitchNoRec _ = M1 <$> (pop >> gstitchArgs 0)
 
-  gtoExpr c@(M1 x)  = app (symbol $ conName c) (gtoExprs x)
+--   gtoExpr c@(M1 x)  = app (symbol $ conName c) (gtoExprs x)
 
 inModule m act
   = do m' <- gets modName
@@ -677,33 +710,46 @@ making ty act
        modify $ \s -> s { makingTy = ty' }
        return r
 
-instance (Datatype c, GConstrain f) => GConstrain (D1 c f) where
+instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
   gtype p = qualifiedDatatypeName (undefined :: D1 c f a)
-  
-  ggen p 0 t
-    = inModule mod . making sort $ ggen (reproxy p :: Proxy (f a)) 0 t
-    where
-      mod = GHC.Generics.moduleName (undefined :: D1 c f a)
-      ty  = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
-      sort = FObj $ symbol ty
-  ggen p d t
-    = inModule mod . making sort $ ggen (reproxy p :: Proxy (f a)) d t
-    where
-      mod = GHC.Generics.moduleName (undefined :: D1 c f a)
-      ty  = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
-      sort = FObj $ symbol ty
 
-  gstitch 0 = M1 <$> (pop >> making sort (gstitch 0))
+  ggen p d t
+    = inModule mod . making sort $ do
+        xs <- ggenAlts (reproxy p :: Proxy (f a)) d t
+        x  <- freshChoose xs sort
+        constrain $ ofReft x $ toReft $ rt_reft t
+        return x
+--   ggen p d t
+--     = do xs <- ggenAlts p d t
+--          x  <- freshChoose xs =<< gets makingTy
+--          constrain $ ofReft x $ toReft $ rt_reft t
+--          return x
     where
       mod = GHC.Generics.moduleName (undefined :: D1 c f a)
       ty  = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
       sort = FObj $ symbol ty
-  gstitch d = M1 <$> (pop >> gstitch d)
+  -- ggen p d t
+  --   = inModule mod . making sort $ ggen (reproxy p :: Proxy (f a)) d t
+  --   where
+  --     mod = GHC.Generics.moduleName (undefined :: D1 c f a)
+  --     ty  = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
+  --     sort = FObj $ symbol ty
+
+  -- gstitch 0 = M1 <$> (pop >> making sort (gstitch 0))
+  --   where
+  --     mod = GHC.Generics.moduleName (undefined :: D1 c f a)
+  --     ty  = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
+  --     sort = FObj $ symbol ty
+  gstitch d = M1 <$> (pop >> making sort (fst <$> gstitchAlts d))
+    where
+      mod = GHC.Generics.moduleName (undefined :: D1 c f a)
+      ty  = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
+      sort = FObj $ symbol ty
 
   gtoExpr c@(M1 x) = app (symbol $ GHC.Generics.moduleName c ++ "." ++
                           (symbolString $ val d)) xs
     where
-      (EApp d xs) = gtoExpr x
+      (EApp d xs) = gtoExprAlts x
 
 instance (GConstrain f) => GConstrain (S1 c f) where
   gtype p    = gtype (reproxy p :: Proxy (f a))
@@ -712,7 +758,7 @@ instance (GConstrain f) => GConstrain (S1 c f) where
   gtoExpr (M1 c)  = gtoExpr c
 
 instance (Constrain a) => GConstrain (K1 i a) where
-  -- gtype p    = getType (reproxy p :: Proxy a)
+  gtype p    = getType (reproxy p :: Proxy a)
   ggen p d t = gen (reproxy p :: Proxy a) d t
   gstitch d  = K1 <$> stitch d
   gtoExpr  (K1 x) = toExpr x
@@ -720,12 +766,13 @@ instance (Constrain a) => GConstrain (K1 i a) where
 qualifiedDatatypeName d = GHC.Generics.moduleName d ++ "." ++ datatypeName d
 
 instance Constrain () where
+  getType _ = "GHC.Types.()"
   gen _ _ _ = fresh [] (FObj (S "UNIT"))
   stitch _  = pop >> return ()
   toExpr _  = app (stringSymbol "()") []
 
 instance Constrain Int where
-  -- getType _ = "GHC.Types.Int"
+  getType _ = "GHC.Types.Int"
   gen _ _ t = fresh [] FInt >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
        -- use the unfolding depth to constrain the range of Ints, like QuickCheck
