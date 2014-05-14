@@ -1,3 +1,4 @@
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -493,9 +494,6 @@ evalBop Mod   (ECon (I x)) (ECon (I y)) = ECon . I $ x `mod` y
 evalBop b     e1           e2           = error $ printf "evalBop(%s, %s, %s)" (show b) (show e1) (show e2)
 
 
-reproxyElem :: proxy (f a) -> Proxy a
-reproxyElem = reproxy
-
 --------------------------------------------------------------------------------
 --- Constrainable Data
 --------------------------------------------------------------------------------
@@ -503,12 +501,12 @@ class Show a => Constrain a where
   getType :: Proxy a -> String
   default getType :: (Generic a, GConstrain (Rep a))
                   => Proxy a -> String
-  getType p = gtype (reproxy p :: Proxy (Rep a a))
+  getType p = gtype (reproxyRep p)
 
   gen :: Proxy a -> Int -> SpecType -> Gen String
   default gen :: (Generic a, GConstrain (Rep a))
               => Proxy a -> Int -> SpecType -> Gen String
-  gen p = ggen (reproxy p :: Proxy (Rep a a))
+  gen p = ggen (reproxyRep p)
 
 
   stitch :: Int -> Gen a
@@ -521,6 +519,12 @@ class Show a => Constrain a where
                  => a -> Expr
   toExpr = gtoExpr . from
 
+reproxyElem :: proxy (f a) -> Proxy a
+reproxyElem = reproxy
+
+reproxyRep :: Proxy a -> Proxy (Rep a a)
+reproxyRep = reproxy
+
 --------------------------------------------------------------------------------
 --- Sums of Products
 --------------------------------------------------------------------------------
@@ -530,12 +534,15 @@ class GConstrain f where
   gstitch      :: Int -> Gen (f a)
   gtoExpr      :: f a -> Expr
 
+reproxyGElem :: Proxy (M1 d c f a) -> Proxy (f a)
+reproxyGElem = reproxy
+
 instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
   gtype p = qualifiedDatatypeName (undefined :: D1 c f a)
 
   ggen p d t
     = inModule mod . making sort $ do
-        xs <- ggenAlts (reproxy p :: Proxy (f a)) d t
+        xs <- ggenAlts (reproxyGElem p) d t
         x  <- freshChoose xs sort
         constrain $ ofReft x $ toReft $ rt_reft t
         return x
@@ -551,7 +558,8 @@ instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
       sort = FObj $ symbol ty
 
   gtoExpr c@(M1 x) = app (symbol $ GHC.Generics.moduleName c ++ "." ++
-                          (symbolString $ val d)) xs
+                          (symbolString $ val d))
+                         xs
     where
       (EApp d xs) = gtoExprAlts x
 
@@ -571,10 +579,16 @@ class GConstrainSum f where
   gstitchAlts   :: Int -> Gen (f a, Bool)
   gtoExprAlts   :: f a -> Expr
 
+reproxyLeft :: Proxy ((c (f :: * -> *) (g :: * -> *)) a) -> Proxy (f a)
+reproxyLeft = reproxy
+
+reproxyRight :: Proxy ((c (f :: * -> *) (g :: * -> *)) a) -> Proxy (g a)
+reproxyRight = reproxy
+
 instance (GConstrainSum f, GConstrainSum g) => GConstrainSum (f :+: g) where
   ggenAlts p d t
-    = do xs <- ggenAlts (reproxy p :: Proxy (f a)) d t
-         ys <- ggenAlts (reproxy p :: Proxy (g a)) d t
+    = do xs <- ggenAlts (reproxyLeft p) d t
+         ys <- ggenAlts (reproxyRight p) d t
          return $! xs++ys
 
   gstitchAlts d
@@ -614,7 +628,7 @@ instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
 gisRecursive :: (Constructor c, GConstrainProd f)
              => Proxy (C1 c f a) -> Sort -> Bool
 gisRecursive (p :: Proxy (C1 c f a)) t
-  = any (==(T.unpack $ smt2 t)) (gconArgTys (reproxy p :: Proxy (f a)))
+  = any (==(T.unpack $ smt2 t)) (gconArgTys (reproxyGElem p))
   where cn = conName (undefined :: C1 c f a)
 
 ggenAlt :: (Constructor c, GConstrainProd f)
@@ -626,7 +640,7 @@ ggenAlt (p :: Proxy (C1 c f a)) d t
       dcp <- safeFromJust "ggenAlt" . lookup (mod++"."++cn) <$> gets ctorEnv
       tyi <- gets tyconInfo
       let ts = applyPreds (expandRApp (M.fromList []) tyi t) dcp
-      xs  <- ggenArgs (reproxy p :: Proxy (f a)) d ts
+      xs  <- ggenArgs (reproxyGElem p) d ts
       make (mod++"."++cn) xs =<< gets makingTy
 
 --------------------------------------------------------------------------------
@@ -639,13 +653,13 @@ class GConstrainProd f where
   gtoExprs    :: (f a) -> [Expr]
 
 instance (GConstrainProd f, GConstrainProd g) => GConstrainProd (f :*: g) where
-  gconArgTys p = gconArgTys (reproxy p :: Proxy (f a)) ++ gconArgTys (reproxy p :: Proxy (g a))
+  gconArgTys p = gconArgTys (reproxyLeft p) ++ gconArgTys (reproxyRight p)
 
-  ggenArgs (p :: Proxy ((f :*: g) a)) d ts
-    = do xs <- ggenArgs (reproxy p :: Proxy (f a)) d ts
+  ggenArgs p d ts
+    = do xs <- ggenArgs (reproxyLeft p) d ts
          let su = mkSubst $ zipWith (\x t -> (fst t, var x)) xs ts
          let ts' = drop (length xs) ts
-         ys <- ggenArgs (reproxy p :: Proxy (g a)) d (map (second (subst su)) ts')
+         ys <- ggenArgs (reproxyRight p) d (map (second (subst su)) ts')
          return $ xs ++ ys
 
   gstitchArgs d
@@ -656,9 +670,9 @@ instance (GConstrainProd f, GConstrainProd g) => GConstrainProd (f :*: g) where
   gtoExprs (f :*: g) = gtoExprs f ++ gtoExprs g
 
 instance (GConstrain f) => GConstrainProd (S1 c f) where
-  gconArgTys p = [gtype (reproxy p :: Proxy (f a))]
+  gconArgTys p = [gtype (reproxyGElem p)]
   ggenArgs p d (t:ts)
-    = do x <- ggen (reproxy p :: Proxy (f a)) (d-1) (snd t)
+    = do x <- ggen (reproxyGElem p) (d-1) (snd t)
          return [x]
   gstitchArgs d = M1 <$> gstitch (d-1)
   gtoExprs (M1 x) = [gtoExpr x]
