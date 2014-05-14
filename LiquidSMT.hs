@@ -269,9 +269,9 @@ instance (Constrain a, Constrain b) => Testable (a -> b) where
               (Passed n) -> \a -> do
                 r <- io $ evaluate (f a)
                 let env = map (second (`app` [])) cts ++ [(show x, toExpr a)]
-                sat <- evalReft (M.fromList env) (toReft $ rt_reft o) (toExpr r)
+                sat <- evalType (M.fromList env) o (toExpr r)
                 case sat of
-                  False -> return $ Failed $ show (x, a)
+                  False -> return $ Failed $ show a
                   True  -> return $ Passed (n+1))
       (Passed 0) xvs
   test f d t = error $ show t
@@ -300,9 +300,9 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
                 r <- io $ evaluate (f a b)
                 let env = map (second (`app` [])) cts
                        ++ [(show xa, toExpr a),(show xb, toExpr b)]
-                sat <- evalReft (M.fromList env) (toReft $ rt_reft to) (toExpr r)
+                sat <- evalType (M.fromList env) to (toExpr r)
                 case sat of
-                  False -> return $ Failed $ show ((xa, a), (xb, b))
+                  False -> return $ Failed $ show (a, b)
                   True  -> return $ Passed (n+1))
       (Passed 0) xvs
   test f d t = error $ show t
@@ -330,9 +330,9 @@ instance (Constrain a, Constrain b, Constrain c, Constrain d)
                 r <- io $ evaluate (f a b c)
                 let env = map (second (`app` [])) cts
                        ++ [(show xa, toExpr a),(show xb, toExpr b),(show xc, toExpr c)]
-                sat <- evalReft (M.fromList env) (toReft $ rt_reft to) (toExpr r)
+                sat <- evalType (M.fromList env) to (toExpr r)
                 case sat of
-                  False -> return $ Failed $ show ((xa, a), (xb, b), (xc, c))
+                  False -> return $ Failed $ show (a, b, c)
                   True  -> return $ Passed (n+1))
       (Passed 0) xvs
   test f d t = error $ show t
@@ -398,10 +398,20 @@ evalType m t e@(EApp c xs)
   = do dcp <- (safeFromJust "evalType" . lookup (symbolString $ val $ c))
               <$> gets ctorEnv
        tyi <- gets tyconInfo
-       let vts = applyPreds (expandRApp M.empty tyi t) dcp
+       vts <- freshen $ applyPreds (expandRApp M.empty tyi t) dcp
        liftM2 (&&) (evalReft m (toReft $ rt_reft t) e) (evalTypes m vts xs)
 evalType m t e
   = evalReft m (toReft $ rt_reft t) e
+
+freshen [] = return []
+freshen ((v,t):vts)
+  = do n <- gets seed
+       modify $ \s@ (GS {..}) -> s { seed = seed + 1 }
+       let v' = symbol . (++show n) . symbolString $ v
+           su = mkSubst [(v,var v')]
+           t' = subst su t
+       vts' <- freshen $ subst su vts
+       return ((v',t'):vts')
 
 evalTypes m []         []     = return True
 evalTypes m ((v,t):ts) (x:xs)
@@ -411,9 +421,8 @@ evalTypes m ((v,t):ts) (x:xs)
 
 
 evalReft :: M.HashMap String Expr -> Reft -> Expr -> Gen Bool
-evalReft m (Reft (S v, rs)) x = and <$> sequence [ evalPred p (M.insert v x m)
-                                                 | RConc p <- rs
-                                                 ]
+evalReft m r@(Reft (S v, rs)) x
+  = and <$> sequence [ evalPred p (M.insert v x m) | RConc p <- rs ]
 
 evalPred PTrue           m = return True
 evalPred PFalse          m = return False
@@ -511,6 +520,48 @@ class Show a => Constrain a where
   default toExpr :: (Generic a, GConstrain (Rep a))
                  => a -> Expr
   toExpr = gtoExpr . from
+
+--------------------------------------------------------------------------------
+--- Sums of Products
+--------------------------------------------------------------------------------
+class GConstrain f where
+  gtype        :: Proxy (f a) -> String
+  ggen         :: Proxy (f a) -> Int    -> SpecType -> Gen String
+  gstitch      :: Int -> Gen (f a)
+  gtoExpr      :: f a -> Expr
+
+instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
+  gtype p = qualifiedDatatypeName (undefined :: D1 c f a)
+
+  ggen p d t
+    = inModule mod . making sort $ do
+        xs <- ggenAlts (reproxy p :: Proxy (f a)) d t
+        x  <- freshChoose xs sort
+        constrain $ ofReft x $ toReft $ rt_reft t
+        return x
+    where
+      mod = GHC.Generics.moduleName (undefined :: D1 c f a)
+      ty  = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
+      sort = FObj $ symbol ty
+
+  gstitch d = M1 <$> (pop >> making sort (fst <$> gstitchAlts d))
+    where
+      mod = GHC.Generics.moduleName (undefined :: D1 c f a)
+      ty  = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
+      sort = FObj $ symbol ty
+
+  gtoExpr c@(M1 x) = app (symbol $ GHC.Generics.moduleName c ++ "." ++
+                          (symbolString $ val d)) xs
+    where
+      (EApp d xs) = gtoExprAlts x
+
+instance (Constrain a) => GConstrain (K1 i a) where
+  gtype p    = getType (reproxy p :: Proxy a)
+  ggen p d t = gen (reproxy p :: Proxy a) d t
+  gstitch d  = K1 <$> stitch d
+  gtoExpr  (K1 x) = toExpr x
+
+qualifiedDatatypeName d = GHC.Generics.moduleName d ++ "." ++ datatypeName d
 
 --------------------------------------------------------------------------------
 --- Sums
@@ -617,48 +668,6 @@ instance GConstrainProd U1 where
   ggenArgs p d [] = return []
   gstitchArgs d   = return U1
   gtoExprs _      = []
-
---------------------------------------------------------------------------------
---- Sums of Products
---------------------------------------------------------------------------------
-class GConstrain f where
-  gtype        :: Proxy (f a) -> String
-  ggen         :: Proxy (f a) -> Int    -> SpecType -> Gen String
-  gstitch      :: Int -> Gen (f a)
-  gtoExpr      :: f a -> Expr
-
-instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
-  gtype p = qualifiedDatatypeName (undefined :: D1 c f a)
-
-  ggen p d t
-    = inModule mod . making sort $ do
-        xs <- ggenAlts (reproxy p :: Proxy (f a)) d t
-        x  <- freshChoose xs sort
-        constrain $ ofReft x $ toReft $ rt_reft t
-        return x
-    where
-      mod = GHC.Generics.moduleName (undefined :: D1 c f a)
-      ty  = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
-      sort = FObj $ symbol ty
-
-  gstitch d = M1 <$> (pop >> making sort (fst <$> gstitchAlts d))
-    where
-      mod = GHC.Generics.moduleName (undefined :: D1 c f a)
-      ty  = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
-      sort = FObj $ symbol ty
-
-  gtoExpr c@(M1 x) = app (symbol $ GHC.Generics.moduleName c ++ "." ++
-                          (symbolString $ val d)) xs
-    where
-      (EApp d xs) = gtoExprAlts x
-
-instance (Constrain a) => GConstrain (K1 i a) where
-  gtype p    = getType (reproxy p :: Proxy a)
-  ggen p d t = gen (reproxy p :: Proxy a) d t
-  gstitch d  = K1 <$> stitch d
-  gtoExpr  (K1 x) = toExpr x
-
-qualifiedDatatypeName d = GHC.Generics.moduleName d ++ "." ++ datatypeName d
 
 --------------------------------------------------------------------------------
 --- Instances
