@@ -242,6 +242,13 @@ pop = do (v:vs) <- gets values
 popN :: Int -> Gen [String]
 popN d = replicateM d pop
 
+popChoice :: Gen Bool
+popChoice = read <$> pop
+  where
+    read "true"  = True
+    read "false" = False
+    read e       = error $ "popChoice: " ++ e
+
 popChoices :: Int -> Gen [Bool]
 popChoices n = fmap read <$> popN n
   where
@@ -547,19 +554,14 @@ instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
         constrain $ ofReft x $ toReft $ rt_reft t
         return x
     where
-      mod = GHC.Generics.moduleName (undefined :: D1 c f a)
-      ty  = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
-      sort = FObj $ symbol ty
+      mod  = GHC.Generics.moduleName (undefined :: D1 c f a)
+      sort = qualifiedSort (undefined :: D1 c f a)
 
   gstitch d = M1 <$> (pop >> making sort (fst <$> gstitchAlts d))
     where
-      mod = GHC.Generics.moduleName (undefined :: D1 c f a)
-      ty  = mod ++ "." ++ datatypeName (undefined :: D1 c f a)
-      sort = FObj $ symbol ty
+      sort = qualifiedSort (undefined :: D1 c f a)
 
-  gtoExpr c@(M1 x) = app (symbol $ GHC.Generics.moduleName c ++ "." ++
-                          (symbolString $ val d))
-                         xs
+  gtoExpr c@(M1 x) = app (qualify c (symbolString $ val d)) xs
     where
       (EApp d xs) = gtoExprAlts x
 
@@ -567,9 +569,16 @@ instance (Constrain a) => GConstrain (K1 i a) where
   gtype p    = getType (reproxy p :: Proxy a)
   ggen p d t = gen (reproxy p :: Proxy a) d t
   gstitch d  = K1 <$> stitch d
-  gtoExpr  (K1 x) = toExpr x
+  gtoExpr (K1 x) = toExpr x
 
-qualifiedDatatypeName d = GHC.Generics.moduleName d ++ "." ++ datatypeName d
+qualify :: Datatype d => D1 d f a -> String -> String
+qualify d x = GHC.Generics.moduleName d ++ "." ++ x
+
+qualifiedDatatypeName :: Datatype d => D1 d f a -> String
+qualifiedDatatypeName d = qualify d (datatypeName d)
+
+qualifiedSort :: Datatype d => D1 d f a -> Sort
+qualifiedSort d = FObj $ symbol $ qualifiedDatatypeName d
 
 --------------------------------------------------------------------------------
 --- Sums
@@ -597,31 +606,26 @@ instance (GConstrainSum f, GConstrainSum g) => GConstrainSum (f :+: g) where
          case (cf,cg) of
            (True,_) -> return $ (L1 f, True)
            (_,True) -> return $ (R1 g, True)
-           _        -> return $ error "gstitchAlts :+: CANNOT HAPPEN"
+           _        -> return $ (error "gstitchAlts :+: CANNOT HAPPEN", False)
 
   gtoExprAlts (L1 x) = gtoExprAlts x
   gtoExprAlts (R1 x) = gtoExprAlts x
 
 instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
   ggenAlts p 0 t
-   = do ty <- gets makingTy
-        if gisRecursive p ty
-          then return []
-          else ggenAlt p 0 t
+    = do ty <- gets makingTy
+         if gisRecursive p ty
+           then return []
+           else ggenAlt p 0 t
   ggenAlts p d t = ggenAlt p d t
 
   gstitchAlts 0
     = do ty <- gets makingTy
          if gisRecursive (Proxy :: Proxy (C1 c f a)) ty
-           then return $ (error "gstitchAlts C1 CANNOT HAPPEN",False)
-           else do x <- M1 <$> (pop >> gstitchArgs 0)
-                   [c] <- popChoices 1
-                   return (x,c)
+           then return $ (error "gstitchAlts C1 CANNOT HAPPEN", False)
+           else gstitchAlt 0
   gstitchAlts d
-    = do pop
-         x    <- gstitchArgs d
-         [cx] <- popChoices 1
-         return (M1 x, cx)
+    = gstitchAlt d
 
   gtoExprAlts c@(M1 x)  = app (symbol $ conName c) (gtoExprs x)
 
@@ -642,6 +646,13 @@ ggenAlt (p :: Proxy (C1 c f a)) d t
       let ts = applyPreds (expandRApp (M.fromList []) tyi t) dcp
       xs  <- ggenArgs (reproxyGElem p) d ts
       make (mod++"."++cn) xs =<< gets makingTy
+
+gstitchAlt :: GConstrainProd f => Int -> Gen (C1 c f a, Bool)
+gstitchAlt d
+  = do pop
+       x <- gstitchArgs d
+       c <- popChoice
+       return (M1 x, c)
 
 --------------------------------------------------------------------------------
 --- Products
@@ -670,12 +681,10 @@ instance (GConstrainProd f, GConstrainProd g) => GConstrainProd (f :*: g) where
   gtoExprs (f :*: g) = gtoExprs f ++ gtoExprs g
 
 instance (GConstrain f) => GConstrainProd (S1 c f) where
-  gconArgTys p = [gtype (reproxyGElem p)]
-  ggenArgs p d (t:ts)
-    = do x <- ggen (reproxyGElem p) (d-1) (snd t)
-         return [x]
-  gstitchArgs d = M1 <$> gstitch (d-1)
-  gtoExprs (M1 x) = [gtoExpr x]
+  gconArgTys p        = [gtype (reproxyGElem p)]
+  ggenArgs p d (t:ts) = sequence [ggen (reproxyGElem p) (d-1) (snd t)]
+  gstitchArgs d       = M1 <$> gstitch (d-1)
+  gtoExprs (M1 x)     = [gtoExpr x]
 
 instance GConstrainProd U1 where
   gconArgTys p    = []
@@ -773,7 +782,7 @@ applyPreds sp dc = zip xs (map tx ts)
     tx    = (\t -> replacePreds "applyPreds" t sup) . onRefs (monosToPoly sup) . subsTyVars_meet su
 
 onRefs f t@(RVar _ _) = t
-onRefs f t = t { rt_pargs = f <$> rt_pargs t}
+onRefs f t = t { rt_pargs = f <$> rt_pargs t }
 
 monosToPoly su r = foldr monoToPoly r su
 
@@ -795,60 +804,6 @@ apply4 c d
   where
     cons :: Constrain a => Gen a
     cons = stitch (d-1)
-
-data Tree a = Leaf | Node a (Tree a) (Tree a) deriving (Eq, Ord, Show, Generic)
-
-treesort = FObj $ stringSymbol "Tree"
-
-treeList Leaf = []
-treeList (Node x l r) = treeList l ++ [x] ++ treeList r
-
-instance Constrain a => Constrain (Tree a) where
-  gen _ 0 t = fst <$> gen_leaf t
-  gen p d t@(RApp c [ta] ps r)
-    = do let t' = RApp c [ta] ps mempty
-         l <- gen_leaf t'
-         n <- gen_node p d t'
-         z <- freshChoose [l,n] treesort
-         constrain $ ofReft z (toReft r)
-         return z
-
-  stitch 0 = stitch_leaf
-  stitch d
-    = do [cn,cl] <- popChoices 2
-         void pop -- "actual" tree
-         n <- stitch_node d
-         l  <- stitch_leaf
-         case (cn,cl) of
-           (True,_) -> return n
-           (_,True) -> return l
-
-  toExpr Leaf         = app (stringSymbol "LiquidSMT.Leaf") []
-  toExpr (Node x l r) = app (stringSymbol "LiquidSMT.Node") [toExpr x, toExpr l, toExpr r]
-
-gen_leaf _
-  = withFreshChoice $ make "LiquidSMT.Leaf" [] treesort
-
-stitch_leaf = pop >> return Leaf
-
-gen_node :: forall a. Constrain a => Proxy (Tree a) -> Int -> SpecType -> Gen (String,String)
-gen_node p d t@(RApp _ _ _ _)
-  -- = do x <- gen (Proxy :: Proxy a) (d-1) ta
-  --      let tal = applyRef pl [x] ta
-  --      let tl  = RApp c [tal] [pl,pr] r
-  --      let tar = applyRef pr [x] ta
-  --      let tr  = RApp c [tar] [pl,pr] r
-  --      nl <- gen p (d-1) tl
-  --      nr <- gen p (d-1) tr
-  --      make 'Node [x,nl,nr] treesort
-  = withFreshChoice $ make3 "LiquidSMT.Node" (reproxyElem p, p, p) t treesort d
-
-stitch_node d
-  = do z <- pop
-       nr <- stitch (d-1)
-       nl <- stitch (d-1)
-       x <- stitch (d-1)
-       return (Node x nl nr)
 
 
 ofReft :: String -> Reft -> Pred
@@ -953,54 +908,3 @@ testOne f name path
 
 safeFromJust msg Nothing  = error $ "safeFromJust: " ++ msg
 safeFromJust msg (Just x) = x
-
---------------------------------------------------------------------------------
---- | Dependency Graph
---------------------------------------------------------------------------------
-
-data Dep = Empty
-         | Choice String [Dep]
-         | Direct String Dep
-         deriving (Show, Eq)
-
-leaf = flip Direct Empty
-x20 = leaf "x20"
-x21 = leaf "x21"
-p10 = Direct "p10" x20
-p11 = Direct "p11" x21
-x10 = Choice "x10" [p10, p11]
-x11 = leaf "x11"
-p00 = Direct "p00" x10
-p01 = Direct "p01" x11
-x0  = Choice "x0" [p00, p01]
-
-
---------------------------------------------------------------------------------
---- | Template Haskell
---------------------------------------------------------------------------------
-
--- ref :: ?? -> Q [Dec]
-
-infix 6 ~>
-(~>) :: Bind a b c d -> RType a b c d -> RType a b c d
-(x,i) ~> o = RFun x i o undefined
-
-type Bind a b c d = (Symbol, RType a b c d)
-
-infix 5 -:
-(-:) :: Symbol -> RType a b c d -> Bind a b c d
-x-:t = (x,t)
-
-instance IsString Symbol where
-  fromString = symbol
-
-
--- quoteRTypeDec s
---   = do -- loc <- TH.location
---        -- let pos =  (TH.loc_filename loc,
---        --             fst (TH.loc_start loc),
---        --             snd (TH.loc_start loc))
---        let t :: SpecType = rr s
---        let ht = TH.ConT ''Int
---        let sig = TH.SigD (TH.mkName "foo") ht
---        return [sig]
