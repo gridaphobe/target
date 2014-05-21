@@ -190,7 +190,7 @@ fresh xs sort
   = do n <- gets seed
        modify $ \s@(GS {..}) -> s { seed = seed + 1 }
        modify $ \s@(GS {..}) -> s { sorts = S.insert (smt2 sort) sorts }
-       let x = T.unpack (smt2 sort) ++ show n
+       let x = (zDecodeString $ T.unpack (smt2 sort)) ++ show n
        modify $ \s@(GS {..}) -> s { variables = (x,sort) : variables }
        mapM_ (addDep x) xs
        return x
