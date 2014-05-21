@@ -56,12 +56,15 @@ import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Types hiding (var, env, Result(..))
 import qualified Language.Haskell.TH as TH
 import           System.Exit
+import           System.FilePath
 import           System.IO.Unsafe
 import           Text.PrettyPrint.HughesPJ hiding (first)
 import           Text.Printf
 
 import           GHC.Generics
 import           Generics.Deriving.ConNames
+
+
 io = liftIO
 
 
@@ -374,6 +377,7 @@ allSat roots = setup >>= go
                         io . command ctx $ Assert (Just i) c})
          cs
        deps <- V.fromList . map (symbol *** symbol) <$> gets deps
+       io $ generateDepGraph "deps" deps
        return (ctx,vs,deps)
 
     go :: (Context, [Variable], V.Vector (Symbol,Symbol)) -> Gen [[String]]
@@ -398,6 +402,12 @@ allSat roots = setup >>= go
       $ realized
       where
         realized = V.concat $ map (\root -> reaches root model deps) roots
+
+generateDepGraph :: String -> V.Vector (Symbol,Symbol) -> IO ()
+generateDepGraph name deps = writeFile (name <.> "dot") digraph
+  where
+    digraph = unlines $ ["digraph G {"] ++ edges ++ ["}"]
+    edges   = [printf "\"%s\" -> \"%s\";" p c | (S p, S c) <- V.toList deps]
 
 
 -- evalType :: Env -> RApp -> Expr -> Gen Bool

@@ -8,14 +8,23 @@ module Main where
 import GHC.Generics
 import LiquidSMT
 
-{-@ mytake :: n:Nat -> xs:[Nat]<{\x y -> x < y}>
-           -> {v:[Nat]<{\x y -> x < y}> | (Min (len v) n (len xs))} @-}
+{-@ type SortedList a = [a]<{\x y -> x < y}> @-}
+
+{-@ mytake :: n:Nat -> xs:SortedList Nat
+           -> {v:SortedList Nat | (Min (len v) n (len xs))} @-}
 mytake :: Int -> [Int] -> [Int]
 mytake 0 xs     = []
 mytake _ []     = []
 mytake n (x:xs) = x : mytake (n-1) xs
 
 
-tests = [ testFun mytake "Main.mytake" 2 ]
+-- insert :: Int -> [Int] -> [Int]
+-- insert x [] = [x]
+-- insert x (y:ys) | x < y    = x : y : ys
+--                 | otherwise = y : insert x ys
+
+tests = [ testFun mytake "Main.mytake" 2
+        -- , testFun insert "Main.insert" 2
+        ]
 
 main = testModule "List.hs" tests
