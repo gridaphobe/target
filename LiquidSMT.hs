@@ -64,6 +64,8 @@ import           Text.Printf
 import           GHC.Generics
 import           Generics.Deriving.ConNames
 
+import           Encoding (zDecodeString)
+
 
 io = liftIO
 
@@ -184,13 +186,8 @@ withFreshChoice act
 -- relation between variables, e.g. `fresh xs sort` will return a new
 -- variable `x`, from which everything in `xs` is reachable.
 fresh :: [String] -> Sort -> Gen String
-fresh xs sort'
+fresh xs sort
   = do n <- gets seed
-       let sort = case smt2 sort' of
-             --FIXME: ugly...
-             "GHC.Types.[]"   -> FObj $ stringSymbol "GHC.Types.List"
-             "GHC.Types.Int"  -> FInt
-             s -> sort'
        modify $ \s@(GS {..}) -> s { seed = seed + 1 }
        modify $ \s@(GS {..}) -> s { sorts = S.insert (smt2 sort) sorts }
        let x = T.unpack (smt2 sort) ++ show n
@@ -642,7 +639,7 @@ instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
 gisRecursive :: (Constructor c, GConstrainProd f)
              => Proxy (C1 c f a) -> Sort -> Bool
 gisRecursive (p :: Proxy (C1 c f a)) t
-  = any (==(T.unpack $ smt2 t)) (gconArgTys (reproxyGElem p))
+  = any (==(zDecodeString $ T.unpack $ smt2 t)) (gconArgTys (reproxyGElem p))
   where cn = conName (undefined :: C1 c f a)
 
 ggenAlt :: (Constructor c, GConstrainProd f)
