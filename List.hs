@@ -3,19 +3,28 @@
 {-@ LIQUID "-g-no-user-package-db" @-}
 
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DeriveGeneric #-}
 module Main where
 
 import GHC.Generics
 import LiquidSMT
 
-{-@ type SortedList a = [a]<{\x y -> x < y}> @-}
+data List a = Nil | Cons a (List a) deriving (Generic, Show)
+instance Constrain a => Constrain (List a)
+{-@ data List a <p:: a -> a -> Prop> = Nil | Cons (zoo::a) (zoog::List <p> (a<p zoo>)) @-}
+{-@ measure llen :: List a -> Int
+    llen(Nil) = 0
+    llen(Cons x xs) = 1 + llen(xs)
+  @-}
+
+{-@ type SortedList a = List <{\x y -> x < y}> a @-}
 
 {-@ mytake :: n:Nat -> xs:SortedList Nat
-           -> {v:SortedList Nat | (Min (len v) n (len xs))} @-}
-mytake :: Int -> [Int] -> [Int]
-mytake 0 xs     = []
-mytake _ []     = []
-mytake n (x:xs) = x : mytake (n-1) xs
+           -> {v:SortedList Nat | (Min (llen v) n (llen xs))} @-}
+mytake :: Int -> List Int -> List Int
+mytake 0 xs     = Nil
+mytake _ Nil     = Nil
+mytake n (Cons x xs) = Cons x (mytake (n-1) xs)
 
 
 -- insert :: Int -> [Int] -> [Int]
