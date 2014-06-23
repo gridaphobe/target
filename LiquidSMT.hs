@@ -76,7 +76,7 @@ reaches root model deps = go root
       | isChoice && taken
       = (root,val) `V.cons` V.concatMap go (reached deps) -- [r | (x,r) <- deps, x == root]
       | isChoice
-      = V.fromList [(root,val)]
+      = V.empty -- V.fromList [(root,val)]
       | otherwise
       = (root,val) `V.cons` V.concatMap go (reached deps) -- [r | (x,r) <- deps, x == root]
       where
@@ -367,7 +367,7 @@ allSat roots = setup >>= go
        mapM_ (\ x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
        -- declare measures
        ms <- gets measEnv
-       mapM_ (\ m -> io . command ctx $ makeDecl (val $ name m) (rTypeSort mempty $ sort m)) ms
+       mapM_ (\m -> io . command ctx $ makeDecl (val $ name m) (rTypeSort mempty $ sort m)) ms
        -- assert constraints
        cs <- gets constraints
        mapM_ (\c -> do {i <- gets seed; modify $ \s@(GS {..}) -> s { seed = seed + 1 };
@@ -384,7 +384,7 @@ allSat roots = setup >>= go
          Error e -> io (cleanupContext ctx) >> error (T.unpack e)
          Unsat   -> io (cleanupContext ctx) >> return []
          Sat     -> do
-           Values model <- io $ command ctx (GetValue $ map symbol vs)
+           Values model <- io $ command ctx (GetValue [symbol v | (v,t) <- vs, t `elem` interps])
            let cs = V.toList $ refute roots (M.fromList model) deps vs
            i <- gets seed
            modify $ \s@(GS {..}) -> s { seed = seed + 1 }
@@ -564,7 +564,7 @@ instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
       mod  = GHC.Generics.moduleName (undefined :: D1 c f a)
       sort = qualifiedSort (undefined :: D1 c f a)
 
-  gstitch d = M1 <$> (pop >> making sort (fst <$> gstitchAlts d))
+  gstitch d = M1 <$> (making sort (fst <$> gstitchAlts d))
     where
       sort = qualifiedSort (undefined :: D1 c f a)
 
@@ -656,7 +656,7 @@ ggenAlt (p :: Proxy (C1 c f a)) d t
 
 gstitchAlt :: GConstrainProd f => Int -> Gen (C1 c f a, Bool)
 gstitchAlt d
-  = do pop
+  = do
        x <- gstitchArgs d
        c <- popChoice
        return (M1 x, c)
@@ -704,8 +704,8 @@ instance GConstrainProd U1 where
 --------------------------------------------------------------------------------
 instance Constrain () where
   getType _ = "GHC.Types.()"
-  gen _ _ _ = fresh [] (FObj (S "UNIT"))
-  stitch _  = pop >> return ()
+  gen _ _ _ = fresh [] (FObj (S "GHC.Types.()"))
+  stitch _  = return ()
   toExpr _  = app (stringSymbol "()") []
 
 instance Constrain Int where
@@ -724,6 +724,15 @@ instance Constrain Bool
 instance Constrain a => Constrain [a]
 instance (Constrain a, Constrain b) => Constrain (a,b)
 
+-- instance (Constrain a, Constrain b) => Constrain (a -> b) where
+--   getType _ = "FUNCTION"
+--   gen p d t = fresh [] (FObj (S "FUNCTION"))
+--   stitch  d = return $ \a -> unsafePerformIO $ do
+--     error "WHAT GOES HERE??"
+--   toExpr  f = error "HOW??"
+
+-- instance Show (a -> b) where
+--   show _ = "<function>"
 
 
 -- make2 :: forall a b. (Constrain a, Constrain b)
@@ -802,7 +811,7 @@ monoToPoly _ m = m
 -- apply4 :: (Constrain a, Constrain b, Constrain c, Constrain d)
 --        => (a -> b -> c -> d -> e) -> Int -> Gen e
 apply4 c d
-  = do pop
+  = do
        v4 <- cons
        v3 <- cons
        v2 <- cons

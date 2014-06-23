@@ -1,3 +1,5 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-@ LIQUID "-g-package-db" @-}
 {-@ LIQUID "-g.cabal-sandbox/x86_64-osx-ghc-7.6.3-packages.conf.d" @-}
 {-@ LIQUID "-g-no-user-package-db" @-}
@@ -8,10 +10,31 @@ module Main where
 
 import GHC.Generics
 import LiquidSMT
+import qualified Test.QuickCheck as QC
+import qualified Test.SmallCheck as SC
+import qualified Test.SmallCheck.Series as SC
+import Control.Monad
 
+--------------------------------------------------------------------------------
+--- Code
+--------------------------------------------------------------------------------
 data List a = Nil | Cons a (List a) deriving (Generic, Show)
+infixr `Cons`
+
+mytake :: Int -> List Int -> List Int
+mytake 0 xs          = Nil
+mytake _ Nil         = Nil
+mytake n (Cons x xs) = x `Cons` mytake (n-1) xs
+
+--------------------------------------------------------------------------------
+--- LiquidCheck
+--------------------------------------------------------------------------------
 instance Constrain a => Constrain (List a)
-{-@ data List a <p:: a -> a -> Prop> = Nil | Cons (zoo::a) (zoog::List <p> (a<p zoo>)) @-}
+
+{-@ data List a <p:: a -> a -> Prop> =
+      Nil | Cons (zoo::a) (zoog::List <p> (a<p zoo>))
+  @-}
+
 {-@ measure llen :: List a -> Int
     llen(Nil) = 0
     llen(Cons x xs) = 1 + llen(xs)
@@ -21,18 +44,55 @@ instance Constrain a => Constrain (List a)
 
 {-@ mytake :: n:Nat -> xs:SortedList Nat
            -> {v:SortedList Nat | (Min (llen v) n (llen xs))} @-}
-mytake :: Int -> List Int -> List Int
-mytake 0 xs     = Nil
-mytake _ Nil     = Nil
-mytake n (Cons x xs) = Cons x (mytake (n-1) xs)
 
+--------------------------------------------------------------------------------
+--- QuickCheck
+--------------------------------------------------------------------------------
+instance QC.Arbitrary a => QC.Arbitrary (List a) where
+  arbitrary = QC.frequency
+    [ (1, return Nil)
+    , (4, liftM2 Cons QC.arbitrary QC.arbitrary)
+    ]
+
+llen Nil         = 0
+llen (Cons x xs) = 1 + llen xs
+
+sorted Nil  = True
+sorted (Cons x Nil) = True
+sorted (Cons x (Cons y zs))
+ | x < y && sorted (Cons y zs) = True
+ | otherwise                   = False
+
+prop_mytake_sorted_qc n xs = sorted xs && n >= 0 && aall (>=0) xs && llen xs >= 1
+  QC.==> sorted zs && mmin (llen zs) n (llen xs)
+  where
+    zs = mytake n xs
+
+mmin v x y
+  | x < y     = v == x
+  | otherwise = v == y
+
+aall p Nil           = True
+aall p (Cons x xs)
+  | p x && aall p xs = True
+  | otherwise       = False
+
+--------------------------------------------------------------------------------
+--- SmallCheck
+--------------------------------------------------------------------------------
+instance SC.Serial m a => SC.Serial m (List a)
+
+prop_mytake_sorted_sc n xs = sorted xs && n >= 0 && aall (>=0) xs
+  SC.==> sorted zs && mmin (llen zs) n (llen xs)
+  where
+    zs = mytake n xs
 
 -- insert :: Int -> [Int] -> [Int]
 -- insert x [] = [x]
 -- insert x (y:ys) | x < y    = x : y : ys
 --                 | otherwise = y : insert x ys
 
-tests = [ testFun mytake "Main.mytake" 2
+tests = [ testFun mytake "Main.mytake" 6
         -- , testFun insert "Main.insert" 2
         ]
 
