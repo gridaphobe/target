@@ -173,14 +173,14 @@ making ty act
        modify $ \s -> s { makingTy = ty' }
        return r
 
+withFreshChoice :: (String -> Gen ()) -> Gen String
 withFreshChoice act
   = do c  <- freshChoice []
        mc <- gets chosen
        modify $ \s -> s { chosen = Just c }
-       x  <- act
+       act c
        modify $ \s -> s { chosen = mc }
-       addDep c x
-       return (x,c)
+       return c
 
 -- | `fresh` generates a fresh variable and encodes the reachability
 -- relation between variables, e.g. `fresh xs sort` will return a new
@@ -203,17 +203,14 @@ freshChoice xs
 
 choicesort = FObj $ stringSymbol "CHOICE"
 
-freshChoose :: [(String,String)] -> Sort -> Gen String
-freshChoose xcs sort
-  = do x' <- fresh [] sort
-       cs <- forM xcs $ \(x,c) -> do
-               constrain $ prop c `iff` var x `eq` var x'
-               addDep x' c
+choose :: String -> [String] -> Gen ()
+choose x cs
+  = do cs <- forM cs $ \c -> do
+               addDep x c
                return $ prop c
        constrain $ pOr cs
        constrain $ pAnd [ PNot $ pAnd [x, y]
                         | [x, y] <- filter ((==2) . length) $ subsequences cs ]
-       return x'
 
 -- make :: TH.Name -> [String] -> Sort -> Gen String
 make c vs s
@@ -225,6 +222,16 @@ make c vs s
        addConstraint $ var x `eq` app c (map var vs)
        constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
        return x
+
+make' c x vs
+  = do Just ch <- gets chosen
+       mapM_ (addDep ch) vs
+       t <- (safeFromJust "make" . lookup c) <$> gets ctorEnv
+       let (xs, _, rt) = bkArrowDeep t
+           su          = mkSubst $ zip (map symbol xs) (map var vs)
+       addConstructor (c, rTypeSort mempty t)
+       addConstraint $ prop ch `imp` (var x `eq` app c (map var vs))
+       constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
 
 constrain :: Pred -> Gen ()
 constrain p
@@ -556,8 +563,9 @@ instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
 
   ggen p d t
     = inModule mod . making sort $ do
-        xs <- ggenAlts (reproxyGElem p) d t
-        x  <- freshChoose xs sort
+        x  <- fresh [] sort
+        xs <- ggenAlts (reproxyGElem p) x d t
+        choose x xs
         constrain $ ofReft x $ toReft $ rt_reft t
         return x
     where
@@ -591,7 +599,7 @@ qualifiedSort d = FObj $ symbol $ qualifiedDatatypeName d
 --- Sums
 --------------------------------------------------------------------------------
 class GConstrainSum f where
-  ggenAlts      :: Proxy (f a) -> Int -> SpecType -> Gen [(String,String)]
+  ggenAlts      :: Proxy (f a) -> String -> Int -> SpecType -> Gen [String]
   gstitchAlts   :: Int -> Gen (f a, Bool)
   gtoExprAlts   :: f a -> Expr
 
@@ -602,9 +610,9 @@ reproxyRight :: Proxy ((c (f :: * -> *) (g :: * -> *)) a) -> Proxy (g a)
 reproxyRight = reproxy
 
 instance (GConstrainSum f, GConstrainSum g) => GConstrainSum (f :+: g) where
-  ggenAlts p d t
-    = do xs <- ggenAlts (reproxyLeft p) d t
-         ys <- ggenAlts (reproxyRight p) d t
+  ggenAlts p v d t
+    = do xs <- ggenAlts (reproxyLeft p) v d t
+         ys <- ggenAlts (reproxyRight p) v d t
          return $! xs++ys
 
   gstitchAlts d
@@ -619,12 +627,12 @@ instance (GConstrainSum f, GConstrainSum g) => GConstrainSum (f :+: g) where
   gtoExprAlts (R1 x) = gtoExprAlts x
 
 instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
-  ggenAlts p 0 t
+  ggenAlts p v 0 t
     = do ty <- gets makingTy
          if gisRecursive p ty
            then return []
-           else ggenAlt p 0 t
-  ggenAlts p d t = ggenAlt p d t
+           else pure <$> ggenAlt p v 0 t
+  ggenAlts p v d t = pure <$> ggenAlt p v d t
 
   gstitchAlts 0
     = do ty <- gets makingTy
@@ -640,24 +648,22 @@ gisRecursive :: (Constructor c, GConstrainProd f)
              => Proxy (C1 c f a) -> Sort -> Bool
 gisRecursive (p :: Proxy (C1 c f a)) t
   = any (==(zDecodeString $ T.unpack $ smt2 t)) (gconArgTys (reproxyGElem p))
-  where cn = conName (undefined :: C1 c f a)
 
 ggenAlt :: (Constructor c, GConstrainProd f)
-        => Proxy (C1 c f a) -> Int -> SpecType -> Gen [(String,String)]
-ggenAlt (p :: Proxy (C1 c f a)) d t
-  = fmap (:[]) $ withFreshChoice $ do
-      let cn = conName (undefined :: C1 c f a)
-      mod <- gets modName
-      dcp <- safeFromJust "ggenAlt" . lookup (mod++"."++cn) <$> gets ctorEnv
-      tyi <- gets tyconInfo
-      let ts = applyPreds (expandRApp (M.fromList []) tyi t) dcp
-      xs  <- ggenArgs (reproxyGElem p) d ts
-      make (mod++"."++cn) xs =<< gets makingTy
+        => Proxy (C1 c f a) -> String -> Int -> SpecType -> Gen String
+ggenAlt (p :: Proxy (C1 c f a)) x d t
+  = withFreshChoice $ \ch -> do
+     let cn = conName (undefined :: C1 c f a)
+     mod <- gets modName
+     dcp <- safeFromJust "ggenAlt" . lookup (mod++"."++cn) <$> gets ctorEnv
+     tyi <- gets tyconInfo
+     let ts = applyPreds (expandRApp (M.fromList []) tyi t) dcp
+     xs  <- ggenArgs (reproxyGElem p) d ts
+     make' (mod++"."++cn) x xs
 
 gstitchAlt :: GConstrainProd f => Int -> Gen (C1 c f a, Bool)
 gstitchAlt d
-  = do
-       x <- gstitchArgs d
+  = do x <- gstitchArgs d
        c <- popChoice
        return (M1 x, c)
 
