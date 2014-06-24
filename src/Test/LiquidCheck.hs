@@ -62,7 +62,6 @@ import           Text.PrettyPrint.HughesPJ hiding (first)
 import           Text.Printf
 
 import           GHC.Generics
-import           Generics.Deriving.ConNames
 
 import           Encoding (zDecodeString)
 

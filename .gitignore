@@ -5,3 +5,4 @@ dist/
 *.hi
 .hpc
 .liquid
+*.dot

@@ -6,10 +6,10 @@
 
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveGeneric #-}
-module Main where
+module List where
 
 import GHC.Generics
-import LiquidSMT
+import Test.LiquidCheck
 import qualified Test.QuickCheck as QC
 import qualified Test.SmallCheck as SC
 import qualified Test.SmallCheck.Series as SC
@@ -96,4 +96,4 @@ tests = [ testFun mytake "Main.mytake" 6
         -- , testFun insert "Main.insert" 2
         ]
 
-main = testModule "List.hs" tests
+-- main = testModule "List.hs" tests
