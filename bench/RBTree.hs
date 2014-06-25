@@ -149,11 +149,17 @@ makeBlack (Node _ x l r) = Node B x l r
 -- | Ordered Red-Black Trees
 
 {-@ type ORBT a = RBTree <{\root v -> v < root }, {\root v -> v > root}> a @-}
+ord Leaf = True
+ord (Node c x l r) = ord l && ord r && all (<x) l && all (>x) r
+  where all p Leaf = True
+        all p (Node _ x l r)
+          | p x && all p l && all p r = True
+          | otherwise               = False
 
 -- | Red-Black Trees
 
 {-@ type RBT a    = {v: (ORBT a) | ((isRB v) && (isBH v)) } @-}
-isRBT t = isRB t && isBH t
+isRBT t = ord t && isRB t && isBH t
 {-@ type RBTN a N = {v: (RBT a) | (bh v) = N }              @-}
 
 {-@ type ORBTL a X = RBT {v:a | v < X} @-}
@@ -195,7 +201,7 @@ isB _ = False
   @-}
 
 {-@ measure isB        :: RBTree a -> Prop
-    isB (Leaf)         = false
+    isB (Leaf)         = true
     isB (Node c x l r) = c == B
   @-}
 
@@ -277,7 +283,7 @@ instance Monad m => SC.Serial m Color
 instance (Monad m, SC.Serial m a) => SC.Serial m (RBTree a)
 
 prop_add_sc :: Monad m => Int -> RBTree Int -> SC.Property m
-prop_add_sc x t = isRBT t SC.==> isRBT (add x t)
+prop_add_sc x t = isRBT t SC.==> isRBT (add x $ trace (show t) t)
 
 {- foo :: RBTN Int {0} @-}
 -- foo :: RBTree Int

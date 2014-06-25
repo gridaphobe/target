@@ -62,6 +62,7 @@ allSat roots = setup >>= io . go
        -- declare constructors
        cts <- gets constructors
        mapM_ (\ (c,t) -> io . command ctx $ makeDecl (symbol c) t) cts
+       io $ command ctx $ Distinct [var c | (c,t) <- cts, not (func t)]
        -- declare variables
        vs <- gets variables
        mapM_ (\ x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
@@ -74,7 +75,7 @@ allSat roots = setup >>= io . go
                         io . command ctx $ Assert (Just i) c})
          cs
        deps <- V.fromList . map (symbol *** symbol) <$> gets deps
-       -- io $ generateDepGraph "deps" deps
+       io $ generateDepGraph "deps" deps cs
        return (ctx,vs,deps)
 
     go :: (Context, [Variable], V.Vector (Symbol,Symbol)) -> IO [[String]]
@@ -102,14 +103,19 @@ allSat roots = setup >>= io . go
       where
         realized = V.concat $ map (\root -> reaches root model deps) roots
 
-generateDepGraph :: String -> V.Vector (Symbol,Symbol) -> IO ()
-generateDepGraph name deps = writeFile (name <.> "dot") digraph
+generateDepGraph :: String -> V.Vector (Symbol,Symbol) -> Constraint -> IO ()
+generateDepGraph name deps constraints = writeFile (name <.> "dot") digraph
   where
     digraph = unlines $ ["digraph G {"] ++ edges ++ ["}"]
-    edges   = [printf "\"%s\" -> \"%s\";" p c | (S p, S c) <- V.toList deps]
+    edges   = [ printf "\"%s\" -> \"%s\" [label=\"%s\"];" p c cs
+              | (S p, S c) <- V.toList deps
+              , let cs = intercalate "\\n" [T.unpack (smt2 p) | PImp (PBexp (EVar (S a))) p <- constraints, a == c]
+              ]
 
 
 makeDecl :: Symbol -> Sort -> Command
 makeDecl x (FFunc _ ts) = Declare x (init ts) (last ts)
 makeDecl x t            = Declare x []        t
 
+func (FFunc _ _) = True
+func _           = False
