@@ -1,8 +1,8 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 {-@ LIQUID "-g-package-db" @-}
@@ -14,18 +14,18 @@
 
 module RBTree where
 
-import Debug.Trace
+import           Debug.Trace
 
-import GHC.Generics
-import Test.LiquidCheck
+import           GHC.Generics
+import           Test.LiquidCheck
 
-import qualified Test.SmallCheck as SC
-import qualified Test.SmallCheck.Series as SC
+import qualified Test.SmallCheck                 as SC
+import qualified Test.SmallCheck.Series          as SC
 
-import Language.Haskell.Liquid.Prelude
+import           Language.Haskell.Liquid.Prelude
 
 
-data RBTree a = Leaf 
+data RBTree a = Leaf
               | Node Color a !(RBTree a) !(RBTree a)
               deriving (Show,Generic)
 
@@ -43,8 +43,8 @@ add x s = makeBlack (ins x s)
 {-@ ins :: (Ord a) => a -> t:RBT a -> {v: ARBTN a {(bh t)} | ((IsB t) => (isRB v))} @-}
 ins kx Leaf             = Node R kx Leaf Leaf
 ins kx s@(Node B x l r) = case compare kx x of
-                            LT -> let t = lbal x (ins kx l) r in t 
-                            GT -> let t = rbal x l (ins kx r) in t 
+                            LT -> let t = lbal x (ins kx l) r in t
+                            GT -> let t = rbal x l (ins kx r) in t
                             EQ -> s
 ins kx s@(Node R x l r) = case compare kx x of
                             LT -> Node R x (ins kx l) r
@@ -63,13 +63,13 @@ remove x t = makeBlack (del x t)
 {-@ del              :: (Ord a) => a -> t:RBT a -> {v:ARBT a | ((HDel t v) && ((isB t) || (isRB v)))} @-}
 del x Leaf           = Leaf
 del x (Node _ y a b) = case compare x y of
-   EQ -> append y a b 
+   EQ -> append y a b
    LT -> case a of
            Leaf         -> Node R y Leaf b
            Node B _ _ _ -> lbalS y (del x a) b
-           _            -> let t = Node R y (del x a) b in t 
+           _            -> let t = Node R y (del x a) b in t
    GT -> case b of
-           Leaf         -> Node R y a Leaf 
+           Leaf         -> Node R y a Leaf
            Node B _ _ _ -> rbalS y a (del x b)
            _            -> Node R y a (del x b)
 
@@ -77,10 +77,10 @@ del x (Node _ y a b) = case compare x y of
 append :: a -> RBTree a -> RBTree a -> RBTree a
 append _ Leaf r                               = r
 append _ l Leaf                               = l
-append piv (Node R lx ll lr) (Node R rx rl rr)  = case append piv lr rl of 
+append piv (Node R lx ll lr) (Node R rx rl rr)  = case append piv lr rl of
                                                     Node R x lr' rl' -> Node R x (Node R lx ll lr') (Node R rx rl' rr)
                                                     lrl              -> Node R lx ll (Node R rx lrl rr)
-append piv (Node B lx ll lr) (Node B rx rl rr)  = case append piv lr rl of 
+append piv (Node B lx ll lr) (Node B rx rl rr)  = case append piv lr rl of
                                                     Node R x lr' rl' -> Node R x (Node B lx ll lr') (Node B rx rl' rr)
                                                     lrl              -> lbalS lx ll (Node B rx lrl rr)
 append piv l@(Node B _ _ _) (Node R rx rl rr)   = Node R rx (append piv l rl) rr
@@ -93,14 +93,14 @@ append piv l@(Node R lx ll lr) r@(Node B _ _ _) = Node R lx ll (append piv lr r)
 {-@ deleteMin            :: RBT a -> RBT a @-}
 deleteMin (Leaf)         = Leaf
 deleteMin (Node _ x l r) = makeBlack t
-  where 
+  where
     (_, t)               = deleteMin' x l r
 
 
 {-@ deleteMin'                   :: k:a -> l:RBT {v:a | v < k} -> r:RBTN {v:a | k < v} {(bh l)} -> (a, ARBT2 a l r) @-}
 deleteMin' k Leaf r              = (k, r)
-deleteMin' x (Node R lx ll lr) r = (k, Node R x l' r)   where (k, l') = deleteMin' lx ll lr 
-deleteMin' x (Node B lx ll lr) r = (k, lbalS x l' r )   where (k, l') = deleteMin' lx ll lr 
+deleteMin' x (Node R lx ll lr) r = (k, Node R x l' r)   where (k, l') = deleteMin' lx ll lr
+deleteMin' x (Node B lx ll lr) r = (k, lbalS x l' r )   where (k, l') = deleteMin' lx ll lr
 
 ---------------------------------------------------------------------------
 -- | Rotations ------------------------------------------------------------
@@ -108,13 +108,13 @@ deleteMin' x (Node B lx ll lr) r = (k, lbalS x l' r )   where (k, l') = deleteMi
 
 {-@ lbalS                             :: k:a -> l:ARBT {v:a | v < k} -> r:RBTN {v:a | k < v} {1 + (bh l)} -> {v: ARBTN a {1 + (bh l)} | ((IsB r) => (isRB v))} @-}
 lbalS k (Node R x a b) r              = Node R k (Node B x a b) r
-lbalS k l (Node B y a b)              = let t = rbal k l (Node R y a b) in t 
+lbalS k l (Node B y a b)              = let t = rbal k l (Node R y a b) in t
 lbalS k l (Node R z (Node B y a b) c) = Node R y (Node B k l a) (rbal z b (makeRed c))
 lbalS k l r                           = liquidError "nein" -- Node R l k r
 
 {-@ rbalS                             :: k:a -> l:RBT {v:a | v < k} -> r:ARBTN {v:a | k < v} {(bh l) - 1} -> {v: ARBTN a {(bh l)} | ((IsB l) => (isRB v))} @-}
 rbalS k l (Node R y b c)              = Node R k l (Node B y b c)
-rbalS k (Node B x a b) r              = let t = lbal k (Node R x a b) r in t 
+rbalS k (Node B x a b) r              = let t = lbal k (Node R x a b) r in t
 rbalS k (Node R x a (Node B y b c)) r = Node R y (lbal x (makeRed a) b) (Node B k c r)
 rbalS k l r                           = liquidError "nein" -- Node R l k r
 
@@ -179,7 +179,7 @@ isB _ = False
 {-@ type ARBTN a N = {v: (ARBT a)   | (bh v) = N }             @-}
 
 {-@ measure isARB        :: (RBTree a) -> Prop
-    isARB (Leaf)         = true 
+    isARB (Leaf)         = true
     isARB (Node c x l r) = ((isRB l) && (isRB r))
   @-}
 
@@ -196,7 +196,7 @@ isB _ = False
 
 {-@ measure isB        :: RBTree a -> Prop
     isB (Leaf)         = false
-    isB (Node c x l r) = c == B 
+    isB (Node c x l r) = c == B
   @-}
 
 {-@ predicate IsB T = col(T) == B @-}
@@ -213,7 +213,7 @@ isBH (Node c x l r) = ((isBH l) && (isBH r) && (bh l) == (bh r))
 
 {-@ measure bh        :: RBTree a -> Int
     bh (Leaf)         = 0
-    bh (Node c x l r) = (bh l) + (if (c == R) then 0 else 1) 
+    bh (Node c x l r) = (bh l) + (if (c == R) then 0 else 1)
   @-}
 bh (Leaf)         = 0
 bh (Node c x l r) = (bh l) + (if (c == R) then 0 else 1)
@@ -256,20 +256,20 @@ inv (Node c x l r) = Node c x (inv l) (inv r)
 instance Constrain Color
 instance Constrain a => Constrain (RBTree a)
 
-tests = [ testFun (add :: Int -> RBTree Int -> RBTree Int) "Main.add"
-        , testFun (ins :: Int -> RBTree Int -> RBTree Int) "Main.ins"
-        , testFun (remove :: Int -> RBTree Int -> RBTree Int) "Main.remove"
-        , testFun (del :: Int -> RBTree Int -> RBTree Int) "Main.del"
-        , testFun (append :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "Main.append"
-        , testFun (deleteMin :: RBTree Int -> RBTree Int) "Main.deleteMin"
-        , testFun (deleteMin' :: Int -> RBTree Int -> RBTree Int -> (Int, RBTree Int)) "Main.deleteMin'"
-        , testFun (lbalS :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "Main.lbalS"
-        , testFun (rbalS :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "Main.rbalS"
-        , testFun (lbal :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "Main.lbal"
-        , testFun (rbal :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "Main.rbal"
-        , testFun (makeRed :: RBTree Int -> RBTree Int) "Main.makeRed"
-        , testFun (makeBlack :: RBTree Int -> RBTree Int) "Main.makeBlack"
-        ]
+-- tests = [ testFun (add :: Int -> RBTree Int -> RBTree Int) "RBTree.add"
+--         , testFun (ins :: Int -> RBTree Int -> RBTree Int) "RBTree.ins"
+--         , testFun (remove :: Int -> RBTree Int -> RBTree Int) "RBTree.remove"
+--         , testFun (del :: Int -> RBTree Int -> RBTree Int) "RBTree.del"
+--         , testFun (append :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "RBTree.append"
+--         , testFun (deleteMin :: RBTree Int -> RBTree Int) "RBTree.deleteMin"
+--         , testFun (deleteMin' :: Int -> RBTree Int -> RBTree Int -> (Int, RBTree Int)) "RBTree.deleteMin'"
+--         , testFun (lbalS :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "RBTree.lbalS"
+--         , testFun (rbalS :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "RBTree.rbalS"
+--         , testFun (lbal :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "RBTree.lbal"
+--         , testFun (rbal :: Int -> RBTree Int -> RBTree Int -> RBTree Int) "RBTree.rbal"
+--         , testFun (makeRed :: RBTree Int -> RBTree Int) "RBTree.makeRed"
+--         , testFun (makeBlack :: RBTree Int -> RBTree Int) "RBTree.makeBlack"
+--         ]
 
 -- main = testModule "RBTree.hs" $ map ($2) tests
 

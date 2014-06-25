@@ -109,8 +109,8 @@ prop_insert_sc x ys = sorted ys SC.==> sorted (insert x ys)
 -- insert x (y:ys) | x < y    = x : y : ys
 --                 | otherwise = y : insert x ys
 
-tests = [ testFun mytake "Main.mytake" 6
-        -- , testFun insert "Main.insert" 2
-        ]
+-- tests = [ testFun mytake "Main.mytake" 6
+--         -- , testFun insert "Main.insert" 2
+--         ]
 
 -- main = testModule "List.hs" tests
