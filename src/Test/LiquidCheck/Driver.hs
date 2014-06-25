@@ -30,6 +30,10 @@ import           Test.LiquidCheck.Types
 import           Test.LiquidCheck.Util
 
 
+reaches :: Symbol
+        -> M.HashMap Symbol String
+        -> V.Vector (Symbol, Symbol)
+        -> V.Vector (Symbol, String)
 reaches root model deps = go root
   where
     go root
@@ -62,7 +66,9 @@ allSat roots = setup >>= io . go
        -- declare constructors
        cts <- gets constructors
        mapM_ (\ (c,t) -> io . command ctx $ makeDecl (symbol c) t) cts
-       io $ command ctx $ Distinct [var c | (c,t) <- cts, not (func t)]
+       let nullary = [var c | (c,t) <- cts, not (func t)]
+       when (not $ null nullary) $
+         void $ io $ command ctx $ Distinct nullary
        -- declare variables
        vs <- gets variables
        mapM_ (\ x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
@@ -75,7 +81,7 @@ allSat roots = setup >>= io . go
                         io . command ctx $ Assert (Just i) c})
          cs
        deps <- V.fromList . map (symbol *** symbol) <$> gets deps
-       io $ generateDepGraph "deps" deps cs
+       -- io $ generateDepGraph "deps" deps cs
        return (ctx,vs,deps)
 
     go :: (Context, [Variable], V.Vector (Symbol,Symbol)) -> IO [[String]]
@@ -86,7 +92,6 @@ allSat roots = setup >>= io . go
          Unsat   -> cleanupContext ctx >> return []
          Sat     -> unsafeInterleaveIO $ do
            Values model <- command ctx (GetValue [symbol v | (v,t) <- vs, t `elem` interps])
-
            -- print model
            let cs = V.toList $ refute roots (M.fromList model) deps vs
            -- i <- gets seed

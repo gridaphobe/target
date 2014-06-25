@@ -1,0 +1,32 @@
+language: haskell
+
+notifications:
+  email:
+    - gridaphobe@gmail.com
+
+install:
+ - git clone git://github.com/ucsd-progsys/liquid-fixpoint.git /tmp/fixpoint
+ - git clone git://github.com/ucsd-progsys/liquidhaskell.git /tmp/liquidhaskell
+ - sudo apt-get update -qq
+ - sudo apt-get install ocaml camlidl
+ - pushd /tmp/fixpoint && cabal install -fz3mem && popd
+ - pushd /tmp/liquidhaskell && cabal install -fz3mem && popd
+ - cabal install --only-dependencies --enable-tests
+
+# Here starts the actual work to be performed for the package under
+# test; any command which exits with a non-zero exit code causes the
+# build to fail.
+script:
+ # -v2 provides useful information for debugging
+ - cabal configure --enable-tests -v2 && cabal build -v2
+
+ # run the actual test-suite
+ - cabal test
+
+ # makes sure the .cabal file is reasonable
+ - cabal check
+
+ # tests that a source-distribution can be generated
+ - cabal sdist
+
+# EOF

@@ -1,4 +1,7 @@
-module Test.LiquidCheck (liquidCheck, testModule, testFun, Constrain(..)) where
+module Test.LiquidCheck
+  ( liquidCheck, testModule, testFun, testOne
+  , Constrain(..), Result(..), Testable(..))
+  where
 
 import           Control.Applicative
 import           Control.Arrow                        (first)
@@ -48,11 +51,11 @@ testFun f name d
        modify $ \s -> s { depth = d }
        test f d ty
 
-testOne :: Testable f => f -> String -> FilePath -> IO Result
-testOne f name path
+testOne :: Testable f => Int -> f -> String -> FilePath -> IO Result
+testOne d f name path
   = do sp <- getSpec path
        let ty = val $ safeFromJust "testOne" $ lookup name $ map (first showpp) $ tySigs sp
-       runGen sp $ test f 2 ty
+       runGen sp $ test f d ty
 
 -- mkTest :: TH.Name -> TH.ExpQ
 -- mkTest f = do loc <- TH.location
