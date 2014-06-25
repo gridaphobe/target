@@ -2,6 +2,9 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveGeneric #-}
 
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 {-@ LIQUID "-g-package-db" @-}
 {-@ LIQUID "-g.cabal-sandbox/x86_64-osx-ghc-7.6.3-packages.conf.d" @-}
 {-@ LIQUID "-g-no-user-package-db" @-}
@@ -9,26 +12,17 @@
 {-@ LIQUID "--no-termination"   @-}
 
 
-module Main where
-
-import Control.Applicative
-import Data.Monoid
-import Data.Proxy
-import Language.Fixpoint.Types (stringSymbol, Sort(..), toReft, val, symbol)
-import Language.Haskell.Liquid.Types (RType(..))
-import LiquidSMT hiding (Tree(..), gen_leaf, stitch_leaf, gen_node, stitch_node)
+module RBTree where
 
 import Debug.Trace
 
 import GHC.Generics
+import Test.LiquidCheck
 
-import Control.Arrow hiding (app)
-import Control.Monad.State
-import qualified Data.HashMap.Strict as M
-import Data.Maybe
-import Language.Haskell.Liquid.Prelude hiding (eq)
-import Language.Haskell.Liquid.PrettyPrint
-import Language.Haskell.Liquid.Types (tySigs)
+import qualified Test.SmallCheck as SC
+import qualified Test.SmallCheck.Series as SC
+
+import Language.Haskell.Liquid.Prelude
 
 
 data RBTree a = Leaf 
@@ -159,6 +153,7 @@ makeBlack (Node _ x l r) = Node B x l r
 -- | Red-Black Trees
 
 {-@ type RBT a    = {v: (ORBT a) | ((isRB v) && (isBH v)) } @-}
+isRBT t = isRB t && isBH t
 {-@ type RBTN a N = {v: (RBT a) | (bh v) = N }              @-}
 
 {-@ type ORBTL a X = RBT {v:a | v < X} @-}
@@ -168,6 +163,15 @@ makeBlack (Node _ x l r) = Node B x l r
     isRB (Leaf)         = true
     isRB (Node c x l r) = ((isRB l) && (isRB r) && (c == R => ((IsB l) && (IsB r))))
   @-}
+isRB (Leaf)         = True
+isRB (Node c x l r) = ((isRB l) && (isRB r) && (c == B || ((isB l) && (isB r))))
+
+isB Leaf = True
+isB (Node B _ _ _) = True
+isB _ = False
+
+
+
 
 -- | Almost Red-Black Trees
 
@@ -204,10 +208,15 @@ makeBlack (Node _ x l r) = Node B x l r
     isBH (Node c x l r) = ((isBH l) && (isBH r) && (bh l) = (bh r))
   @-}
 
+isBH (Leaf)         = True
+isBH (Node c x l r) = ((isBH l) && (isBH r) && (bh l) == (bh r))
+
 {-@ measure bh        :: RBTree a -> Int
     bh (Leaf)         = 0
     bh (Node c x l r) = (bh l) + (if (c == R) then 0 else 1) 
   @-}
+bh (Leaf)         = 0
+bh (Node c x l r) = (bh l) + (if (c == R) then 0 else 1)
 
 -- | Binary Search Ordering
 
@@ -262,7 +271,13 @@ tests = [ testFun (add :: Int -> RBTree Int -> RBTree Int) "Main.add"
         , testFun (makeBlack :: RBTree Int -> RBTree Int) "Main.makeBlack"
         ]
 
-main = testModule "RBTree.hs" $ map ($2) tests
+-- main = testModule "RBTree.hs" $ map ($2) tests
+
+instance Monad m => SC.Serial m Color
+instance (Monad m, SC.Serial m a) => SC.Serial m (RBTree a)
+
+prop_add_sc :: Monad m => Int -> RBTree Int -> SC.Property m
+prop_add_sc x t = isRBT t SC.==> isRBT (add x t)
 
 {- foo :: RBTN Int {0} @-}
 -- foo :: RBTree Int

@@ -15,11 +15,22 @@ import qualified Test.SmallCheck as SC
 import qualified Test.SmallCheck.Series as SC
 import Control.Monad
 
+import Debug.Trace
+
 --------------------------------------------------------------------------------
 --- Code
 --------------------------------------------------------------------------------
 data List a = Nil | Cons a (List a) deriving (Generic, Show)
 infixr `Cons`
+
+insert :: Int -> List Int -> List Int
+insert x Nil
+  = Cons x Nil
+insert x (y `Cons` ys)
+  | x < y
+  = x `Cons` y `Cons` ys
+  | otherwise
+  = y `Cons` insert x ys
 
 mytake :: Int -> List Int -> List Int
 mytake 0 xs          = Nil
@@ -40,10 +51,12 @@ instance Constrain a => Constrain (List a)
     llen(Cons x xs) = 1 + llen(xs)
   @-}
 
-{-@ type SortedList a = List <{\x y -> x < y}> a @-}
+{-@ type SortedList a = List <{\x y -> x <= y}> a @-}
 
 {-@ mytake :: n:Nat -> xs:SortedList Nat
            -> {v:SortedList Nat | (Min (llen v) n (llen xs))} @-}
+
+{-@ insert :: n:Int -> xs:SortedList Int -> SortedList Int @-}
 
 --------------------------------------------------------------------------------
 --- QuickCheck
@@ -60,8 +73,10 @@ llen (Cons x xs) = 1 + llen xs
 sorted Nil  = True
 sorted (Cons x Nil) = True
 sorted (Cons x (Cons y zs))
- | x < y && sorted (Cons y zs) = True
- | otherwise                   = False
+ | x <= y && sorted (Cons y zs) = True
+ | otherwise                    = False
+
+prop_insert_qc x ys = sorted ys QC.==> sorted (insert x ys)
 
 prop_mytake_sorted_qc n xs = sorted xs && n >= 0 && aall (>=0) xs && llen xs >= 1
   QC.==> sorted zs && mmin (llen zs) n (llen xs)
@@ -85,7 +100,9 @@ instance SC.Serial m a => SC.Serial m (List a)
 prop_mytake_sorted_sc n xs = sorted xs && n >= 0 && aall (>=0) xs
   SC.==> sorted zs && mmin (llen zs) n (llen xs)
   where
-    zs = mytake n xs
+    zs = trace (show xs) $ mytake n xs
+
+prop_insert_sc x ys = sorted ys SC.==> sorted (insert x ys)
 
 -- insert :: Int -> [Int] -> [Int]
 -- insert x [] = [x]

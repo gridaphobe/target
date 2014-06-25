@@ -626,18 +626,18 @@ instance (GConstrainSum f, GConstrainSum g) => GConstrainSum (f :+: g) where
   gtoExprAlts (R1 x) = gtoExprAlts x
 
 instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
-  ggenAlts p v 0 t
+  ggenAlts p v 1 t
     = do ty <- gets makingTy
          if gisRecursive p ty
            then return []
-           else pure <$> ggenAlt p v 0 t
+           else pure <$> ggenAlt p v 1 t
   ggenAlts p v d t = pure <$> ggenAlt p v d t
 
-  gstitchAlts 0
+  gstitchAlts 1
     = do ty <- gets makingTy
          if gisRecursive (Proxy :: Proxy (C1 c f a)) ty
            then return $ (error "gstitchAlts C1 CANNOT HAPPEN", False)
-           else gstitchAlt 0
+           else gstitchAlt 1
   gstitchAlts d
     = gstitchAlt d
 
@@ -715,10 +715,10 @@ instance Constrain () where
 
 instance Constrain Int where
   getType _ = "GHC.Types.Int"
-  gen _ _ t = fresh [] FInt >>= \x ->
+  gen _ d t = fresh [] FInt >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
        -- use the unfolding depth to constrain the range of Ints, like QuickCheck
-       d <- gets depth
+       _ <- gets depth
        constrain $ var x `ge` fromIntegral (negate d)
        constrain $ var x `le` fromIntegral d
        return x
