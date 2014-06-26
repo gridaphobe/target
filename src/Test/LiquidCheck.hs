@@ -46,7 +46,7 @@ liquidCheck = testFun
 
 testFun :: Testable f => f -> String -> Int -> Gen Result
 testFun f name d
-  = do ty <- fromJust . lookup (symbol name) <$> gets sigs
+  = do ty <- safeFromJust "testFun" . lookup (symbol name) <$> gets sigs
        io $ printf "Testing %s\n" name -- (showpp ty)
        modify $ \s -> s { depth = d }
        test f d ty

@@ -281,7 +281,7 @@ instance Monad m => SC.Serial m Color
 instance (Monad m, SC.Serial m a) => SC.Serial m (RBTree a)
 
 prop_add_sc :: Monad m => Int -> RBTree Int -> SC.Property m
-prop_add_sc x t = isRBT t SC.==> isRBT (add x $ trace (show t) t)
+prop_add_sc x t = isRBT t SC.==> isRBT (add x t)
 
 {- foo :: RBTN Int {0} @-}
 -- foo :: RBTree Int

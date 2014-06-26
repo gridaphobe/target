@@ -82,7 +82,7 @@ instance Constrain Int where
        constrain $ var x `ge` fromIntegral (negate d)
        constrain $ var x `le` fromIntegral d
        return x
-  stitch _ = read . show <$> pop
+  stitch _ = read . T.unpack <$> pop
   toExpr i = ECon $ I $ fromIntegral i
 
 instance Constrain Bool

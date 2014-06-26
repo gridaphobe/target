@@ -108,7 +108,7 @@ instance SC.Serial m a => SC.Serial m (List a)
 prop_mytake_sorted_sc n xs = sorted xs && n >= 0 && aall (>=0) xs
   SC.==> sorted zs && mmin (llen zs) n (llen xs)
   where
-    zs = trace (show xs) $ mytake n xs
+    zs = mytake n xs
 
 prop_insert_sc x ys = sorted ys SC.==> sorted (insert x ys)
 

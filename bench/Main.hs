@@ -19,7 +19,7 @@ main = defaultMain [
        [ bgroup (show n)
            [ bench "LiquidCheck" $ testModule "bench/List.hs" [liquidCheck insert "List.insert" n]
            ]
-       | n <- [6]
+       | n <- [6..7]
        ],
      bgroup "RBTree.add" $
        [ bgroup (show n)
@@ -31,6 +31,6 @@ main = defaultMain [
        [ bgroup (show n)
            [ bench "LiquidCheck" $ testModule "bench/RBTree.hs" [liquidCheck (add :: Int -> RBTree Int -> RBTree Int) "RBTree.add" n]
            ]
-       | n <- [4]
+       | n <- [4..5]
        ]
     ]
