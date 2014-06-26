@@ -5,6 +5,7 @@ import Test.SmallCheck
 
 import Criterion.Main
 
+import JSON
 import List
 import RBTree
 
@@ -32,5 +33,12 @@ main = defaultMain [
            [ bench "LiquidCheck" $ testModule "bench/RBTree.hs" [liquidCheck (add :: Int -> RBTree Int -> RBTree Int) "RBTree.add" n]
            ]
        | n <- [4..5]
+       ],
+     bgroup "JSON.inv" $
+       [ bgroup (show n)
+           [ bench "LiquidCheck" $ testModule "bench/JSON.hs" [liquidCheck prop_json_inv "JSON.prop_json_inv" n]
+           , bench "SmallCheck" $ smallCheck n prop_json_inv
+           ]
+       | n <- [2..7]
        ]
     ]

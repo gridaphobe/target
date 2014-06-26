@@ -53,6 +53,7 @@ benchmark bench
   ghc-options:         -O2
   main-is:             Main.hs
   build-depends:       base,
+                       aeson,
                        criterion < 0.8,
                        hastache < 0.6,
                        statistics < 0.11,
