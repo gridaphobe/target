@@ -1,4 +1,5 @@
 language: haskell
+ghc: 7.6
 
 notifications:
   email:
@@ -20,8 +21,8 @@ script:
  # -v2 provides useful information for debugging
  - cabal install -v2
 
- # run the actual test-suite
- - cabal test --show-details=always
+ # getting weird cabal mismatch error without the re-configure...
+ - cabal configure --enable-tests && cabal build && cabal test --show-details=always
 
  # makes sure the .cabal file is reasonable
  - cabal check
