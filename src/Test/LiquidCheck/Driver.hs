@@ -18,6 +18,7 @@ import           System.FilePath
 import           System.IO.Unsafe
 import           Text.Printf
 
+import           FastString
 import           Language.Fixpoint.Config        (SMTSolver (..))
 import           Language.Fixpoint.SmtLib2
 import           Language.Fixpoint.Types
@@ -31,9 +32,9 @@ import           Test.LiquidCheck.Util
 
 
 reaches :: Symbol
-        -> M.HashMap Symbol String
+        -> M.HashMap Symbol Value
         -> V.Vector (Symbol, Symbol)
-        -> V.Vector (Symbol, String)
+        -> V.Vector (Symbol, Value)
 reaches root model deps = go root
   where
     go root
@@ -49,7 +50,7 @@ reaches root model deps = go root
         taken    = val == "true"
         reached  = V.map snd . V.filter ((==root).fst)
 
-allSat :: [Symbol] -> Gen [[String]]
+allSat :: [Symbol] -> Gen [[Value]]
 allSat roots = setup >>= io . go
   where
     setup = do
@@ -67,7 +68,7 @@ allSat roots = setup >>= io . go
        cts <- gets constructors
        mapM_ (\ (c,t) -> io . command ctx $ makeDecl (symbol c) t) cts
        let nullary = [var c | (c,t) <- cts, not (func t)]
-       when (not $ null nullary) $
+       unless (null nullary) $
          void $ io $ command ctx $ Distinct nullary
        -- declare variables
        vs <- gets variables
@@ -84,7 +85,7 @@ allSat roots = setup >>= io . go
        -- io $ generateDepGraph "deps" deps cs
        return (ctx,vs,deps)
 
-    go :: (Context, [Variable], V.Vector (Symbol,Symbol)) -> IO [[String]]
+    go :: (Context, [Variable], V.Vector (Symbol,Symbol)) -> IO [[Value]]
     go (ctx,vs,deps) = do
        resp <- command ctx CheckSat
        case resp of
@@ -102,7 +103,7 @@ allSat roots = setup >>= io . go
     ints vs = S.fromList [symbol v | (v,t) <- vs, t `elem` interps]
     interps = [FInt, boolsort, choicesort]
     refute roots model deps vs
-      = V.map    (\(x,v) -> var x `eq` ESym (SL v))
+      = V.map    (\(x,v) -> var x `eq` ESym (SL $ T.unpack v))
       . V.filter (\(x,v) -> x `S.member` ints vs)
       $ realized
       where
@@ -112,7 +113,7 @@ generateDepGraph :: String -> V.Vector (Symbol,Symbol) -> Constraint -> IO ()
 generateDepGraph name deps constraints = writeFile (name <.> "dot") digraph
   where
     digraph = unlines $ ["digraph G {"] ++ edges ++ ["}"]
-    edges   = [ printf "\"%s\" -> \"%s\" [label=\"%s\"];" p c cs
+    edges   = [ printf "\"%s\" -> \"%s\" [label=\"%s\"];" (unpackFS p) (unpackFS c) cs
               | (S p, S c) <- V.toList deps
               , let cs = intercalate "\\n" [T.unpack (smt2 p) | PImp (PBexp (EVar (S a))) p <- constraints, a == c]
               ]

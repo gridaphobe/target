@@ -43,7 +43,7 @@ instance (Constrain a, Constrain b) => Testable (a -> b) where
               r@(Failed _) -> const $ return r
               (Passed n) -> \a -> do
                 r <- io $ evaluate (f a)
-                let env = map (second (`app` [])) cts ++ [(show x, toExpr a)]
+                let env = map (second (`app` [])) cts ++ [(x, toExpr a)]
                 sat <- evalType (M.fromList env) o (toExpr r)
                 case sat of
                   False -> return $ Failed $ show a
@@ -98,7 +98,7 @@ process d f vs cts xa xb to = go vs 0
          -- io $ print (a,b)
          r <- io $ evaluate (f a b)
          let env = map (second (`app` [])) cts
-                ++ [(show xa, toExpr a),(show xb, toExpr b)]
+                ++ [(xa, toExpr a),(xb, toExpr b)]
          sat <- evalType (M.fromList env) to (toExpr r)
          case sat of
            False -> return $ Failed $ show (a, b)
@@ -126,7 +126,7 @@ instance (Constrain a, Constrain b, Constrain c, Constrain d)
               (Passed n) -> \(a,b,c) -> do
                 r <- io $ evaluate (f a b c)
                 let env = map (second (`app` [])) cts
-                       ++ [(show xa, toExpr a),(show xb, toExpr b),(show xc, toExpr c)]
+                       ++ [(xa, toExpr a),(xb, toExpr b),(xc, toExpr c)]
                 sat <- evalType (M.fromList env) to (toExpr r)
                 case sat of
                   False -> return $ Failed $ show (a, b, c)

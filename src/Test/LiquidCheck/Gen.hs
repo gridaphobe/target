@@ -1,5 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE OverloadedStrings          #-}
 module Test.LiquidCheck.Gen where
 
 import           Control.Applicative
@@ -37,31 +38,31 @@ execGen e (Gen x) = execStateT x (initGS e)
 data GenState
   = GS { seed         :: !Int
        , variables    :: ![Variable]
-       , choices      :: ![String]
+       , choices      :: ![Symbol]
        , constraints  :: !Constraint
-       , values       :: ![String]
-       , deps         :: ![(String, String)]
-       , dconEnv      :: ![(String, DataConP)]
+       , values       :: ![Value]
+       , deps         :: ![(Symbol, Symbol)]
+       , dconEnv      :: ![(Symbol, DataConP)]
        , ctorEnv      :: !DataConEnv
        , measEnv      :: !MeasureEnv
        , tyconInfo    :: !(M.HashMap TyCon RTyCon)
-       , freesyms     :: ![(String,String)]
+       , freesyms     :: ![(Symbol,Symbol)]
        , constructors :: ![Variable] -- (S.HashSet Variable)  --[(String, String)]
-       , sigs         :: ![(String, SpecType)]
+       , sigs         :: ![(Symbol, SpecType)]
        , depth        :: !Int
-       , chosen       :: !(Maybe String)
+       , chosen       :: !(Maybe Symbol)
        , sorts        :: !(S.HashSet T.Text)
-       , modName      :: !String
-       , makingTy     :: !Sort
+       , modName      :: !Symbol
+       , makingTy     :: !Symbol
        } -- deriving (Show)
 
-initGS sp = GS def def def def def def dcons cts (measures sp) tyi free [] sigs def Nothing S.empty "" FInt
+initGS sp = GS def def def def def def dcons cts (measures sp) tyi free [] sigs def Nothing S.empty "" ""
   where
-    dcons = map (showpp *** id) (dconsP sp)
-    cts   = map (showpp *** val) (ctors sp)
+    dcons = map (symbol *** id) (dconsP sp)
+    cts   = map (symbol *** val) (ctors sp)
     tyi   = makeTyConInfo (tconsP sp)
-    free  = map (showpp *** showpp) $ freeSyms sp
-    sigs  = map (showpp *** val) $ tySigs sp
+    free  = map (second symbol) $ freeSyms sp
+    sigs  = map (symbol *** val) $ tySigs sp
 
 setValues vs = modify $ \s@(GS {..}) -> s { values = vs }
 
@@ -87,7 +88,7 @@ making ty act
        modify $ \s -> s { makingTy = ty' }
        return r
 
-withFreshChoice :: (String -> Gen ()) -> Gen String
+withFreshChoice :: (Symbol -> Gen ()) -> Gen Symbol
 withFreshChoice act
   = do c  <- freshChoice []
        mc <- gets chosen
@@ -99,17 +100,17 @@ withFreshChoice act
 -- | `fresh` generates a fresh variable and encodes the reachability
 -- relation between variables, e.g. `fresh xs sort` will return a new
 -- variable `x`, from which everything in `xs` is reachable.
-fresh :: [String] -> Sort -> Gen String
+fresh :: [Symbol] -> Sort -> Gen Symbol
 fresh xs sort
   = do n <- gets seed
        modify $ \s@(GS {..}) -> s { seed = seed + 1 }
        modify $ \s@(GS {..}) -> s { sorts = S.insert (smt2 sort) sorts }
-       let x = (zDecodeString $ T.unpack (smt2 sort)) ++ show n
+       let x = symbol $ T.unpack (smt2 sort) ++ show n
        modify $ \s@(GS {..}) -> s { variables = (x,sort) : variables }
        mapM_ (addDep x) xs
        return x
 
-freshChoice :: [String] -> Gen String
+freshChoice :: [Symbol] -> Gen Symbol
 freshChoice xs
   = do c <- fresh xs choicesort
        modify $ \s@(GS {..}) -> s { choices = c : choices }
@@ -117,12 +118,12 @@ freshChoice xs
 
 
 
-pop :: Gen String
+pop :: Gen Value
 pop = do (v:vs) <- gets values
          modify $ \s@(GS {..}) -> s { values = vs }
          return v
 
-popN :: Int -> Gen [String]
+popN :: Int -> Gen [Value]
 popN d = replicateM d pop
 
 popChoice :: Gen Bool
@@ -130,11 +131,11 @@ popChoice = read <$> pop
   where
     read "true"  = True
     read "false" = False
-    read e       = error $ "popChoice: " ++ e
+    read e       = error $ "popChoice: " ++ show e
 
 popChoices :: Int -> Gen [Bool]
 popChoices n = fmap read <$> popN n
   where
     read "true"  = True
     read "false" = False
-    read e       = error $ "popChoices: " ++ e
+    read e       = error $ "popChoices: " ++ show e

@@ -20,9 +20,9 @@ import           Test.LiquidCheck.Util
 
 
 -- evalType :: Env -> RApp -> Expr -> Gen Bool
-evalType :: M.HashMap String Expr -> SpecType -> Expr -> Gen Bool
+evalType :: M.HashMap Symbol Expr -> SpecType -> Expr -> Gen Bool
 evalType m t e@(EApp c xs)
-  = do dcp <- (safeFromJust "evalType" . lookup (symbolString $ val c))
+  = do dcp <- (safeFromJust "evalType" . lookup (val c))
               <$> gets ctorEnv
        tyi <- gets tyconInfo
        vts <- freshen $ applyPreds (expandRApp M.empty tyi t) dcp
@@ -44,11 +44,11 @@ evalTypes m []         []     = return True
 evalTypes m ((v,t):ts) (x:xs)
   = liftM2 (&&) (evalType m' t x) (evalTypes m' ts xs)
   where
-    m' = M.insert (symbolString v) x m
+    m' = M.insert v x m
 
 
-evalReft :: M.HashMap String Expr -> Reft -> Expr -> Gen Bool
-evalReft m r@(Reft (S v, rs)) x
+evalReft :: M.HashMap Symbol Expr -> Reft -> Expr -> Gen Bool
+evalReft m r@(Reft (v, rs)) x
   = and <$> sequence [ evalPred p (M.insert v x m) | RConc p <- rs ]
 
 evalPred PTrue           m = return True
@@ -77,7 +77,7 @@ evalBrel Ge = (>=)
 evalBrel Lt = (<)
 evalBrel Le = (<=)
 
-applyMeasure :: Measure SpecType DataCon -> Expr -> M.HashMap String Expr -> Gen Expr
+applyMeasure :: Measure SpecType DataCon -> Expr -> M.HashMap Symbol Expr -> Gen Expr
 applyMeasure m (EApp c xs) env = evalBody eq xs env
   where
     ct = case symbolString $ val c of
@@ -95,9 +95,9 @@ evalBody eq xs env = go $ body eq
     su = mkSubst $ zip (binds eq) xs
 
 
-evalExpr :: Expr -> M.HashMap String Expr -> Gen Expr
+evalExpr :: Expr -> M.HashMap Symbol Expr -> Gen Expr
 evalExpr (ECon i)       m = return $ ECon i
-evalExpr (EVar x)       m = return $ m M.! showpp x
+evalExpr (EVar x)       m = return $ m M.! x
 evalExpr (EBin b e1 e2) m = evalBop b <$> evalExpr e1 m <*> evalExpr e2 m
 evalExpr (EApp f es)    m
   = do ms <- find ((==f) . name) <$> gets measEnv

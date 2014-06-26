@@ -11,7 +11,7 @@ import           Data.Maybe
 import           Data.Monoid
 import           Text.Printf                          (printf)
 
-import           Language.Fixpoint.Types              (Located (..))
+import           Language.Fixpoint.Types              (Located (..), symbol)
 import           Language.Haskell.Liquid.CmdLine      (mkOpts)
 import           Language.Haskell.Liquid.GhcInterface (getGhcInfo)
 import           Language.Haskell.Liquid.Types        (GhcInfo (..),
@@ -46,7 +46,7 @@ liquidCheck = testFun
 
 testFun :: Testable f => f -> String -> Int -> Gen Result
 testFun f name d
-  = do ty <- fromJust . lookup name <$> gets sigs
+  = do ty <- fromJust . lookup (symbol name) <$> gets sigs
        io $ printf "Testing %s\n" name -- (showpp ty)
        modify $ \s -> s { depth = d }
        test f d ty

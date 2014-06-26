@@ -7,6 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE OverloadedStrings    #-}
 module Test.LiquidCheck.Constrain where
 
 import           Control.Applicative
@@ -36,17 +37,17 @@ import           Test.LiquidCheck.Util
 --- Constrainable Data
 --------------------------------------------------------------------------------
 class Show a => Constrain a where
-  getType :: Proxy a -> String
-  gen     :: Proxy a -> Int -> SpecType -> Gen String
+  getType :: Proxy a -> Symbol
+  gen     :: Proxy a -> Int -> SpecType -> Gen Symbol
   stitch  :: Int -> Gen a
   toExpr  :: a -> Expr
 
   default getType :: (Generic a, GConstrain (Rep a))
-                  => Proxy a -> String
+                  => Proxy a -> Symbol
   getType p = gtype (reproxyRep p)
 
   default gen :: (Generic a, GConstrain (Rep a))
-              => Proxy a -> Int -> SpecType -> Gen String
+              => Proxy a -> Int -> SpecType -> Gen Symbol
   gen p = ggen (reproxyRep p)
 
   default stitch :: (Generic a, GConstrain (Rep a))
@@ -68,7 +69,7 @@ reproxyElem = reproxy
 --------------------------------------------------------------------------------
 instance Constrain () where
   getType _ = "GHC.Types.()"
-  gen _ _ _ = fresh [] (FObj (S "GHC.Types.()"))
+  gen _ _ _ = fresh [] (FObj "GHC.Types.()")
   stitch _  = return ()
   toExpr _  = app (stringSymbol "()") []
 
@@ -81,7 +82,7 @@ instance Constrain Int where
        constrain $ var x `ge` fromIntegral (negate d)
        constrain $ var x `le` fromIntegral d
        return x
-  stitch _ = read <$> pop
+  stitch _ = read . show <$> pop
   toExpr i = ECon $ I $ fromIntegral i
 
 instance Constrain Bool
@@ -98,7 +99,7 @@ instance (Constrain a, Constrain b) => Constrain (a,b)
 -- instance Show (a -> b) where
 --   show _ = "<function>"
 
-choose :: String -> [String] -> Gen ()
+choose :: Symbol -> [Symbol] -> Gen ()
 choose x cs
   = do cs <- forM cs $ \c -> do
                addDep x c
@@ -223,7 +224,7 @@ apply4 c d
     cons = stitch (d-1)
 
 
-ofReft :: String -> Reft -> Pred
+ofReft :: Symbol -> Reft -> Pred
 ofReft s (Reft (v, rs))
   = let x = mkSubst [(v, var s)]
     in pAnd [subst x p | RConc p <- rs]
@@ -237,8 +238,8 @@ reproxyRep = reproxy
 --- Sums of Products
 --------------------------------------------------------------------------------
 class GConstrain f where
-  gtype        :: Proxy (f a) -> String
-  ggen         :: Proxy (f a) -> Int    -> SpecType -> Gen String
+  gtype        :: Proxy (f a) -> Symbol
+  ggen         :: Proxy (f a) -> Int    -> SpecType -> Gen Symbol
   gstitch      :: Int -> Gen (f a)
   gtoExpr      :: f a -> Expr
 
@@ -250,18 +251,18 @@ instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
 
   ggen p d t
     = inModule mod . making sort $ do
-        x  <- fresh [] sort
+        x  <- fresh [] $ FObj sort
         xs <- ggenAlts (reproxyGElem p) x d t
         choose x xs
         constrain $ ofReft x $ toReft $ rt_reft t
         return x
     where
-      mod  = GHC.Generics.moduleName (undefined :: D1 c f a)
-      sort = qualifiedSort (undefined :: D1 c f a)
+      mod  = symbol $ GHC.Generics.moduleName (undefined :: D1 c f a)
+      sort = qualifiedDatatypeName (undefined :: D1 c f a)
 
   gstitch d = M1 <$> making sort (fst <$> gstitchAlts d)
     where
-      sort = qualifiedSort (undefined :: D1 c f a)
+      sort = qualifiedDatatypeName (undefined :: D1 c f a)
 
   gtoExpr c@(M1 x) = app (qualify c (symbolString $ val d)) xs
     where
@@ -276,17 +277,14 @@ instance (Constrain a) => GConstrain (K1 i a) where
 qualify :: Datatype d => D1 d f a -> String -> String
 qualify d x = GHC.Generics.moduleName d ++ "." ++ x
 
-qualifiedDatatypeName :: Datatype d => D1 d f a -> String
-qualifiedDatatypeName d = qualify d (datatypeName d)
-
-qualifiedSort :: Datatype d => D1 d f a -> Sort
-qualifiedSort d = FObj $ symbol $ qualifiedDatatypeName d
+qualifiedDatatypeName :: Datatype d => D1 d f a -> Symbol
+qualifiedDatatypeName d = symbol $ qualify d (datatypeName d)
 
 --------------------------------------------------------------------------------
 --- Sums
 --------------------------------------------------------------------------------
 class GConstrainSum f where
-  ggenAlts      :: Proxy (f a) -> String -> Int -> SpecType -> Gen [String]
+  ggenAlts      :: Proxy (f a) -> Symbol -> Int -> SpecType -> Gen [Symbol]
   gstitchAlts   :: Int -> Gen (f a, Bool)
   gtoExprAlts   :: f a -> Expr
 
@@ -332,21 +330,21 @@ instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
   gtoExprAlts c@(M1 x)  = app (symbol $ conName c) (gtoExprs x)
 
 gisRecursive :: (Constructor c, GConstrainProd f)
-             => Proxy (C1 c f a) -> Sort -> Bool
+             => Proxy (C1 c f a) -> Symbol -> Bool
 gisRecursive (p :: Proxy (C1 c f a)) t
-  = zDecodeString (T.unpack $ smt2 t) `elem` gconArgTys (reproxyGElem p)
+  = t `elem` gconArgTys (reproxyGElem p)
 
 ggenAlt :: (Constructor c, GConstrainProd f)
-        => Proxy (C1 c f a) -> String -> Int -> SpecType -> Gen String
+        => Proxy (C1 c f a) -> Symbol -> Int -> SpecType -> Gen Symbol
 ggenAlt (p :: Proxy (C1 c f a)) x d t
   = withFreshChoice $ \ch -> do
      let cn = conName (undefined :: C1 c f a)
-     mod <- gets modName
-     dcp <- safeFromJust "ggenAlt" . lookup (mod++"."++cn) <$> gets ctorEnv
+     mod <- show <$> gets modName
+     dcp <- safeFromJust "ggenAlt" . lookup (symbol $ mod++"."++cn) <$> gets ctorEnv
      tyi <- gets tyconInfo
      let ts = applyPreds (expandRApp (M.fromList []) tyi t) dcp
      xs  <- ggenArgs (reproxyGElem p) d ts
-     make' (mod++"."++cn) x xs
+     make' (symbol $ mod++"."++cn) x xs
 
 gstitchAlt :: GConstrainProd f => Int -> Gen (C1 c f a, Bool)
 gstitchAlt d
@@ -358,8 +356,8 @@ gstitchAlt d
 --- Products
 --------------------------------------------------------------------------------
 class GConstrainProd f where
-  gconArgTys  :: Proxy (f a) -> [String]
-  ggenArgs    :: Proxy (f a) -> Int -> [(Symbol,SpecType)] -> Gen [String]
+  gconArgTys  :: Proxy (f a) -> [Symbol]
+  ggenArgs    :: Proxy (f a) -> Int -> [(Symbol,SpecType)] -> Gen [Symbol]
   gstitchArgs :: Int -> Gen (f a)
   gtoExprs    :: f a -> [Expr]
 

@@ -8,12 +8,13 @@ import           Language.Haskell.Liquid.Types
 
 import           GHC
 
+import qualified Data.Text.Lazy as T
 
 type Constraint = [Pred]
-type Variable   = ( String -- the name
+type Variable   = ( Symbol -- the name
                   , Sort   -- the `Sort'
                   )
-type Value      = String
+type Value      = T.Text
 
 instance Symbolic Variable where
   symbol (x, _) = symbol x
@@ -21,7 +22,7 @@ instance Symbolic Variable where
 instance SMTLIB2 Constraint where
   smt2 = smt2 . PAnd
 
-type DataConEnv = [(String, SpecType)]
+type DataConEnv = [(Symbol, SpecType)]
 type MeasureEnv = [Measure SpecType DataCon]
 
 boolsort, choicesort :: Sort
