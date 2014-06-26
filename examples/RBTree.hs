@@ -5,10 +5,6 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-{-@ LIQUID "-g-package-db" @-}
-{-@ LIQUID "-g.cabal-sandbox/x86_64-osx-ghc-7.6.3-packages.conf.d" @-}
-{-@ LIQUID "-g-no-user-package-db" @-}
-
 {-@ LIQUID "--no-termination"   @-}
 
 
