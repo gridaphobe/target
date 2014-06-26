@@ -18,10 +18,10 @@ install:
 # build to fail.
 script:
  # -v2 provides useful information for debugging
- - cabal configure --enable-tests -v2 && cabal build -v2
+ - cabal install -v2
 
  # run the actual test-suite
- - cabal test
+ - cabal test --show-details=always
 
  # makes sure the .cabal file is reasonable
  - cabal check
