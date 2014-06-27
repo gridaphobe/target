@@ -54,6 +54,7 @@ benchmark bench
   main-is:             Main.hs
   build-depends:       base,
                        aeson,
+                       X11,
                        criterion < 0.8,
                        hastache < 0.6,
                        statistics < 0.11,
