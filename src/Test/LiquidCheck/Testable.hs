@@ -34,23 +34,39 @@ instance (Constrain a, Constrain b) => Testable (a -> b) where
   test f d (stripQuals -> (RFun x i o _)) = do
     a <- gen (Proxy :: Proxy a) d i
     cts <- gets freesyms
-    vals <- allSat [symbol a]
+    vals <- allSat [a]
+    process1 d f vals cts x o
     -- build up the haskell value
-    (xvs :: [a]) <- forM vals $ \ vs -> do
-      setValues vs
-      stitch d
-    foldM (\case
-              r@(Failed _) -> const $ return r
-              (Passed n) -> \a -> do
-                r <- io $ evaluate (f a)
-                let env = map (second (`app` [])) cts ++ [(x, toExpr a)]
-                sat <- evalType (M.fromList env) o (toExpr r)
-                case sat of
-                  False -> return $ Failed $ show a
-                  True  -> return $ Passed (n+1))
-      (Passed 0) xvs
+    --(xvs :: [a]) <- forM vals $ \ vs -> do
+    --  setValues vs
+    --  stitch d
+    --foldM (\case
+    --          r@(Failed _) -> const $ return r
+    --          (Passed n) -> \a -> do
+    --            io $ print a
+    --            r <- io $ evaluate (f a)
+    --            let env = map (second (`app` [])) cts ++ [(x, toExpr a)]
+    --            sat <- evalType (M.fromList env) o (toExpr r)
+    --            case sat of
+    --              False -> return $ Failed $ show a
+    --              True  -> return $ Passed (n+1))
+    --  (Passed 0) xvs
   test f d t = error $ show t
 
+process1 d f vs cts x to = go vs 0
+  where
+    go []       !n = return $ Passed n
+    go (vs:vss) !n =
+      do setValues vs
+         a <- stitch d
+         io $ print a
+         r <- io $ evaluate (f a)
+         let env = map (second (`app` [])) cts
+                ++ [(x, toExpr a)]
+         sat <- evalType (M.fromList env) to (toExpr r)
+         case sat of
+           False -> return $ Failed $ show a
+           True  -> go vss (n+1) -- return $ Passed (n+1))
 
 fourth4 (_,_,_,d) = d
 
@@ -62,7 +78,7 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
     let tb' = subst (mkSubst [(xa, var a)]) tb
     b <- gen (Proxy :: Proxy b) d tb'
     cts <- gets freesyms
-    vals <- allSat [symbol a, symbol b]
+    vals <- allSat [a, b]
     -- -- build up the haskell value
     -- (xvs :: [(a,b)]) <- forM vals $ \ vs -> do
     --   setValues vs
@@ -113,7 +129,7 @@ instance (Constrain a, Constrain b, Constrain c, Constrain d)
     let tc' = subst (mkSubst [(xa, var a), (xb, var b)]) tc
     c <- gen (Proxy :: Proxy c) d tc'
     cts <- gets freesyms
-    vals <- allSat [symbol a, symbol b, symbol c]
+    vals <- allSat [a, b, c]
     -- build up the haskell value
     (xvs :: [(a,b,c)]) <- forM vals $ \ vs -> do
       setValues vs

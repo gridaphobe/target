@@ -187,6 +187,7 @@ data Workspace i l a = Workspace  { tag :: i, layout :: l, lstack :: Maybe (USta
           -> {v:(Maybe (UStack a)) | v = (lstack w)}
   @-}
 
+{-@ data RationalRect = RationalRect {r1::Rational, r2::Rational, r3::Rational, r4::Rational} @-}
 
 -- | A structure for window geometries
 data RationalRect = RationalRect Rational Rational Rational Rational
@@ -570,7 +571,7 @@ mapWorkspace f s
       , visible = map updScr (visible s)
       , hidden  = map f (hidden s) }
   where 
-     {-@ updScr :: x:Screen i l a sid sd -> {v:Screen i l a sid sd | (screenElts v) = (screenElts x)} @-}
+     {- updScr :: x:Screen i l a sid sd -> {v:Screen i l a sid sd | (screenElts v) = (screenElts x)} @-}
      updScr (Screen w sid sd) = (Screen (f w) sid sd)
 
      map f [] = []
@@ -807,7 +808,7 @@ liquidAssume :: (a -> Bool) -> a -> a
 liquidAssume p x | p x       = x
                  | otherwise = error "liquidAssume fails" 
 
-{-@ assume (GHC.List.++) :: xs:(UList a)
+{- assume (GHC.List.++) :: xs:(UList a)
                 -> ys:{v: UList a | (ListDisjoint v xs)}
                 -> {v: UList a | (UnionElts v xs ys)}
   @-}
@@ -829,17 +830,17 @@ filterScreen f []                 = []
 filterScreen f (x:xs) | f x       = x : filterScreen f xs
                       | otherwise =     filterScreen f xs 
 
-{-@ assume Data.List.filter :: (a -> Bool) 
+{- assume Data.List.filter :: (a -> Bool) 
                             -> xs:(UList a) 
                             -> {v:UList a | (SubElts v xs)} @-}
 
-{-@ assume elem :: Eq a 
+{- assume elem :: Eq a 
                 => x:a 
                 -> xs:[a] 
                 -> {v:Bool|((Prop v)<=>(ListElt x xs))}
   @-}
 
-{-@ assume reverse :: xs:(UList a)
+{- assume reverse :: xs:(UList a)
                    -> {v: UList a | (EqElts v xs)} 
   @-}
 

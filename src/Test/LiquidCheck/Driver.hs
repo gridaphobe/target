@@ -120,8 +120,11 @@ generateDepGraph name deps constraints = writeFile (name <.> "dot") digraph
 
 
 makeDecl :: Symbol -> Sort -> Command
+-- FIXME: hack..
+makeDecl x _ | x `M.member` smt_set_funs = Assert Nothing PTrue
 makeDecl x (FFunc _ ts) = Declare x (init ts) (last ts)
 makeDecl x t            = Declare x []        t
 
 func (FFunc _ _) = True
 func _           = False
+

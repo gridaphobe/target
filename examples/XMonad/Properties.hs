@@ -1,4 +1,7 @@
 {-# OPTIONS -fglasgow-exts -w #-}
+{-@ LIQUID "-iexamples" @-}
+{-@ LIQUID "-isrc" @-}
+{-# LANGUAGE OverloadedStrings #-}
 module XMonad.Properties where
 
 import XMonad.StackSet hiding (filter)
@@ -26,6 +29,56 @@ import qualified Data.List as L
 import Data.Char            (ord)
 import Data.Map             (keys,elems)
 import qualified Data.Map as M
+
+import Control.Monad.State
+import qualified Data.HashMap.Strict as HM
+import Data.Monoid
+import Data.Proxy
+import Test.LiquidCheck
+import Test.LiquidCheck.Gen (GenState(..))
+import Test.LiquidCheck.Util
+import Language.Haskell.Liquid.PredType
+import Language.Haskell.Liquid.Types (RType(..))
+import BasicTypes (TupleSort(..))
+import TysWiredIn (listTyCon, tupleTyCon)
+-- FIXME: this measure makes sure that True and False are in the environment...
+{-@ measure prop :: Bool -> Prop
+    prop (True)  = true
+    prop (False) = false
+ @-}
+{-@ type True = {v:Bool | (prop v)} @-}
+
+{-@ type TT = {v: T | (NoDuplicates v)} @-}
+
+instance (Ord a, Constrain i, Constrain l, Constrain a, Constrain s, Constrain sd)
+  => Constrain (StackSet i l a s sd)
+
+instance (Constrain i, Constrain l, Constrain a, Constrain s, Constrain sd)
+  => Constrain (Screen i l a s sd)
+
+instance (Constrain i, Constrain l, Constrain a) => Constrain (Workspace i l a)
+
+instance Constrain a => Constrain (Stack a)
+
+instance Constrain RationalRect
+
+--FIXME: this belongs in Constrain.hs
+instance (Ord k, Constrain k, Constrain v) => Constrain (M.Map k v) where
+  getType _ = "Data.Map.Base.Map"
+  gen p d (RApp c ts ps r)
+    = do tyi <- gets tyconInfo
+         let listRTyCon  = tyi HM.! listTyCon
+         let tupleRTyCon = tyi HM.! tupleTyCon BoxedTuple 2
+         gen (Proxy :: Proxy [(k,v)]) d (RApp listRTyCon [RApp tupleRTyCon ts ps mempty] [] mempty)
+  stitch  d = stitch d >>= \(kvs :: [(k,v)]) -> return $ M.fromList kvs
+  toExpr  m = toExpr $ M.toList m
+
+instance (Num a, Constrain a) => Constrain (NonNegative a) where
+  getType p = getType (Proxy :: Proxy a)
+  gen p d t = gen (Proxy :: Proxy a) d t
+  stitch  d = stitch d >>= \(x::a) -> return $ NonNegative $ x + fromIntegral d
+  toExpr (NonNegative x) = toExpr x
+
 
 -- ---------------------------------------------------------------------
 -- QuickCheck properties for the StackSet
@@ -103,6 +156,7 @@ hidden_spaces x = map workspace (visible x) ++ hidden x
 --          -- monotonically ascending in the elements
 -- * the current workspace should be a member of the xinerama screens
 --
+{-@ assert invariant :: TT -> True @-}
 invariant (s :: T) = and
     -- no duplicates
     [ noDuplicates

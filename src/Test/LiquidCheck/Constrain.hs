@@ -8,16 +8,20 @@
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE StandaloneDeriving #-}
 module Test.LiquidCheck.Constrain where
 
 import           Control.Applicative
 import           Control.Arrow                    (second)
 import           Control.Monad.State
+import           Data.Char
 import qualified Data.HashMap.Strict              as M
 import           Data.List
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Proxy
+import           Data.Ratio
 import qualified Data.Text.Lazy                   as T
 import           GHC.Generics
 
@@ -30,8 +34,10 @@ import           Language.Haskell.Liquid.Types    hiding (var)
 
 import           Test.LiquidCheck.Expr
 import           Test.LiquidCheck.Gen
+import           Test.LiquidCheck.Types
 import           Test.LiquidCheck.Util
 
+import Text.Printf
 
 --------------------------------------------------------------------------------
 --- Constrainable Data
@@ -85,9 +91,45 @@ instance Constrain Int where
   stitch _ = read . T.unpack <$> pop
   toExpr i = ECon $ I $ fromIntegral i
 
-instance Constrain Bool
+instance Constrain Integer where
+  getType _ = "GHC.Integer.Type.Integer"
+  gen _ d t = gen (Proxy :: Proxy Int) d t
+  stitch  d = stitch d >>= \(x::Int) -> return . fromIntegral $ x + d
+  toExpr  x = toExpr (fromIntegral x :: Int)
+
+instance Constrain Char where
+  getType _ = "GHC.Types.Char"
+  gen _ d t = gen (Proxy :: Proxy Int) d t
+  stitch  d = stitch d >>= \(x::Int) -> return . chr $ x + d + ord 'a'
+  toExpr  c = ESym $ SL [c]
+
+instance Constrain Bool where
+  getType _ =  "GHC.Types.Bool"
+  gen _ d t = fresh [] boolsort >>= \x ->
+    do constrain $ ofReft x (toReft $ rt_reft t)
+       return x
+  stitch _ = pop >>= \case
+    "true"  -> return True
+    "false" -> return False
+
 instance Constrain a => Constrain [a]
+instance Constrain a => Constrain (Maybe a)
 instance (Constrain a, Constrain b) => Constrain (a,b)
+
+instance (Num a, Integral a, Constrain a) => Constrain (Ratio a) where
+  getType _ = "GHC.Real.Ratio"
+  gen _ d t = fresh [] (FObj "GHC.Real.Ratio") >>= \x ->
+    do gen (Proxy :: Proxy Int) d t
+       gen (Proxy :: Proxy Int) d t
+       return x
+  stitch d = do x :: Int <- stitch d
+                y' :: Int <- stitch d
+                -- we should really modify `t' above to have Z3 generate non-zero denoms
+                let y = if y' == 0 then 1 else y'
+                let toA z = fromIntegral z :: a
+                return $ toA x % toA y
+  toExpr x = EApp (dummyLoc "GHC.Real.:%") [toExpr (numerator x), toExpr (denominator x)]
+
 
 -- instance (Constrain a, Constrain b) => Constrain (a -> b) where
 --   getType _ = "FUNCTION"
@@ -189,9 +231,11 @@ make5 c (p1,p2,p3,p4,p5) t s d
        x5 <- gen p5 (d-1) (subst su $ snd t5)
        make c [x1,x2,x3,x4,x5] s
 
--- applyPreds :: RApp -> SpecType -> [SpecType]
-applyPreds sp dc = zip xs (map tx ts)
+applyPreds :: SpecType -> SpecType -> [(Symbol,SpecType)]
+applyPreds sp' dc = zip xs (map tx ts)
   where
+    sp = removePreds <$> sp'
+    removePreds (U r _ _) = (U r mempty mempty)
     (as, ps, _, t) = bkUniv dc
     (xs, ts, rt)   = bkArrow . snd $ bkClass t
     -- args  = reverse tyArgs
@@ -312,14 +356,14 @@ instance (GConstrainSum f, GConstrainSum g) => GConstrainSum (f :+: g) where
   gtoExprAlts (R1 x) = gtoExprAlts x
 
 instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
-  ggenAlts p v 1 t
+  ggenAlts p v d t | d <= 1
     = do ty <- gets makingTy
          if gisRecursive p ty
            then return []
            else pure <$> ggenAlt p v 1 t
   ggenAlts p v d t = pure <$> ggenAlt p v d t
 
-  gstitchAlts 1
+  gstitchAlts d | d <= 1
     = do ty <- gets makingTy
          if gisRecursive (Proxy :: Proxy (C1 c f a)) ty
            then return (error "gstitchAlts C1 CANNOT HAPPEN", False)

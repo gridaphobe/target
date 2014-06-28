@@ -8,6 +8,7 @@ import Criterion.Main
 import JSON
 import List
 import RBTree
+import XMonad.Properties
 
 main = defaultMain [
      bgroup "List.insert" $
@@ -34,11 +35,18 @@ main = defaultMain [
            ]
        | n <- [4..5]
        ],
-     bgroup "JSON.inv" $
+     bgroup "JSON.inverse" $
        [ bgroup (show n)
            [ bench "LiquidCheck" $ testModule "bench/JSON.hs" [liquidCheck prop_json_inv "JSON.prop_json_inv" n]
            , bench "SmallCheck" $ smallCheck n prop_json_inv
            ]
        | n <- [2..7]
+       ],
+     bgroup "XMonad.invariant" $
+       [ bgroup (show n)
+           [ bench "LiquidCheck" $ testModule "bench/XMonad/Properties.hs" [liquidCheck invariant "XMonad.Properties.invariant" n]
+           -- , bench "SmallCheck" $ smallCheck n prop_json_inv
+           ]
+       | n <- [3..4]
        ]
     ]

@@ -17,7 +17,8 @@ source-repository head
 library
   default-language:    Haskell2010
   hs-source-dirs:      src
-  -- ghc-options:         -O2
+  ghc-options:         -O2
+  ghc-prof-options:    -fprof-auto -caf-all
   exposed-modules:     Test.LiquidCheck,
                        Test.LiquidCheck.Constrain,
                        Test.LiquidCheck.Driver,
@@ -51,10 +52,19 @@ benchmark bench
   default-language:    Haskell2010
   hs-source-dirs:      bench
   ghc-options:         -O2
+  ghc-prof-options:    -fprof-auto -caf-all
   main-is:             Main.hs
   build-depends:       base,
                        aeson,
+                       -- for XMonad
                        X11,
+                       containers,
+                       random,
+                       tagged,
+                       ghc,
+                       unordered-containers,
+                       mtl >= 2.1.2,
+                       --
                        criterion < 0.8,
                        hastache < 0.6,
                        statistics < 0.11,
