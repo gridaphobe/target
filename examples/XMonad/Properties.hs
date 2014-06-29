@@ -49,6 +49,8 @@ import TysWiredIn (listTyCon, tupleTyCon)
 {-@ type True = {v:Bool | (prop v)} @-}
 
 {-@ type TT = {v: T | (NoDuplicates v)} @-}
+{-@ type TT_LC = {v: StackSet Nat Int Char Int Int | (NoDuplicates v)} @-}
+type T_LC = StackSet Int Int Char Int Int
 
 instance (Ord a, Constrain i, Constrain l, Constrain a, Constrain s, Constrain sd)
   => Constrain (StackSet i l a s sd)
@@ -168,7 +170,7 @@ invariant (s :: T) = and
     ]
 
   where
-    ws = concat [ focus t : up t ++ down t
+    ws = myTrace "ws" $ concat [ focus t : up t ++ down t
                   | w <- workspace (current s) : map workspace (visible s) ++ hidden s
                   , t <- maybeToList (stack w)] :: [Char]
     noDuplicates = nub ws == ws
@@ -361,6 +363,10 @@ prop_index_length (x :: T) =
 --
 -- The tiling order, and master window, of a stack is unaffected by focus changes.
 --
+{-@ prop_focus_left_master_lc :: Nat -> TT_LC -> True @-}
+prop_focus_left_master_lc (n :: Int) (x::T_LC) =
+    index (foldr (const focusUp) x [1..n]) == index x
+
 prop_focus_left_master (n :: NonNegative Int) (x::T) =
     index (foldr (const focusUp) x [1..n]) == index x
 prop_focus_right_master (n :: NonNegative Int) (x::T) =
@@ -1216,6 +1222,7 @@ newtype NonZero a = NonZero a
 --       , (1, return 0)
 --       ]
 --   -- coarbitrary = undefined
+
 
 newtype EmptyStackSet = EmptyStackSet T deriving Show
 

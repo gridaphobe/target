@@ -47,6 +47,13 @@ main = defaultMain [
            [ bench "LiquidCheck" $ testModule "bench/XMonad/Properties.hs" [liquidCheck invariant "XMonad.Properties.invariant" n]
            -- , bench "SmallCheck" $ smallCheck n prop_json_inv
            ]
-       | n <- [3..4]
+       | n <- [3]
+       ],
+     bgroup "XMonad.focus_left_master" $
+       [ bgroup (show n)
+           [ bench "LiquidCheck" $ testModule "bench/XMonad/Properties.hs" [liquidCheck prop_focus_left_master_lc "XMonad.Properties.prop_focus_left_master_lc" n]
+           -- , bench "SmallCheck" $ smallCheck n prop_json_inv
+           ]
+       | n <- [3]
        ]
     ]
