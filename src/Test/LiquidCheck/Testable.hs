@@ -13,6 +13,7 @@ import           Control.Monad
 import           Control.Monad.State
 import qualified Data.HashMap.Strict           as M
 import           Data.Proxy
+import           Text.Printf
 
 import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.Types (RType (..), SpecType, bkClass,
@@ -86,7 +87,7 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
     --   !a <- stitch d
     --   io $ print (a,b)
     --   return (a,b)
-    process d f vals cts xa xb to
+    process2 d f vals cts xa xb to
     -- foldM (\case
     --           r@(Failed _) -> const $ return r
     --           (Passed n) -> \vs -> do
@@ -104,11 +105,12 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
     --   (Passed 0) vals
   test f d t = error $ show t
 
-process d f vs cts xa xb to = go vs 0
+process2 d f vs cts xa xb to = go vs 0
   where
     go []       !n = return $ Passed n
     go (vs:vss) !n =
-      do setValues vs
+      do -- when (n `mod` 100 == 0) $ io $ printf "Checked %d inputs\n" n
+         setValues vs
          b <- stitch d
          a <- stitch d
          -- io $ print (a,b)

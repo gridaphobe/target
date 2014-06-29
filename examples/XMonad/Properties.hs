@@ -41,6 +41,8 @@ import Language.Haskell.Liquid.PredType
 import Language.Haskell.Liquid.Types (RType(..))
 import BasicTypes (TupleSort(..))
 import TysWiredIn (listTyCon, tupleTyCon)
+import qualified Test.SmallCheck as SC
+import qualified Test.SmallCheck.Series as SC
 -- FIXME: this measure makes sure that True and False are in the environment...
 {-@ measure prop :: Bool -> Prop
     prop (True)  = true
@@ -49,8 +51,8 @@ import TysWiredIn (listTyCon, tupleTyCon)
 {-@ type True = {v:Bool | (prop v)} @-}
 
 {-@ type TT = {v: T | (NoDuplicates v)} @-}
-{-@ type TT_LC = {v: StackSet Nat Int Char Int Int | (NoDuplicates v)} @-}
-type T_LC = StackSet Int Int Char Int Int
+{-@ type TT_LC = {v: StackSet () () Char () () | (NoDuplicates v)} @-}
+type T_LC = StackSet () () Char () ()
 
 instance (Ord a, Constrain i, Constrain l, Constrain a, Constrain s, Constrain sd)
   => Constrain (StackSet i l a s sd)
@@ -63,6 +65,21 @@ instance (Constrain i, Constrain l, Constrain a) => Constrain (Workspace i l a)
 instance Constrain a => Constrain (Stack a)
 
 instance Constrain RationalRect
+
+instance (Ord a, SC.Serial m i, SC.Serial m l, SC.Serial m a, SC.Serial m s, SC.Serial m sd)
+  => SC.Serial m (StackSet i l a s sd)
+
+instance (SC.Serial m i, SC.Serial m l, SC.Serial m a, SC.Serial m s, SC.Serial m sd)
+  => SC.Serial m (Screen i l a s sd)
+
+instance (SC.Serial m i, SC.Serial m l, SC.Serial m a) => SC.Serial m (Workspace i l a)
+
+instance SC.Serial m a => SC.Serial m (Stack a)
+
+instance (Monad m) => SC.Serial m RationalRect
+
+instance (Ord k, SC.Serial m k, SC.Serial m v) => SC.Serial m (M.Map k v) where
+  series  = fmap M.fromList SC.series
 
 --FIXME: this belongs in Constrain.hs
 instance (Ord k, Constrain k, Constrain v) => Constrain (M.Map k v) where
@@ -170,10 +187,17 @@ invariant (s :: T) = and
     ]
 
   where
-    ws = myTrace "ws" $ concat [ focus t : up t ++ down t
+    ws = concat [ focus t : up t ++ down t
                   | w <- workspace (current s) : map workspace (visible s) ++ hidden s
                   , t <- maybeToList (stack w)] :: [Char]
     noDuplicates = nub ws == ws
+
+noDuplicates s = let ws = windows s
+                 in nub ws == ws
+windows s = concat [ focus t : up t ++ down t
+                     | w <- workspace (current s) : map workspace (visible s) ++ hidden s
+                     , t <- maybeToList (stack w)] :: [Char]
+
 
 --  validScreens = monotonic . sort . M. . (W.current s : W.visible : W$ s
 
@@ -365,6 +389,8 @@ prop_index_length (x :: T) =
 --
 {-@ prop_focus_left_master_lc :: Nat -> TT_LC -> True @-}
 prop_focus_left_master_lc (n :: Int) (x::T_LC) =
+    index (foldr (const focusUp) x [1..n]) == index x
+prop_focus_left_master_sc (n :: Int) (x::T_LC) = noDuplicates x SC.==>
     index (foldr (const focusUp) x [1..n]) == index x
 
 prop_focus_left_master (n :: NonNegative Int) (x::T) =
