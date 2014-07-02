@@ -53,7 +53,6 @@ module XMonad.StackSet (
     ) where
 
 {-@ LIQUID "--totality" @-}
-import GHC.Generics
 
 import Prelude hiding (filter)
 import Data.Maybe   (listToMaybe,isJust,fromMaybe)
@@ -62,6 +61,7 @@ import Data.List ( (\\) )
 import qualified Data.Map  as M (Map,insert,delete,empty)
 
 import qualified Data.Set
+import GHC.Generics
 -- $intro
 --
 -- The 'StackSet' data type encodes a window manager abstraction. The
@@ -143,23 +143,23 @@ data StackSet i l a sid sd =
              , floating :: M.Map a RationalRect      -- ^ floating windows
              } deriving (Show, Read, Eq, Generic)
 
-{-@ data StackSet i l a sid sd =
-       StackSet { lcurrent  :: (Screen i l a sid sd)   
-                , lvisible  :: [(Screen i l a sid sd)]
-                , lhidden   :: [Workspace i l a]
-                , lfloating :: M.Map a RationalRect     
+{-@ data StackSet i l a sid sd <p :: Workspace i l a -> Prop> =
+       StackSet { lcurrent  :: (Screen <p> i l a sid sd)
+                , lvisible  :: [(Screen <p> i l a sid sd)]
+                , lhidden   :: [<(Workspace i l a)<p>>]
+                , lfloating :: M.Map a RationalRect
                 }
   @-}
 
 {-@ using (StackSet i l a sid sd) as  {v: (StackSet i l a sid sd) | (NoDuplicates v)} @-}
 
-{-@ visible :: x:(StackSet i l a sid sd) 
+{-@ visible :: x:(StackSet i l a sid sd)
             -> {v : [(Screen i l a sid sd)] | (v = (lvisible x)) }@-}
 
-{-@ hidden :: x:(StackSet i l a sid sd) 
+{-@ hidden :: x:(StackSet i l a sid sd)
            -> {v : [(Workspace i l a)] | (v = (lhidden x)) }@-}
 
-{-@ current :: x:(StackSet i l a sid sd) 
+{-@ current :: x:(StackSet i l a sid sd)
             -> {v : (Screen i l a sid sd) | (v = (lcurrent x)) } @-}
 
 -- | Visible workspaces, and their Xinerama screens.
@@ -167,11 +167,13 @@ data Screen i l a sid sd = Screen { workspace :: !(Workspace i l a)
                                   , screen :: !sid
                                   , screenDetail :: !sd }
     deriving (Show, Read, Eq, Generic)
-{-@ data Screen i l a sid sd = Screen { lworkspace :: (Workspace i l a)
-                                      , screen :: sid
-                                      , screenDetail :: sd }
+{-@ data Screen i l a sid sd <p :: Workspace i l a -> Prop>
+   = Screen { lworkspace    :: <(Workspace i l a) <p>>
+            , lscreen       :: sid
+            , lscreenDetail :: sd
+            }
 @-}
-{-@ workspace :: x:(Screen i l a sid sd) 
+{-@ workspace :: x:(Screen i l a sid sd)
               -> {v:(Workspace i l a) | v = (lworkspace x)}@-}
 
 -- |
@@ -180,16 +182,22 @@ data Screen i l a sid sd = Screen { workspace :: !(Workspace i l a)
 data Workspace i l a = Workspace  { tag :: !i, layout :: l, stack :: Maybe (Stack a) }
    deriving (Show, Read, Eq, Generic)
 {-@
-data Workspace i l a = Workspace  { tag :: i, layout :: l, lstack :: Maybe (UStack a) }
+data Workspace i l a = Workspace  { ltag    :: i
+                                  , llayout :: l
+                                  , lstack :: (Maybe (UStack a)) }
   @-}
 
-{-@ stack :: w:(Workspace i l a) 
-          -> {v:(Maybe (UStack a)) | v = (lstack w)}
+
+{-@ layout :: x:(Workspace i l a) -> {v:l | (v = (llayout x))} @-}
+{-@ tag    :: x:(Workspace i l a) -> {v:i | (v = (ltag x))} @-}
+
+{-@ stack  :: w:(Workspace i l a)
+           -> {v:(Maybe (UStack a)) | v = (lstack w)}
   @-}
 
-{-@ data RationalRect = RationalRect {r1::Rational, r2::Rational, r3::Rational, r4::Rational} @-}
 
 -- | A structure for window geometries
+{-@ data RationalRect = RationalRect {r1::Rational, r2::Rational, r3::Rational, r4::Rational} @-}
 data RationalRect = RationalRect Rational Rational Rational Rational
     deriving (Show, Read, Eq, Generic)
 
@@ -217,7 +225,7 @@ data Stack a = Stack { focus  :: !a        -- focused thing in this set
     deriving (Show, Read, Eq, Generic)
 
 {-@
-data Stack a = Stack { focus :: a   
+data Stack a = Stack { focus :: a
                      , up    :: UListDif a focus
                      , down  :: UListDif a focus }
 @-}
@@ -243,6 +251,14 @@ abort x = error $ "xmonad: StackSet: " ++. x
 --
 -- Xinerama: Virtual workspaces are assigned to physical screens, starting at 0.
 --
+
+
+{-@ new :: (Integral s)
+        => l
+        -> ns:[i]
+        -> [sd]
+        -> {v:EmptyStackSet i l a s sd |((ltag (lworkspace (lcurrent v))) = (head ns))}
+  @-}
 new :: (Integral s) => l -> [i] -> [sd] -> StackSet i l a s sd
 new l wids m | not (null wids) && length m <= length wids && not (null m)
   = StackSet cur visi unseen M.empty
@@ -259,11 +275,34 @@ new _ _ _ = abort "non-positive argument to StackSet.new"
 -- becomes the current screen. If it is in the visible list, it becomes
 -- current.
 
-{-@ view :: (Eq s, Eq i) => i -> StackSet i l a s sd -> StackSet i l a s sd @-}
+{-@ predicate EqTag X S = (X = (ltag (lworkspace (lcurrent S)))) @-}
+
+{-@ predicate TagMember X S =
+      (
+       (EqTag X S)
+      ||
+       (Set_mem X (workspacesTags (lhidden S)))
+      ||
+       (Set_mem X (screensTags    (lvisible S)))
+      )
+  @-}
+
+-- TODO prove uniqueness of tags!
+{-@ invariant {v:StackSet i l a sid sd | (
+      Disjoint3 (Set_sng (ltag (lworkspace (lcurrent v)))) (workspacesTags (lhidden v)) (screensTags (lvisible v))
+  )} @-}
+
+{-@ predicate EqEltsStackSet X Y = ((stackSetElts X) = (stackSetElts Y)) @-}
+
+{-@ view :: (Eq s, Eq i)
+         => x:i
+         -> s:StackSet i l a s sd
+         -> {v:StackSet i l a s sd | ( ((TagMember x s) => (EqTag x v)) && (EqEltsStackSet s v) && (((EqTag x s) || (not (TagMember x s))) => (s = v)) ) }
+  @-}
 view :: (Eq s, Eq i) => i -> StackSet i l a s sd -> StackSet i l a s sd
 view i s
     | i == currentTag s = s  -- current
-    
+
     | Just x <- raiseIfVisible i s = x
 
     | Just x <- raiseIfHidden i s  = x
@@ -271,36 +310,102 @@ view i s
 -- LIQUID  -- if it is visible, it is just raised
 -- LIQUID     = s { current = x
 -- LIQUID         , visible = current s : deleteByScreen x (visible s) }
--- LIQUID 
+-- LIQUID
 -- LIQUID     | Just x <- L.find ((i==).tag)           (hidden  s) -- must be hidden then
 -- LIQUID     -- if it was hidden, it is raised on the xine screen currently used
 -- LIQUID     = s { current = (current s) { workspace = x }
 -- LIQUID         , hidden = workspace (current s) : L.deleteBy (equating tag) x (hidden s) }
--- LIQUID 
-    | otherwise = s -- not a member of the stackset
+-- LIQUID
+   | otherwise = s -- not a member of the stackset
 
   where equating f = \x y -> f x == f y
 
-{-@ raiseIfVisible :: (Eq s, Eq i) => i -> StackSet i l a s sd -> Maybe (StackSet i l a s sd) @-}
+{-@ raiseIfVisible :: (Eq s, Eq i)
+                   => x:i
+                   -> s:StackSet i l a s sd
+                   -> {vv:(Maybe ({v:StackSet i l a s sd | ((EqTag x v) && (EqEltsStackSet s v))})) | ((isJust vv) <=> (Set_mem x (screensTags (lvisible s))))} @-}
 raiseIfVisible :: (Eq s, Eq i) => i -> StackSet i l a s sd -> Maybe (StackSet i l a s sd)
-raiseIfVisible i (StackSet c v h f) 
-  | Just (c', v') <- go v []
-  = Just $ StackSet c' (c:v') h f
-  | otherwise 
+raiseIfVisible i (StackSet c v h f)
+  | Just (c', v') <- go i v v []
+  = let Just (c', v') = go i v v [] in Just $ StackSet c' (c:v') h f
+  | otherwise
   = Nothing
-  where 
-    go ovs (v:vs) | i == (tag $ workspace v) = Just (v, ovs ++ vs)
-                  | otherwise                = go (v:ovs) vs
-    go ovs []                                = Nothing
+  where
+{-@ predicate EqJoinScreens2 X ZS YS =
+     (
+      ((screensElts X) = (Set_cup (screensElts ZS) (screensElts YS) ))
+     &&
+     (Set_emp (Set_cap (screensElts ZS) (screensElts YS)))
+     &&
+      (screensTags X) = (Set_cup (screensTags ZS) (screensTags YS))
+     ) @-}
 
-{-@ raiseIfHidden :: (Eq s, Eq i) => i -> StackSet i l a s sd -> Maybe (StackSet i l a s sd) @-}
+{-@ predicate EqJoinScreens X Y YS =
+     (
+      ((screensElts X) = (Set_cup (screenElts Y) (screensElts YS) ))
+     &&
+      (Set_emp (Set_cap (screenElts Y) (screensElts YS)))
+     &&
+      (screensTags X) = (Set_cup (screenTags Y) (screensTags YS))
+     ) @-}
+
+{-@ go :: Eq i
+       => x1:i
+       -> init:(UScreens i l a sid sd)
+       -> y:(UScreens i l a sid sd)
+       -> ys:{v:(UScreens i l a sid sd) | (EqJoinScreens2 init y v) }
+       -> {vv: (Maybe ((Screen i l a sid sd, (UScreens i l a sid sd))<{\x xs -> ((x1 = (ltag (lworkspace x))) && (EqJoinScreens init x xs))}>)) | ((Set_mem x1 (screensTags y)) <=> (isJust vv))  }
+  @-}
+{-@ Decrease go 4 @-}
+go :: Eq i => i -> [Screen i l a sid sd] -> [Screen i l a sid sd] -> [Screen i l a sid sd]
+   -> Maybe (Screen i l a sid sd, [Screen i l a sid sd])
+
+go i vv (v:vs) ovs | boo i v  = Just (v, ovs .++. vs)
+                   | otherwise                = go i vv vs (v:ovs)
+
+go i vv [] ovs                                = Nothing
+
+
+{-@ boo :: (Eq i) => i:i -> w:Screen i l a sid sd
+        -> {v:Bool |(((Prop v) <=> (Set_mem i (screenTags w)))
+                     &&
+                     ((Prop v) <=> (i = (ltag (lworkspace w)))))
+                     } @-}
+boo i v@(Screen (Workspace _ _ _) _ _) = i == (tag $ workspace v)
+{-@ (.++.) :: xs:UScreens i l a sid sd
+           -> ys:{v:UScreens i l a sid sd | (Set_emp (Set_cap (screensElts xs) (screensElts v))) }
+           -> {v:UScreens i l a sid sd | (((Set_cup (screensElts xs) (screensElts ys)) = (screensElts v)) && ((screensTags v) = (Set_cup (screensTags xs) (screensTags ys))))}
+  @-}
+(.++.) :: [Screen i l a sid sd] -> [Screen i l a sid sd] -> [Screen i l a sid sd]
+[] .++. ys = ys
+(x:xs) .++. ys = x : (xs .++. ys)
+
+
+
+{-@assume  bar    :: x: Screen i l a sid sd
+           ->  {v:(UScreens i l a sid sd) | (Set_emp (Set_cap (screenElts x) (screensElts v)))}
+           -> UScreens i l a sid sd
+  @-}
+
+bar :: Screen i l a sid sd -> [Screen i l a sid sd] -> [Screen i l a sid sd]
+bar x xs = x : xs
+
+
+-- this code is similar to raiseIfVisible
+-- TODO prove
+{-@ assume raiseIfHidden :: (Eq s, Eq i)
+                  => x:i
+                  -> s:StackSet i l a s sd
+                  -> {vv: (Maybe ({v:StackSet i l a s sd | ((EqTag x v) && (EqEltsStackSet s v)) })) |
+                  ((isJust vv) <=> (Set_mem x (workspacesTags (lhidden s))))
+                  }@-}
 raiseIfHidden :: (Eq s, Eq i) => i -> StackSet i l a s sd -> Maybe (StackSet i l a s sd)
-raiseIfHidden i (StackSet (Screen w sid sd) v h f) 
+raiseIfHidden i (StackSet (Screen w sid sd) v h f)
   | Just (w', h') <- go h []
   = Just $ StackSet (Screen w' sid sd) v (w:h') f
-  | otherwise 
+  | otherwise
   = Nothing
-  where 
+  where
     go ohs (h:hs) | i == (tag h) = Just (h, ohs ++ hs)
                   | otherwise    = go (h:ohs) hs
     go ohs []                    = Nothing
@@ -318,11 +423,15 @@ raiseIfHidden i (StackSet (Screen w sid sd) v h f)
 -- current workspace to 'hidden'.  If that workspace is 'visible' on another
 -- screen, the workspaces of the current screen and the other screen are
 -- swapped.
+{-@ greedyView :: (Eq s, Eq i)
+         => x:i
+         -> s:StackSet i l a s sd
+         -> {v:StackSet i l a s sd | ( ((TagMember x s) => (EqTag x v)) && (EqEltsStackSet s v) && (((EqTag x s) || (not (TagMember x s))) => (v = s))) }
+  @-}
 
-{-@ greedyView :: (Eq s, Eq i) => i -> StackSet i l a s sd -> StackSet i l a s sd @-}
 greedyView :: (Eq s, Eq i) => i -> StackSet i l a s sd -> StackSet i l a s sd
-greedyView w ws
-     | any wTag (hidden ws) = view w ws
+greedyView w ws@(StackSet _ _ _ _)
+     | w `elem` workspacesTags (hidden ws) = view w ws
      | Just x <- greedyRaiseIfVisible w ws = x
 -- LIQUID      | (Just s) <- L.find (wTag . workspace) (visible ws)
 -- LIQUID                             = ws { current = (current ws) { workspace = workspace s }
@@ -331,14 +440,20 @@ greedyView w ws
      | otherwise = ws
    where wTag = (w == ) . tag
 
-{-@ greedyRaiseIfVisible :: (Eq s, Eq i) => i -> StackSet i l a s sd -> Maybe (StackSet i l a s sd) @-}
+-- TODO similar as for view
+{-@ assume greedyRaiseIfVisible :: (Eq s, Eq i)
+                         => x:i
+                         -> s:StackSet i l a s sd
+                         -> {vv:(Maybe ({v:StackSet i l a s sd|((EqTag x v) && (EqEltsStackSet s v))})) |
+                         ((Set_mem x (screensTags (lvisible s))) <=> (isJust vv))
+                         }@-}
 greedyRaiseIfVisible :: (Eq s, Eq i) => i -> StackSet i l a s sd -> Maybe (StackSet i l a s sd)
-greedyRaiseIfVisible i (StackSet (Screen w sid sd) v h f) 
+greedyRaiseIfVisible i (StackSet (Screen w sid sd) v h f)
   | Just ((Screen w' sid' sd'), v') <- go v []
   = Just $ StackSet (Screen w' sid sd) ((Screen w sid' sd'):v') h f
-  | otherwise 
+  | otherwise
   = Nothing
-  where 
+  where
     go ovs (v:vs) | i == (tag $ workspace v) = Just (v, ovs ++ vs)
                   | otherwise                = go (v:ovs) vs
     go ovs []                                = Nothing
@@ -363,9 +478,9 @@ lookupWorkspace sc w = listToMaybe [ tag i | Screen i s _ <- current w : visible
 with :: b -> (Stack a -> b) -> StackSet i l a s sd -> b
 with dflt f = maybe dflt f . stack . workspace . current
 
-withStack :: Maybe (Stack a) 
-          -> (Stack a -> Maybe (Stack a)) 
-          -> StackSet i l a s sd 
+withStack :: Maybe (Stack a)
+          -> (Stack a -> Maybe (Stack a))
+          -> StackSet i l a s sd
           -> Maybe (Stack a)
 withStack dflt f = maybe dflt f . stack . workspace . current
 
@@ -374,7 +489,7 @@ withStack dflt f = maybe dflt f . stack . workspace . current
 --
 --
 
-{-@ predicate GoodCurrent X ST = 
+{-@ predicate GoodCurrent X ST =
        (Set_sub (mStackElts X) (mStackElts (lstack (lworkspace (lcurrent ST))))) @-}
 
 {-@ measure mStackElts :: (Maybe (Stack a)) -> (Data.Set.Set a)
@@ -390,14 +505,14 @@ withStack dflt f = maybe dflt f . stack . workspace . current
 
 {-@ modify :: {v:Maybe (UStack a) | (? (isNothing v))}
            -> (y:(UStack a) -> ({v: Maybe (UStack a) | (Set_sub (mStackElts v)  (stackElts y))}) )
-           -> StackSet i l a s sd 
+           -> StackSet i l a s sd
            -> StackSet i l a s sd @-}
 modify :: Maybe (Stack a) -> (Stack a -> Maybe (Stack a)) -> StackSet i l a s sd -> StackSet i l a s sd
 
 modify d f (StackSet (Screen (Workspace i l Nothing) sid sd) v h fl)
   = (StackSet (Screen  (Workspace i l d) sid sd) v h fl)
 
-modify d f (StackSet (Screen (Workspace i l (Just x)) sid sd) v h fl) 
+modify d f (StackSet (Screen (Workspace i l (Just x)) sid sd) v h fl)
   = (StackSet (Screen  (Workspace i l (f x)) sid sd) v h fl)
 
 -- LIQUID Agreesive rewrite modify .....
@@ -418,6 +533,7 @@ modify' f = modify Nothing (Just . f)
 -- Return 'Just' that element, or 'Nothing' for an empty stack.
 --
 peek :: StackSet i l a s sd -> Maybe a
+{-@ peek :: StackSet i l a s sd -> Maybe a @-}
 peek = with Nothing (return . focus)
 
 -- |
@@ -442,11 +558,12 @@ differentiate :: [a] -> Maybe (Stack a)
 differentiate []     = Nothing
 differentiate (x:xs) = Just $ Stack x [] xs
 
+
 -- |
 -- /O(n)/. 'filter p s' returns the elements of 's' such that 'p' evaluates to
 -- 'True'.  Order is preserved, and focus moves as described for 'delete'.
 --
-{-@ filter :: (a -> Bool) -> UStack a -> Maybe (UStack a) @-}
+{-@ filter :: (a -> Bool) -> x:UStack a -> {v:Maybe (UStack a) |(Set_sub (mStackElts v) (stackElts x)) }@-}
 filter :: (a -> Bool) -> Stack a -> Maybe (Stack a)
 filter p (Stack f ls rs) = case L.filter p (f:rs) of
     f':rs' -> Just $ Stack f' (L.filter p ls) rs'    -- maybe move focus down
@@ -487,7 +604,10 @@ swapDown  = modify' (reverseStack . swapUp' . reverseStack)
 -- 'Stack' rather than an entire 'StackSet'.
 
 
-{-@ invariant {v:[a] | (listElts v) = (Set_cup (Set_sng (head v)) (listElts (tail v)))}@-}
+{-@ invariant {v:[a] |
+       ((not (null v)) => (listElts v) = (Set_cup (Set_sng (head v)) (listElts (tail v)))) }@-}
+
+{-@ invariant {v:[a] | ((null v) => (Set_emp (listElts v))) }@-}
 
 
 {-@ measure head :: [a] -> a
@@ -501,7 +621,7 @@ swapDown  = modify' (reverseStack . swapUp' . reverseStack)
 {-@ focusUp', focusDown', swapUp' :: x:UStack a -> {v:UStack a|((stackElts v) = (stackElts x))} @-}
 focusUp', focusDown' :: Stack a -> Stack a
 focusUp' (Stack t (l:ls) rs) = Stack l ls (t:rs)
-focusUp' (Stack t []     rs) = Stack x xs [] where (x:xs) = reverse (t:rs)
+focusUp' (Stack t []     rs) = Stack (head xs) (tail xs) [] where xs = reverse (t:rs)
 focusDown'                   = reverseStack . focusUp' . reverseStack
 
 swapUp' :: Stack a -> Stack a
@@ -535,12 +655,30 @@ allWindows :: Eq a => StackSet i l a s sd -> [a]
 allWindows = L.nub . concatMap (integrate' . stack) . workspaces
 
 -- | Get the tag of the currently focused workspace.
+{-@ currentTag :: x:StackSet i l a s sd -> {v:i| (EqTag v x)} @-}
 currentTag :: StackSet i l a s sd -> i
-currentTag = tag . workspace . current
+currentTag (StackSet (Screen (Workspace i _ _) _ _) _ _ _)  = i
+-- LIQUID currentTag = tag . workspace . current
 
 -- | Is the given tag present in the 'StackSet'?
 tagMember :: Eq i => i -> StackSet i l a s sd -> Bool
-tagMember t = elem t . map tag . workspaces
+{-@ tagMember :: Eq i
+          => x:i
+          -> s:StackSet i l a s sd
+          -> {v:Bool| ( (Prop v) <=> (TagMember x s))}
+  @-}
+tagMember t s =   t == currentTag s
+              ||  (t `elem` workspacesTags (hidden s))
+              ||  (t `elem` screensTags (visible s))
+{-@ screensTags :: ss:[Screen i l a sid sd] -> {v:[i] | (listElts v) = (screensTags ss)}@-}
+screensTags :: [Screen i l a sid sd] -> [i]
+screensTags (x@(Screen (Workspace _ _ _) _ _):xs) = (tag $ workspace x):(screensTags xs)
+screensTags []     = []
+
+{-@ workspacesTags :: ws:[Workspace i l a] -> {v:[i] |(listElts v) = (workspacesTags ws)} @-}
+workspacesTags :: [Workspace i l a] -> [i]
+workspacesTags (x:xs) = (tag x):(workspacesTags xs)
+workspacesTags []     = []
 
 -- | Rename a given tag if present in the 'StackSet'.
 renameTag :: Eq i => i -> i -> StackSet i l a s sd -> StackSet i l a s sd
@@ -562,38 +700,70 @@ ensureTags l allt st = et allt (map tag (workspaces st) \\ allt) st
 {- invariant {v:Screen i l a sid sd | (screenElts v) = (workspaceElts (lworkspace v)) } @-}
 
 -- | Map a function on all the workspaces in the 'StackSet'.
-{-@ mapWorkspace :: (x:Workspace i l a -> {v:Workspace i l a| (workspaceElts x) = (workspaceElts v)}) 
-                 -> StackSet i l a s sd 
+{-@ mapWorkspace :: (x:Workspace i l a -> {v:Workspace i l a| (workspaceElts x) = (workspaceElts v)})
+                 -> StackSet i l a s sd
                  -> StackSet i l a s sd @-}
 mapWorkspace :: (Workspace i l a -> Workspace i l a) -> StackSet i l a s sd -> StackSet i l a s sd
 mapWorkspace f s
   = s { current = updScr (current s)
-      , visible = map updScr (visible s)
-      , hidden  = map f (hidden s) }
-  where 
+      , visible = mapS updScr (visible s)
+      , hidden  = mapW f (hidden s) }
+  where
      {- updScr :: x:Screen i l a sid sd -> {v:Screen i l a sid sd | (screenElts v) = (screenElts x)} @-}
      updScr (Screen w sid sd) = (Screen (f w) sid sd)
-
-     map f [] = []
-     map f (x:xs) = f x : map f xs
 
 
 -- | Map a function on all the layouts in the 'StackSet'.
 {-@ mapLayout :: (l1 -> l2) -> StackSet i l1 a s sd -> StackSet i l2 a s sd @-}
 mapLayout :: (l -> l') -> StackSet i l a s sd -> StackSet i l' a s sd
-mapLayout f (StackSet v vs hs m) = StackSet (fScreen v) (map fScreen vs) (map fWorkspace hs) m
+mapLayout f (StackSet v vs hs m) = StackSet (fScreen v) (mapS fScreen vs) (mapW fWorkspace hs) m
  where
-    fScreen (Screen ws s sd) = Screen (fWorkspace ws) s sd
-    fWorkspace (Workspace t l s) = Workspace t (f l) s
-    
-    map f [] = []
-    map f (x:xs) = f x : map f xs
 
+{- fScreen :: x:Screen i l1 a s sid -> {v:Screen i l2 a s sid | (screenElts x) = (screenElts v)} @-}
+    fScreen (Screen ws s sd) = Screen (fWorkspace ws) s sd
+
+{-  fWorkspace :: x:Workspace i l1 a -> {v:Workspace i l2 a | (workspaceElts x) = (workspaceElts v)} @-}
+    fWorkspace (Workspace t l s) = Workspace t (f l) s
+
+
+{-@  mapS' :: (x:Screen i l1 a sid sd
+                       -> {v:Screen i l2 a sid sd|(Set_sub (screenElts v) (screenElts x))})
+                  -> xs:UScreens i l1 a sid sd
+                  -> {v:(UScreens i l2 a sid sd) |(Set_sub (screensElts v) (screensElts xs))} @-}
+mapS' :: (Screen i l a sid sd -> Screen i l' a sid sd) -> [Screen i l a sid sd] -> [Screen i l' a sid sd]
+mapS' f [] = []
+mapS' f (x:xs) = f x : mapS' f xs
+
+{-@  mapW' :: (x:Workspace i l1 a
+                       -> {v:Workspace i l2 a|(Set_sub (workspaceElts v) (workspaceElts x))})
+                  -> xs:(UWorkspaces i l1 a)
+                  -> {v:(UWorkspaces i l2 a) |(Set_sub (workspacesElts v) (workspacesElts xs))} @-}
+mapW' :: (Workspace i l a -> Workspace i l' a) -> [Workspace i l a] -> [Workspace i l' a]
+mapW' f [] = []
+mapW' f (x:xs) = f x : mapW' f xs
+
+
+
+{-@  mapS :: (x:Screen i l1 a sid sd
+                       -> {v:Screen i l2 a sid sd|(screenElts x) = (screenElts v)})
+                  -> xs:(UScreens i l1 a sid sd)
+                  -> {v:(UScreens i l2 a sid sd) |((screensElts v) = (screensElts xs))} @-}
+mapS :: (Screen i l a sid sd -> Screen i l' a sid sd) -> [Screen i l a sid sd] -> [Screen i l' a sid sd]
+mapS f [] = []
+mapS f (x:xs) = f x : mapS f xs
+
+{-@  mapW :: (x:Workspace i l1 a
+                       -> {v:Workspace i l2 a|(workspaceElts x) = (workspaceElts v)})
+                  -> xs:UWorkspaces i l1 a
+                  -> {v:(UWorkspaces i l2 a) |(workspacesElts v) = (workspacesElts xs)} @-}
+mapW :: (Workspace i l a -> Workspace i l' a) -> [Workspace i l a] -> [Workspace i l' a]
+mapW f [] = []
+mapW f (x:xs) = f x : mapW f xs
 
 -- | /O(n)/. Is a window in the 'StackSet'?
-{-@ member :: Eq a 
-           => x:a 
-           -> st:(StackSet i l a s sd) 
+{-@ member :: Eq a
+           => x:a
+           -> st:(StackSet i l a s sd)
            -> {v:Bool| ((~(Prop v)) => (~(StackSetElt x st)))}
   @-}
 member :: Eq a => a -> StackSet i l a s sd -> Bool
@@ -604,7 +774,7 @@ member a s =  memberStack      a (stack $ workspace $ current s)
 -- member a s = isJust (findTag a s)
 
 {-@ memberWorkspace :: Eq a
-                    => x:a 
+                    => x:a
                     -> w:(Workspace i l a)
                     -> {v:Bool|((Prop v)<=>(Set_mem x (workspaceElts w)))}
   @-}
@@ -613,7 +783,7 @@ memberWorkspace _ _                     = False
 
 {-@ invariant {v:(Screen i l a sid sd) | (screenElts v) = (mStackElts (lstack (lworkspace v)))} @-}
 {-@ memberScreen :: Eq a
-                    => x:a 
+                    => x:a
                     -> w:(Screen i l a sid sd)
                     -> {v:Bool|((Prop v)<=>(Set_mem x (screenElts w)))}
   @-}
@@ -622,7 +792,7 @@ memberScreen x (Screen w _ _) = memberWorkspace x w
 
 
 {-@ memberWorkspaces :: Eq a
-                     => x:a 
+                     => x:a
                      -> ss:[Workspace i l a]
                      -> {v:Bool|((Prop v)<=>(Set_mem x (workspacesElts ss)))}
   @-}
@@ -631,7 +801,7 @@ memberWorkspaces _ []     = False
 memberWorkspaces a (w:ws) = memberWorkspace a w || memberWorkspaces a ws
 
 {-@ memberScreens :: Eq a
-                  => x:a 
+                  => x:a
                   -> ss:[Screen i l a s sd]
                   -> {v:Bool|((Prop v)<=>(Set_mem x (screensElts ss)))}
   @-}
@@ -640,7 +810,7 @@ memberScreens a []     = False
 memberScreens a (s:ss) = memberScreen a s || memberScreens a ss
 
 {-@ memberStack :: Eq a
-                => x:a 
+                => x:a
                 -> st:(Maybe (UStack a))
                 -> {v:Bool|((Prop v)<=>((isJust st) && (StackElt x (fromJust st))))}
   @-}
@@ -652,6 +822,7 @@ memberStack _ Nothing                  = False
 -- Return 'Just' the workspace tag of the given window, or 'Nothing'
 -- if the window is not in the 'StackSet'.
 findTag :: Eq a => a -> StackSet i l a s sd -> Maybe i
+{-@ findTag :: Eq a => a -> StackSet i l a s sd -> Maybe i @-}
 findTag a s = listToMaybe
     [ tag w | w <- workspaces s, has a (stack w) ]
     where has _ Nothing         = False
@@ -672,17 +843,20 @@ findTag a s = listToMaybe
 -- Semantics in Huet's paper is that insert doesn't move the cursor.
 -- However, we choose to insert above, and move the focus.
 --
-{-@ insertUp :: Eq a => a -> StackSet i l a s sd -> StackSet i l a s sd @-}
+{-@ insertUp :: Eq a
+             => x:a
+             -> StackSet i l a s sd
+             -> StackSet i l a s sd @-}
 insertUp :: Eq a => a -> StackSet i l a s sd -> StackSet i l a s sd
 insertUp a s = if member a s then s else insertUp_ a (Just $ Stack a [] []) s
 
-{-@ insertUp_ :: x:a 
+{-@ insertUp_ :: x:a
               -> {v: (Maybe (UStack a)) | ((isJust v) => ((stackElts (fromJust v)) = (Set_sng x)))}
               -> {v:StackSet i l a s sd | (~ (StackSetElt x v))}
-              -> (StackSet i l a s sd) @-}
-insertUp_ :: a 
-          -> Maybe (Stack a) 
-          -> StackSet i l a s sd 
+              -> StackSet i l a s sd @-}
+insertUp_ :: a
+          -> Maybe (Stack a)
+          -> StackSet i l a s sd
           -> StackSet i l a s sd
 insertUp_ x _ (StackSet (Screen (Workspace i l (Just (Stack t ls rs))) a b ) v h c)
  = (StackSet (Screen (Workspace i l (Just (Stack x ls (t:rs)))) a b) v h c)
@@ -719,13 +893,17 @@ delete w = sink w . delete' w
 -- information saved in the 'Stackset'
 delete' :: (Eq a, Eq s) => a -> StackSet i l a s sd -> StackSet i l a s sd
 delete' w s = s { current = removeFromScreen        (current s)
-                , visible = map removeFromScreen    (visible s)
-                , hidden  = map removeFromWorkspace (hidden  s) }
-    where removeFromWorkspace ws = ws { stack = stack ws >>= filter (/=w) }
-          removeFromScreen scr   = scr { workspace = removeFromWorkspace (workspace scr) }
+                , visible = mapS' removeFromScreen    (visible s)
+                , hidden  = mapW' removeFromWorkspace (hidden  s) }
+    where
 
-          map f [] = []
-          map f (x:xs) = f x : map f xs
+      {- removeFromWorkspace :: x:Workspace i l a -> {v:Workspace i l a | (Set_sub  (workspaceElts v) (workspaceElts  x) )} @-}
+      {- removeFromScreen :: x:Screen i l a sid sd -> {v:Screen i l a sid sd| (Set_sub  (screenElts v) (screenElts x) )} @-}
+      removeFromWorkspace (Workspace i l Nothing) = Workspace i l Nothing
+      removeFromWorkspace (Workspace i l (Just x)) = Workspace i l (filter (/=w) x)
+-- LIQUID       removeFromWorkspace ws = ws { stack = stack ws >>= filter (/=w) }
+      removeFromScreen scr   = scr { workspace = removeFromWorkspace (workspace scr) }
+
 
 ------------------------------------------------------------------------
 
@@ -746,12 +924,9 @@ sink w s = s { floating = M.delete w (floating s) }
 -- Focus stays with the item moved.
 {-@ swapMaster :: StackSet i l a s sd -> StackSet i l a s sd @-}
 swapMaster :: StackSet i l a s sd -> StackSet i l a s sd
-swapMaster = modify' swapMaster'
-  {-@ swapMaster' :: x:UStack a -> {v:UStack a| (stackElts v) = (stackElts x)} @-}
---  where 
-swapMaster' = \c -> case c of
+swapMaster = modify' $ \c -> case c of
     Stack _ [] _  -> c    -- already master.
-    Stack t ls rs -> Stack t [] (xs ++ x:rs) where (x:xs) = reverse ls
+    Stack t ls rs -> Stack t [] ((tail xs) ++ (head xs):rs) where xs = reverse ls
 
 -- natural! keep focus, move current to the top, move top to current.
 
@@ -768,9 +943,15 @@ shiftMaster = modify' $ \c -> case c of
 {-@ focusMaster :: StackSet i l a s sd -> StackSet i l a s sd @-}
 focusMaster :: StackSet i l a s sd -> StackSet i l a s sd
 focusMaster = modify' $ \c -> case c of
-    Stack _ [] _  -> c
-    Stack t ls rs -> Stack x [] (xs ++ t : rs) where (x:xs) = reverse ls
+    Stack _ [] _ -> c
+    Stack t ls rs ->  Stack (head xs) [] (tail xs ++ t:rs) where xs = reverse ls
 
+
+
+{-@ assume Prelude.tail :: x:UList a -> {v:UList a | ((listElts x) = (Set_cup (Set_sng (head x)) (listElts v)) && (not (Set_mem (head x) (listElts v))))} @-}
+
+
+{-@ assume Prelude.head :: x:UList a -> {v:a | ((listElts x) = (Set_cup (Set_sng v) (listElts (tail x))) && (not (Set_mem v (listElts (tail x)))))} @-}
 --
 -- ---------------------------------------------------------------------
 -- $composite
@@ -806,84 +987,110 @@ onWorkspace n f s = view (currentTag s) . f . view n $ s
 {-@ assume liquidAssume :: forall <p :: a -> Prop>. (a<p> -> {v:Bool| ((Prop v) <=> true)}) -> a -> a<p> @-}
 liquidAssume :: (a -> Bool) -> a -> a
 liquidAssume p x | p x       = x
-                 | otherwise = error "liquidAssume fails" 
+                 | otherwise = error "liquidAssume fails"
 
-{- assume (GHC.List.++) :: xs:(UList a)
+{-@ assume (Prelude.++) :: xs:(UList a)
                 -> ys:{v: UList a | (ListDisjoint v xs)}
                 -> {v: UList a | (UnionElts v xs ys)}
   @-}
 infix 4 ++.
-{-@ (++.) :: [a] -> [a] -> [a] @-}
+{- (++.) :: [a] -> [a] -> [a] @-}
 (++.) :: [a] -> [a] -> [a]
 []     ++. ys = ys
 (x:xs) ++. ys = x:(xs ++. ys)
 
-{-@ filterScreen :: (Screen i l a sid sd -> Bool) 
-                 -> [Screen i l a sid sd] 
+{-@ filterScreen :: (Screen i l a sid sd -> Bool)
+                 -> [Screen i l a sid sd]
                  -> [Screen i l a sid sd]
   @-}
 
-filterScreen :: (Screen i l a sid sd -> Bool) 
-             -> [Screen i l a sid sd] 
+filterScreen :: (Screen i l a sid sd -> Bool)
+             -> [Screen i l a sid sd]
              -> [Screen i l a sid sd]
 filterScreen f []                 = []
 filterScreen f (x:xs) | f x       = x : filterScreen f xs
-                      | otherwise =     filterScreen f xs 
+                      | otherwise =     filterScreen f xs
 
-{- assume Data.List.filter :: (a -> Bool) 
-                            -> xs:(UList a) 
+{- assume Data.List.filter :: (a -> Bool)
+                            -> xs:(UList a)
                             -> {v:UList a | (SubElts v xs)} @-}
 
-{- assume elem :: Eq a 
-                => x:a 
-                -> xs:[a] 
+{- assume elem :: Eq a
+                => x:a
+                -> xs:[a]
                 -> {v:Bool|((Prop v)<=>(ListElt x xs))}
   @-}
 
 {- assume reverse :: xs:(UList a)
-                   -> {v: UList a | (EqElts v xs)} 
+                   -> {v: UList a | ((EqElts v xs) && (Set_sub (listElts v) (listElts xs)))}
   @-}
 
-{-@ predicate NoDuplicatesSAFE SS = 
-     ( 
-       (Disjoint3  (workspacesElts (lhidden SS)) 
-                  (screenElts     (lcurrent SS)) 
-                  (screensElts    (lvisible SS)) 
-       )
-      )
-  @-}
-
-{-@ predicate NoDuplicates SS = 
-      ( 
-      (Disjoint3  (workspacesElts (lhidden SS)) 
-                  (screenElts     (lcurrent SS)) 
-                  (screensElts    (lvisible SS)) 
-       ) 
-       &&
-       (ScreensNoDups (lvisible SS)) 
-       &&
-       (workspacesNotHaveDups (lhidden SS))
-      )
-  @-}
-
-{-@ predicate StackSetElt N S = 
+{-@ predicate NoDuplicates SS =
       (
-        (ScreenElt N (lcurrent S)) 
-      || 
-        (Set_mem N (screensElts (lvisible S))) 
-      || 
+      (Disjoint3  (workspacesElts (lhidden SS))
+                  (screenElts     (lcurrent SS))
+                  (screensElts    (lvisible SS))
+       )
+       &&
+       (ScreensNoDups (lvisible SS))
+       &&
+       (WorkspacesNoDups (lhidden SS))
+       &&
+       (NoDuplicateTags SS)
+       &&
+       (NoDuplicateScreens SS)
+      )
+  @-}
+
+{-@ predicate NoDuplicateTags SS = (Disjoint3 (Set_sng (ltag (lworkspace (lcurrent SS)))) (workspacesTags (lhidden SS)) (screensTags (lvisible SS))) @-}
+
+{-@ predicate NoDuplicateScreens SS = (Set_emp (Set_cap (Set_sng (lscreen (lcurrent SS))) (screensScreens (lvisible SS)))) @-}
+
+{-@ type UScreens i l a sid sd  = {v:[Screen i l a sid sd ] | (ScreensNoDups v) } @-}
+
+{-@ type UWorkspaces i l a = {v:[Workspace i l a] | (WorkspacesNoDups v) } @-}
+
+{-@ predicate StackSetElt N S =
+      (
+        (ScreenElt N (lcurrent S))
+      ||
+        (Set_mem N (screensElts (lvisible S)))
+      ||
         (Set_mem N (workspacesElts (lhidden S)))
       )
   @-}
 
 {-@ predicate Disjoint3 X Y Z =
        (
-         (Set_emp (Set_cap X Y)) 
-       && 
-         (Set_emp (Set_cap Y Z)) 
-       && 
+         (Set_emp (Set_cap X Y))
+       &&
+         (Set_emp (Set_cap Y Z))
+       &&
          (Set_emp (Set_cap Z X))
-       ) 
+       )
+  @-}
+
+{-@ measure screenScreens :: (Screen i l a sid sd) ->  (Data.Set.Set sid)
+    screenScreens(Screen w x y) = (Set_sng x)
+  @-}
+
+{-@ measure screensScreens :: ([Screen i l a sid sd]) ->  (Data.Set.Set sid)
+    screensScreens([]) = {v|(?(Set_emp v))}
+    screensScreens(x:xs) = (Set_cup (screenScreens x) (screensScreens xs))
+  @-}
+
+{-@ measure screenTags :: (Screen i l a sid sd) ->  (Data.Set.Set i)
+    screenTags(Screen w x y) = (Set_sng (ltag w))
+  @-}
+
+{-@ measure screensTags :: ([Screen i l a sid sd]) ->  (Data.Set.Set i)
+    screensTags([]) = {v|(?(Set_emp v))}
+    screensTags(x:xs) = (Set_cup (screenTags x) (screensTags xs))
+  @-}
+
+{-@ measure workspacesTags :: ([Workspace i l a]) ->  (Data.Set.Set i)
+    workspacesTags([]) = {v|(?(Set_emp v))}
+    workspacesTags(x:xs) = (Set_cup (Set_sng(ltag x)) (workspacesTags xs))
   @-}
 
 {-@ measure screenElts :: (Screen i l a sid sd) -> (Data.Set.Set a)
@@ -894,19 +1101,19 @@ filterScreen f (x:xs) | f x       = x : filterScreen f xs
     stackElts(Stack f u d) = (Set_cup (Set_sng f) (Set_cup (listElts u) (listElts d)))
   @-}
 
-{-@ measure screensElts :: [(Screen i l a sid sd)] -> (Data.Set.Set a) 
+{-@ measure screensElts :: [(Screen i l a sid sd)] -> (Data.Set.Set a)
     screensElts([])   = {v| (? (Set_emp v))}
     screensElts(x:xs) = (Set_cup (screenElts x) (screensElts xs))
   @-}
 
-{-@ measure workspacesElts :: [(Workspace i l a)] -> (Data.Set.Set a) 
+{-@ measure workspacesElts :: [(Workspace i l a)] -> (Data.Set.Set a)
     workspacesElts([])   = {v| (? (Set_emp v))}
     workspacesElts(x:xs) = (Set_cup (workspaceElts x) (workspacesElts xs))
   @-}
 
-{-@ measure workspacesNotHaveDups :: [(Workspace i l a)] -> Prop
-    workspacesNotHaveDups([])   = true
-    workspacesNotHaveDups(x:xs) = (Set_emp (Set_cap (workspaceElts x) (workspacesElts xs)))
+{-@ measure workspacesDups :: [(Workspace i l a)] -> (Data.Set.Set a)
+    workspacesDups([])   = {v | (? (Set_emp v)) }
+    workspacesDups(x:xs) = (Set_cup (Set_cap (workspaceElts x) (workspacesElts xs)) (workspacesDups xs))
   @-}
 
 {-@ measure screensDups :: [(Screen i l a sid sd)] -> (Data.Set.Set a)
@@ -915,16 +1122,17 @@ filterScreen f (x:xs) | f x       = x : filterScreen f xs
   @-}
 
 {-@ predicate ScreensNoDups XS = (Set_emp (screensDups XS)) @-}
+{-@ predicate WorkspacesNoDups XS = (Set_emp (workspacesDups XS)) @-}
 
 {-@ measure workspaceElts :: (Workspace i l a) -> (Data.Set.Set a)
     workspaceElts (Workspace i l s) = {v | (if (isJust s) then (v = (stackElts (fromJust s))) else (? (Set_emp v)))}
   @-}
 
-{-@ predicate StackSetCurrentElt N S = 
+{-@ predicate StackSetCurrentElt N S =
       (ScreenElt N (lcurrent S))
   @-}
 
-{-@ predicate ScreenElt N S = 
+{-@ predicate ScreenElt N S =
       (WorkspaceElt N (lworkspace S))
   @-}
 
@@ -932,8 +1140,8 @@ filterScreen f (x:xs) | f x       = x : filterScreen f xs
   ((isJust (lstack W)) && (StackElt N (fromJust (lstack W)))) @-}
 
 {-@ predicate StackElt N S =
-       (((ListElt N (up S)) 
-       || (Set_mem N (Set_sng (focus S))) 
+       (((ListElt N (up S))
+       || (Set_mem N (Set_sng (focus S)))
        || (ListElt N (down S))))
   @-}
 
@@ -973,3 +1181,170 @@ filterScreen f (x:xs) | f x       = x : filterScreen f xs
 {-@ qualif NoDup(v: List a) : (Set_emp(listDup v)) @-}
 
 {-@ qualif Disjoint(v: List a, x:List a) : (Set_emp(Set_cap (listElts v) (listElts x))) @-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+---------------  QUICKCHECK PROPERTIES : --------------------------------------
+-------------------------------------------------------------------------------
+
+-- TODO move them in a seperate file, after name resolution is fixed....
+
+{-@ type EmptyStackSet i l a sid sd = StackSet <{\w -> (isNothing (lstack w))}> i l a sid sd @-}
+
+{-@ type Valid = {v:Bool | (Prop v) } @-}
+{-@ type TOPROVE = Bool @-}
+
+{-@ prop_empty :: (Eq a) => EmptyStackSet i l a sid sd -> Valid  @-}
+prop_empty :: (Eq a) => StackSet i l a sid sd -> Bool
+prop_empty s@(StackSet (Screen _ _ _) vs hs _)
+  =  isNothing (stack (workspace (current s)))
+  && allIsNothingW hs && allIsNothingS vs
+
+{-@ prop_empty_current :: (Integral l, Eq i) => {v:[i]|(not (null v))} -> [sd] -> l ->  Valid @-}
+prop_empty_current :: (Integral l, Eq i) => [i] -> [sd] -> l -> Bool
+prop_empty_current ns@(n:_) sds l =
+    tag (workspace (current x)) == n
+    where x = new l ns sds
+
+{-@ prop_member_empty :: Eq a => a -> EmptyStackSet i l a sid sd -> TOPROVE @-}
+prop_member_empty :: Eq a => a -> StackSet i l a sid sd -> Bool
+prop_member_empty i x
+    = member i x == False
+
+-- viewing workspaces
+
+{-@ prop_view_current :: (Eq s, Eq i) => StackSet i l a sid sd -> i -> Valid @-}
+prop_view_current :: (Eq sid, Eq i) => StackSet i l a sid sd -> i -> Bool
+prop_view_current x i
+  | i `tagMember` x = tag (workspace $ current (view i x)) == i
+  | otherwise       = True
+
+{-@ prop_view_local :: (Eq s, Eq i, Ord a) => StackSet i l a sid sd -> i -> Valid @-}
+prop_view_local :: (Eq sid, Eq i, Ord a) => StackSet i l a sid sd -> i -> Bool
+
+prop_view_local x i
+  | i `tagMember` x = x =~= (view i x)
+  | otherwise       = True
+
+{-@ prop_view_idem :: (Eq s, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Valid @-}
+prop_view_idem :: (Eq sid, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Bool
+prop_view_idem x i
+  | i `tagMember` x = let v = view i x in view i v == v
+  | otherwise       = True
+
+{-@ prop_view_reversible :: (Eq s, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Valid @-}
+prop_view_reversible :: (Eq sid, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Bool
+prop_view_reversible x i
+  | i `tagMember` x = let v1 = view i x in
+                      let v2 = view n v1 in v2 =~= x
+  | otherwise       = True
+  where n = currentTag x
+
+-- greedyViewing workspaces
+
+{-@ prop_greedyView_current :: (Eq s, Eq i) => StackSet i l a sid sd -> i -> Valid @-}
+prop_greedyView_current :: (Eq sid, Eq i) => StackSet i l a sid sd -> i -> Bool
+prop_greedyView_current x i
+  | i `tagMember` x = tag (workspace $ current (greedyView i x)) == i
+  | otherwise       = True
+
+{-@ prop_greedyView_current_id :: (Eq s, Eq i) => StackSet i l a sid sd -> i -> Valid @-}
+prop_greedyView_current_id :: (Eq sid, Eq i) => StackSet i l a sid sd -> i -> Bool
+prop_greedyView_current_id x i
+  | not (i `tagMember` x) = tag (workspace $ current (greedyView i x)) == (currentTag x)
+  | otherwise             = True
+
+{-@ prop_greedyView_local :: (Eq s, Eq i, Ord a) => StackSet i l a sid sd -> i -> Valid @-}
+prop_greedyView_local :: (Eq sid, Eq i, Ord a) => StackSet i l a sid sd -> i -> Bool
+
+prop_greedyView_local x i
+  | i `tagMember` x = x =~= (greedyView i x)
+  | otherwise       = True
+
+{-@ prop_greedyView_idem :: (Eq s, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Valid @-}
+prop_greedyView_idem :: (Eq sid, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Bool
+prop_greedyView_idem x i
+  | i `tagMember` x = let v = greedyView i x in greedyView i v == v
+  | otherwise       = True
+
+{-@ prop_greedyView_reversible :: (Eq s, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Valid @-}
+prop_greedyView_reversible :: (Eq sid, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Bool
+prop_greedyView_reversible x i
+  | i `tagMember` x = let v1 = greedyView i x in
+                      let v2 = greedyView n v1 in v2 =~= x
+  | otherwise       = True
+  where n = currentTag x
+
+
+
+
+-- HELPERS
+
+
+{-@ (=~=) :: (Ord a) => x:StackSet i l a sid sd -> y:StackSet i l a sid sd -> {v:Bool | ((Prop v) <=> ((stackSetElts x) = (stackSetElts y)))} @-}
+(=~=) :: Ord a => StackSet i l a sid sd -> StackSet i l a sid sd -> Bool
+s1 =~= s2 = (stackSetElts s1) == (stackSetElts s2)
+
+{-@ stackSetElts :: (Ord a) => x:StackSet i l a sid sd -> {v:Data.Set.Set a | v = (stackSetElts x)} @-}
+stackSetElts :: Ord a => StackSet i l a sid sd -> Data.Set.Set a
+stackSetElts (StackSet c v h _)
+  = screenElts c `Data.Set.union` screensElts v `Data.Set.union` workspacesElts h
+
+{-@ measure stackSetElts :: (StackSet i l a sid sd) -> (Data.Set.Set a)
+    stackSetElts (StackSet c v h l) = (Set_cup (screenElts c) (Set_cup (screensElts v) (workspacesElts h)))
+  @-}
+
+{-@ screenElts :: (Ord a) => x:Screen i l a sid sd -> {v:Data.Set.Set a | v = (screenElts x)} @-}
+screenElts :: Ord a => Screen i l a sid sd -> Data.Set.Set a
+screenElts (Screen w _ _) = workspaceElts w
+
+{-@ screensElts :: (Ord a) => x:[Screen i l a sid sd] -> {v:Data.Set.Set a | v = (screensElts x)} @-}
+screensElts :: Ord a => [Screen i l a sid sd] -> Data.Set.Set a
+screensElts (x:xs) = screenElts x `Data.Set.union` screensElts xs
+screensElts []     = Data.Set.empty
+
+
+{-@ workspaceElts :: (Ord a) => x:Workspace i l a -> {v:Data.Set.Set a | v = (workspaceElts x)} @-}
+workspaceElts :: Ord a => Workspace i l a -> Data.Set.Set a
+workspaceElts (Workspace _ _ Nothing)  = Data.Set.empty
+workspaceElts (Workspace _ _ (Just s)) = stackElts s
+
+{-@ workspacesElts :: (Ord a) => x:[Workspace i l a] -> {v:Data.Set.Set a | v = (workspacesElts x)} @-}
+workspacesElts :: Ord a => [Workspace i l a] -> Data.Set.Set a
+workspacesElts (x:xs) = workspaceElts x `Data.Set.union` workspacesElts xs
+workspacesElts []     = Data.Set.empty
+
+{-@ stackElts :: (Ord a) => x:Stack a -> {v:Data.Set.Set a | v = (stackElts x)} @-}
+stackElts :: Ord a => Stack a -> Data.Set.Set a
+stackElts (Stack f u d) = Data.Set.fromList $ f:u++d
+
+
+
+{-@ allIsNothingS :: [Screen <{\w -> (isNothing (lstack w))}> i l a sid sd] -> {v:Bool | (Prop v) } @-}
+allIsNothingS :: [Screen i l a sid sd] -> Bool
+allIsNothingS ((Screen (Workspace _ _ Nothing) _ _):xs) = allIsNothingS xs
+allIsNothingS ((Screen (Workspace _ _ (Just _)) _ _):xs) = False
+allIsNothingS []                          = True
+
+{-@ allIsNothingW :: [{v:Workspace i l a|(isNothing (lstack v))}] -> {v:Bool | (Prop v) } @-}
+allIsNothingW :: [Workspace i l a] -> Bool
+allIsNothingW (Workspace _ _ Nothing :xs) = allIsNothingW xs
+allIsNothingW (Workspace _ _ (Just _):xs) = False
+allIsNothingW []                          = True
+
+{-@ isNothing :: x:Maybe a -> {v:Bool | ((Prop v) <=> (isNothing x)) } @-}
+isNothing (Nothing) = True
+isNothing (Just _)  = False

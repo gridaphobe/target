@@ -21,7 +21,7 @@ main = defaultMain [
        [ bgroup (show n)
            [ bench "LiquidCheck" $ testModule "bench/List.hs" [liquidCheck insert "List.insert" n]
            ]
-       | n <- [6..7]
+       | n <- []
        ],
      bgroup "RBTree.add" $
        [ bgroup (show n)
@@ -33,7 +33,7 @@ main = defaultMain [
        [ bgroup (show n)
            [ bench "LiquidCheck" $ testModule "bench/RBTree.hs" [liquidCheck (add :: Int -> RBTree Int -> RBTree Int) "RBTree.add" n]
            ]
-       | n <- [4..5]
+       | n <- []
        ],
      bgroup "JSON.inverse" $
        [ bgroup (show n)
@@ -44,10 +44,10 @@ main = defaultMain [
        ],
      bgroup "XMonad.invariant" $
        [ bgroup (show n)
-           [ bench "LiquidCheck" $ testModule "bench/XMonad/Properties.hs" [liquidCheck invariant "XMonad.Properties.invariant" n]
+           [ bench "LiquidCheck" $ testModule "bench/XMonad/Properties.hs" [liquidCheck prop_invariant_lc "XMonad.Properties.prop_invariant_lc" n]
            -- , bench "SmallCheck" $ smallCheck n prop_json_inv
            ]
-       | n <- [3]
+       | n <- [2]
        ],
      bgroup "XMonad.focus_left_master" $
        [ bgroup (show n)

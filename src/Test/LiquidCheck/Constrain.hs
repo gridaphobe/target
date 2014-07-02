@@ -16,6 +16,7 @@ import           Control.Applicative
 import           Control.Arrow                    (second)
 import           Control.Monad.State
 import           Data.Char
+import           Data.Generics                    (everywhere, mkT)
 import qualified Data.HashMap.Strict              as M
 import           Data.List
 import           Data.Maybe
@@ -73,11 +74,12 @@ reproxyElem = reproxy
 --------------------------------------------------------------------------------
 --- Instances
 --------------------------------------------------------------------------------
-instance Constrain () where
-  getType _ = "GHC.Types.()"
-  gen _ _ _ = fresh [] (FObj "GHC.Types.()")
-  stitch _  = return ()
-  toExpr _  = app (stringSymbol "()") []
+instance Constrain ()
+-- instance Constrain () where
+--   getType _ = "GHC.Types.()"
+--   gen _ _ _ = fresh [] (FObj "GHC.Types.()")
+--   stitch _  = return ()
+--   toExpr _  = app (stringSymbol "()") []
 
 instance Constrain Int where
   getType _ = "GHC.Types.Int"
@@ -245,10 +247,12 @@ applyPreds sp' dc = zip xs (map tx ts)
     -- args  = reverse tyArgs
     su    = [(tv, toRSort t, t) | tv <- as | t <- rt_args sp]
     sup   = [(p, r) | p <- ps | r <- rt_pargs sp]
-    tx    = (\t -> replacePreds "applyPreds" t sup) . onRefs (monosToPoly sup) . subsTyVars_meet su
+    tx    = (\t -> replacePreds "applyPreds" t sup) . everywhere (mkT $ monosToPoly sup) . subsTyVars_meet su
 
-onRefs f t@(RVar _ _) = t
-onRefs f t = t { rt_pargs = f <$> rt_pargs t }
+-- deriving instance (Show a, Show b, Show c) => Show (Ref a b c)
+
+-- onRefs f t@(RVar _ _) = t
+-- onRefs f t = t { rt_pargs = f <$> rt_pargs t }
 
 monosToPoly su r = foldr monoToPoly r su
 
@@ -448,6 +452,6 @@ instance (GConstrain f) => GConstrainProd (S1 c f) where
 
 instance GConstrainProd U1 where
   gconArgTys p    = []
-  ggenArgs p d [] = return []
+  ggenArgs p d _  = return []
   gstitchArgs d   = return U1
   gtoExprs _      = []

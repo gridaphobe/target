@@ -45,6 +45,7 @@ library
                        data-default >= 0.5.3,
                        tagged,
                        text-format,
+                       syb >= 0.4.2,
                        vector
 
 benchmark bench
