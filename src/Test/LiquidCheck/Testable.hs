@@ -35,7 +35,7 @@ instance (Constrain a, Constrain b) => Testable (a -> b) where
   test f d (stripQuals -> (RFun x i o _)) = do
     a <- gen (Proxy :: Proxy a) d i
     cts <- gets freesyms
-    vals <- allSat [a]
+    vals <- allSat [symbol a]
     process1 d f vals cts x o
     -- build up the haskell value
     --(xvs :: [a]) <- forM vals $ \ vs -> do
@@ -58,9 +58,10 @@ process1 d f vs cts x to = go vs 0
   where
     go []       !n = return $ Passed n
     go (vs:vss) !n =
-      do setValues vs
+      do when (n `mod` 100 == 0) $ io $ printf "Checked %d inputs\n" n
+         setValues vs
          a <- stitch d
-         io $ print a
+         -- io $ print a
          r <- io $ evaluate (f a)
          let env = map (second (`app` [])) cts
                 ++ [(x, toExpr a)]
@@ -79,7 +80,7 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
     let tb' = subst (mkSubst [(xa, var a)]) tb
     b <- gen (Proxy :: Proxy b) d tb'
     cts <- gets freesyms
-    vals <- allSat [a, b]
+    vals <- allSat [symbol a, symbol b]
     -- -- build up the haskell value
     -- (xvs :: [(a,b)]) <- forM vals $ \ vs -> do
     --   setValues vs
@@ -109,7 +110,7 @@ process2 d f vs cts xa xb to = go vs 0
   where
     go []       !n = return $ Passed n
     go (vs:vss) !n =
-      do -- when (n `mod` 100 == 0) $ io $ printf "Checked %d inputs\n" n
+      do when (n `mod` 100 == 0) $ io $ printf "Checked %d inputs\n" n
          setValues vs
          b <- stitch d
          a <- stitch d
@@ -131,7 +132,7 @@ instance (Constrain a, Constrain b, Constrain c, Constrain d)
     let tc' = subst (mkSubst [(xa, var a), (xb, var b)]) tc
     c <- gen (Proxy :: Proxy c) d tc'
     cts <- gets freesyms
-    vals <- allSat [a, b, c]
+    vals <- allSat [symbol a, symbol b, symbol c]
     -- build up the haskell value
     (xvs :: [(a,b,c)]) <- forM vals $ \ vs -> do
       setValues vs

@@ -51,8 +51,8 @@ import qualified Test.SmallCheck.Series as SC
 {-@ type True = {v:Bool | (prop v)} @-}
 
 {-@ type TT = {v: T | (NoDuplicates v)} @-}
-{-@ type TT_LC = {v: StackSet Nat () Char Nat () | (NoDuplicates v)} @-}
-type T_LC = StackSet Int () Char Int ()
+{-@ type TT_LC = {v: StackSet () () Char () () | (NoDuplicates v)} @-}
+type T_LC = StackSet () () Char () ()
 
 instance (Ord a, Constrain i, Constrain l, Constrain a, Constrain s, Constrain sd)
   => Constrain (StackSet i l a s sd)
@@ -176,7 +176,8 @@ hidden_spaces x = map workspace (visible x) ++ hidden x
 -- * the current workspace should be a member of the xinerama screens
 --
 {-@ prop_invariant_lc :: TT_LC -> True @-}
-prop_invariant_lc (x :: T_LC) = noDuplicates x
+prop_invariant_lc (x :: T_LC) = -- trace (show $ windows x) $
+                                noDuplicates x
 
 invariant (s :: T) = and
     -- no duplicates

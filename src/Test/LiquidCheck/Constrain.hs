@@ -45,7 +45,7 @@ import Text.Printf
 --------------------------------------------------------------------------------
 class Show a => Constrain a where
   getType :: Proxy a -> Symbol
-  gen     :: Proxy a -> Int -> SpecType -> Gen Symbol
+  gen     :: Proxy a -> Int -> SpecType -> Gen Variable
   stitch  :: Int -> Gen a
   toExpr  :: a -> Expr
 
@@ -54,7 +54,7 @@ class Show a => Constrain a where
   getType p = gtype (reproxyRep p)
 
   default gen :: (Generic a, GConstrain (Rep a))
-              => Proxy a -> Int -> SpecType -> Gen Symbol
+              => Proxy a -> Int -> SpecType -> Gen Variable
   gen p = ggen (reproxyRep p)
 
   default stitch :: (Generic a, GConstrain (Rep a))
@@ -147,7 +147,7 @@ instance (Num a, Integral a, Constrain a) => Constrain (Ratio a) where
 -- instance Show (a -> b) where
 --   show _ = "<function>"
 
-choose :: Symbol -> [Symbol] -> Gen ()
+choose :: Variable -> [Variable] -> Gen ()
 choose x cs
   = do cs <- forM cs $ \c -> do
                addDep x c
@@ -157,25 +157,31 @@ choose x cs
                         | [x, y] <- filter ((==2) . length) $ subsequences cs ]
 
 -- make :: TH.Name -> [String] -> Sort -> Gen String
+make :: Symbol -> [Variable] -> Sort -> Gen Variable
 make c vs s
   = do x  <- fresh vs s
        t <- (safeFromJust "make" . lookup c) <$> gets ctorEnv
        let (xs, _, rt) = bkArrowDeep t
            su          = mkSubst $ zip (map symbol xs) (map var vs)
-       addConstructor (c, rTypeSort mempty t)
+           ct          = FFunc 0 $ map snd vs ++ [s]
+       addConstructor (c, ct)
        addConstraint $ var x `eq` app c (map var vs)
        constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
        return x
 
+make' :: Symbol -> Variable -> [Variable] -> Gen ()
 make' c x vs
   = do Just ch <- gets chosen
        mapM_ (addDep ch) vs
-       t <- (safeFromJust "make" . lookup c) <$> gets ctorEnv
-       let (xs, _, rt) = bkArrowDeep t
-           su          = mkSubst $ zip (map symbol xs) (map var vs)
-       addConstructor (c, rTypeSort mempty t)
-       addConstraint $ prop ch `imp` (var x `eq` app c (map var vs))
-       constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
+       addConstraint $ prop (fst ch) `imp` (var (fst x) `eq` app c (map (var . fst) vs))
+       mt <- lookup c <$> gets ctorEnv
+       case mt of
+         Nothing -> addConstructor (c, FFunc 0 $ map snd vs ++ [snd x])
+         Just t  -> do
+           let (xs, _, rt) = bkArrowDeep t
+               su          = mkSubst $ zip (map symbol xs) (map var vs)
+           addConstructor (c, rTypeSort mempty t)
+           constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
 
 constrain :: Pred -> Gen ()
 constrain p
@@ -276,8 +282,8 @@ apply4 c d
     cons = stitch (d-1)
 
 
-ofReft :: Symbol -> Reft -> Pred
-ofReft s (Reft (v, rs))
+ofReft :: Variable -> Reft -> Pred
+ofReft (s,_) (Reft (v, rs))
   = let x = mkSubst [(v, var s)]
     in pAnd [subst x p | RConc p <- rs]
 
@@ -291,7 +297,7 @@ reproxyRep = reproxy
 --------------------------------------------------------------------------------
 class GConstrain f where
   gtype        :: Proxy (f a) -> Symbol
-  ggen         :: Proxy (f a) -> Int    -> SpecType -> Gen Symbol
+  ggen         :: Proxy (f a) -> Int    -> SpecType -> Gen Variable
   gstitch      :: Int -> Gen (f a)
   gtoExpr      :: f a -> Expr
 
@@ -322,22 +328,22 @@ instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
 
 instance (Constrain a) => GConstrain (K1 i a) where
   gtype p    = getType (reproxy p :: Proxy a)
-  -- ggen p d t = gen (reproxy p :: Proxy a) d t
-  ggen p d t = do let p' = reproxy p :: Proxy a
-                  ty <- gets makingTy
-                  depth <- gets depth
-                  let d' = if getType p' == ty
-                              then d
-                              else depth
-                  gen p' d' t
-  -- gstitch d  = K1 <$> stitch d
-  gstitch d  = do let p = Proxy :: Proxy a
-                  ty <- gets makingTy
-                  depth <- gets depth
-                  let d' = if getType p == ty
-                              then d
-                              else depth
-                  K1 <$> stitch d'
+  ggen p d t = gen (reproxy p :: Proxy a) d t
+  -- ggen p d t = do let p' = reproxy p :: Proxy a
+  --                 ty <- gets makingTy
+  --                 depth <- gets depth
+  --                 let d' = if getType p' == ty
+  --                             then d
+  --                             else depth
+  --                 gen p' d' t
+  gstitch d  = K1 <$> stitch d
+  -- gstitch d  = do let p = Proxy :: Proxy a
+  --                 ty <- gets makingTy
+  --                 depth <- gets depth
+  --                 let d' = if getType p == ty
+  --                             then d
+  --                             else depth
+  --                 K1 <$> stitch d'
   gtoExpr (K1 x) = toExpr x
 
 qualify :: Datatype d => D1 d f a -> String -> String
@@ -350,7 +356,7 @@ qualifiedDatatypeName d = symbol $ qualify d (datatypeName d)
 --- Sums
 --------------------------------------------------------------------------------
 class GConstrainSum f where
-  ggenAlts      :: Proxy (f a) -> Symbol -> Int -> SpecType -> Gen [Symbol]
+  ggenAlts      :: Proxy (f a) -> Variable -> Int -> SpecType -> Gen [Variable]
   gstitchAlts   :: Int -> Gen (f a, Bool)
   gtoExprAlts   :: f a -> Expr
 
@@ -401,7 +407,7 @@ gisRecursive (p :: Proxy (C1 c f a)) t
   = t `elem` gconArgTys (reproxyGElem p)
 
 ggenAlt :: (Constructor c, GConstrainProd f)
-        => Proxy (C1 c f a) -> Symbol -> Int -> SpecType -> Gen Symbol
+        => Proxy (C1 c f a) -> Variable -> Int -> SpecType -> Gen Variable
 ggenAlt (p :: Proxy (C1 c f a)) x d t
   = withFreshChoice $ \ch -> do
      let cn = conName (undefined :: C1 c f a)
@@ -423,7 +429,7 @@ gstitchAlt d
 --------------------------------------------------------------------------------
 class GConstrainProd f where
   gconArgTys  :: Proxy (f a) -> [Symbol]
-  ggenArgs    :: Proxy (f a) -> Int -> [(Symbol,SpecType)] -> Gen [Symbol]
+  ggenArgs    :: Proxy (f a) -> Int -> [(Symbol,SpecType)] -> Gen [Variable]
   gstitchArgs :: Int -> Gen (f a)
   gtoExprs    :: f a -> [Expr]
 

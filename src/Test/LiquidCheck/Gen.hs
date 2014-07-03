@@ -38,7 +38,7 @@ execGen e (Gen x) = execStateT x (initGS e)
 data GenState
   = GS { seed         :: !Int
        , variables    :: ![Variable]
-       , choices      :: ![Symbol]
+       , choices      :: ![Variable]
        , constraints  :: !Constraint
        , values       :: ![Value]
        , deps         :: ![(Symbol, Symbol)]
@@ -50,7 +50,7 @@ data GenState
        , constructors :: ![Variable] -- (S.HashSet Variable)  --[(String, String)]
        , sigs         :: ![(Symbol, SpecType)]
        , depth        :: !Int
-       , chosen       :: !(Maybe Symbol)
+       , chosen       :: !(Maybe Variable)
        , sorts        :: !(S.HashSet T.Text)
        , modName      :: !Symbol
        , makingTy     :: !Symbol
@@ -66,7 +66,7 @@ initGS sp = GS def def def def def def dcons cts (measures sp) tyi free [] sigs 
 
 setValues vs = modify $ \s@(GS {..}) -> s { values = vs }
 
-addDep from to = modify $ \s@(GS {..}) -> s { deps = (from,to):deps }
+addDep from to = modify $ \s@(GS {..}) -> s { deps = (fst from, fst to):deps }
 
 addConstraint p = modify $ \s@(GS {..}) -> s { constraints = p:constraints }
 
@@ -88,7 +88,7 @@ making ty act
        modify $ \s -> s { makingTy = ty' }
        return r
 
-withFreshChoice :: (Symbol -> Gen ()) -> Gen Symbol
+withFreshChoice :: (Variable -> Gen ()) -> Gen Variable
 withFreshChoice act
   = do c  <- freshChoice []
        mc <- gets chosen
@@ -100,17 +100,17 @@ withFreshChoice act
 -- | `fresh` generates a fresh variable and encodes the reachability
 -- relation between variables, e.g. `fresh xs sort` will return a new
 -- variable `x`, from which everything in `xs` is reachable.
-fresh :: [Symbol] -> Sort -> Gen Symbol
+fresh :: [Variable] -> Sort -> Gen Variable
 fresh xs sort
   = do n <- gets seed
        modify $ \s@(GS {..}) -> s { seed = seed + 1 }
        modify $ \s@(GS {..}) -> s { sorts = S.insert (smt2 sort) sorts }
-       let x = symbol $ T.unpack (smt2 sort) ++ show n
-       modify $ \s@(GS {..}) -> s { variables = (x,sort) : variables }
+       let x = (symbol $ T.unpack (smt2 sort) ++ show n, sort)
+       modify $ \s@(GS {..}) -> s { variables = x : variables }
        mapM_ (addDep x) xs
        return x
 
-freshChoice :: [Symbol] -> Gen Symbol
+freshChoice :: [Variable] -> Gen Variable
 freshChoice xs
   = do c <- fresh xs choicesort
        modify $ \s@(GS {..}) -> s { choices = c : choices }
