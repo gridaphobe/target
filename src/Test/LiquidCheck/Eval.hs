@@ -98,6 +98,7 @@ evalBody eq xs env = go $ body eq
 evalExpr :: Expr -> M.HashMap Symbol Expr -> Gen Expr
 evalExpr (ECon i)       m = return $ ECon i
 evalExpr (EVar x)       m = return $ m M.! x
+evalExpr (ESym s)       m = return $ ESym s
 evalExpr (EBin b e1 e2) m = evalBop b <$> evalExpr e1 m <*> evalExpr e2 m
 evalExpr (EApp f es)    m
   = do ms <- find ((==f) . name) <$> gets measEnv

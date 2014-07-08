@@ -105,6 +105,7 @@ instance Constrain Char where
     do _ <- gets depth
        constrain $ var x `ge` 0
        constrain $ var x `le` fromIntegral d
+       constrain $ ofReft x (toReft $ rt_reft t)
        return x
   stitch  d = stitch d >>= \(x::Int) -> return . chr $ x + ord 'a'
   toExpr  c = ESym $ SL [c]

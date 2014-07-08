@@ -65,6 +65,8 @@ benchmark bench
                        ghc,
                        unordered-containers,
                        mtl >= 2.1.2,
+                       -- for Data.Map
+                       deepseq,
                        --
                        criterion < 0.8,
                        hastache < 0.6,
