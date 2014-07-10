@@ -286,6 +286,7 @@ import Data.Data
 import GHC.Generics
 import Test.LiquidCheck
 import Test.LiquidCheck.Gen (Gen)
+import Data.Set (Set)
 #endif
 
 -- Use macros to define strictness of functions.
@@ -385,6 +386,11 @@ mlen (Bin s k v l r) = 1 + mlen l + mlen r
 {-@ measure isBin :: Map k a -> Prop
     isBin (Bin sz kx x l r) = true
     isBin (Tip)             = false
+  @-}
+
+{-@ measure mapKeys :: Map k a -> (Set k)
+    mapKeys (Tip) = {v | (? (Set_emp v))}
+    mapKeys (Bin s k v l r) = (Set_cup (Set_sng k) (Set_cup (mapKeys l) (mapKeys r)))
   @-}
 
 {-@ invariant {v0: MaybeS {v: a | ((isJustS v0) && (v = (fromJustS v0)))} | true} @-}
@@ -703,7 +709,9 @@ singleton k x = Bin 1 k x Tip Tip
 -- > insert 5 'x' empty                         == singleton 5 'x'
 
 -- See Note: Type of local 'go' function
-{-@ insert :: (Ord k) => k -> a -> OMap k a -> OMap k a @-}
+{-@ insert :: (Ord k) => k:k -> a -> x:OMap k a 
+           -> {v:OMap k a | (mapKeys v) = (Set_cup (Set_sng k) (mapKeys x))}
+  @-}
 insert :: Ord k => k -> a -> Map k a -> Map k a
 insert = insert_go
 --LIQUID insert = go
@@ -889,7 +897,8 @@ insertLookupWithKey_go f kx x (Bin sy ky y l r) =
 -- > delete 5 empty                         == empty
 
 -- See Note: Type of local 'go' function
-{-@ delete :: (Ord k) => k -> OMap k a -> OMap k a @-}
+{-@ delete :: (Ord k) => k:k -> x:OMap k a 
+           -> {v:OMap k a | (mapKeys v) = (Set_dif (mapKeys x) (Set_sng k))} @-}
 delete :: Ord k => k -> Map k a -> Map k a
 delete = delete_go
 --LIQUID delete = go
@@ -1449,7 +1458,9 @@ unionsWith f ts
 --
 -- > union (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == fromList [(3, "b"), (5, "a"), (7, "C")]
  
-{-@ union :: (Ord k) => OMap k a -> OMap k a -> OMap k a @-}
+{-@ union :: (Ord k) => x:OMap k a -> y:OMap k a 
+          -> {v:OMap k a | (mapKeys v) = (Set_cup (mapKeys x) (mapKeys y))}
+  @-}
 union :: Ord k => Map k a -> Map k a -> Map k a
 union Tip t2  = t2
 union t1 Tip  = t1
@@ -1514,7 +1525,9 @@ unionWithKey f t1 t2 = mergeWithKey (\k x1 x2 -> Just $ f k x1 x2) (\ _ _ x -> x
 --
 -- > difference (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == singleton 3 "b"
 
-{-@ difference :: (Ord k) => OMap k a -> OMap k b -> OMap k a @-}
+{-@ difference :: (Ord k) => x:OMap k a -> y:OMap k b 
+               -> {v:OMap k a | (mapKeys v) = (Set_dif (mapKeys x) (mapKeys y))}
+  @-}
 difference :: Ord k => Map k a -> Map k b -> Map k a
 difference Tip _   = Tip
 difference t1 Tip  = t1
@@ -1585,7 +1598,9 @@ differenceWithKey f t1 t2 = mergeWithKey f (\_ _ x -> x) (\ _ _ _ -> Tip) t1 t2
 --
 -- > intersection (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == singleton 5 "a"
 
-{-@ intersection :: (Ord k) => OMap k a -> OMap k b -> OMap k a @-}
+{-@ intersection :: (Ord k) => x:OMap k a -> y:OMap k b 
+                 -> {v:OMap k a | (mapKeys v) = (Set_cap (mapKeys x) (mapKeys y))}
+  @-}
 intersection :: Ord k => Map k a -> Map k b -> Map k a
 intersection Tip _ = Tip
 intersection _ Tip = Tip
@@ -3207,7 +3222,7 @@ insert_bad = go
     go kx x (Bin sz ky y l r) =
         case compare kx ky of
                   -- Bin ky y (go kx x l) r 
-            --LIQUID: swappen balanceL and balanceR to inject bug
+            --LIQUID: swapped balanceL and balanceR to inject bug
             LT -> balanceR ky y (go kx x l) r
             GT -> balanceL ky y l (go kx x r)
             EQ -> Bin sz kx x l r
@@ -3220,17 +3235,17 @@ delete_bad = go
     go _ Tip = Tip
     go k (Bin _ kx x l r) =
         case compare k kx of
-            LT -> balanceR kx x (go k l) r
-            GT -> balanceL kx x l (go k r)
-            --LIQUID: injected bug in glue
-            EQ -> glue_bad kx l r
+            --LIQUID: swapped balanceL and balanceR to inject bug
+            LT -> balanceL kx x (go k l) r
+            GT -> balanceR kx x l (go k r)
+            EQ -> glue kx l r
 
+--LIQUID: having trouble injecting bugs here..
 glue_bad :: k -> Map k a -> Map k a -> Map k a
 glue_bad _    Tip r = r
 glue_bad _    l Tip = l
 glue_bad kcut l r
-  --LIQUID changed > to < to inject bug
-  | size l < size r = let (km, m, l') = deleteFindMax l in balanceR km m l' r
+  | size l > size r = let (km, m, l') = deleteFindMax l in balanceR km m l' r
   | otherwise       = let (km, m, r') = deleteFindMin r in balanceL km m l r'
 
 
@@ -3265,17 +3280,17 @@ difference_bad t1 t2   = hedgeDiff_bad NothingS NothingS t1 t2
 
 hedgeDiff_bad :: Ord a => MaybeS a -> MaybeS a -> Map a b -> Map a c -> Map a b
 hedgeDiff_bad _  _   Tip _                  = Tip
-hedgeDiff_bad blo bhi (Bin _ kx x l r) Tip  = join kx x (filterGt blo l) (filterLt bhi r)
-hedgeDiff_bad blo bhi t (Bin _ kx _ l r)    = merge_bad kx (hedgeDiff_bad blo bmi (trim blo bmi t) l)
-                                                   (hedgeDiff_bad bmi bhi (trim bmi bhi t) r)
+hedgeDiff_bad blo bhi (Bin _ kx x l r) Tip  = join_bad kx x (filterGt blo l) (filterLt bhi r)
+hedgeDiff_bad blo bhi t (Bin _ kx _ l r)    = merge_bad kx (hedgeDiff_bad blo bmi (trim_bad blo bmi t) l)
+                                                   (hedgeDiff_bad bmi bhi (trim_bad bmi bhi t) r)
   where bmi = JustS kx
 
+--LIQUID: having trouble injecting bug here
 merge_bad _   Tip r   = r
 merge_bad _   l Tip   = l
 merge_bad kcut l@(Bin sizeL kx x lx rx) r@(Bin sizeR ky y ly ry)
-  --LIQUID swap balanceR and balanceL to inject bug
-  | delta*sizeL < sizeR = balanceR ky y (merge_bad kcut l ly) ry
-  | delta*sizeR < sizeL = balanceL kx x lx (merge_bad kcut rx r)
+  | delta*sizeL > sizeR = balanceL ky y (merge_bad kcut l ly) ry
+  | delta*sizeR > sizeL = balanceR kx x lx (merge_bad kcut rx r)
   | otherwise           = glue kcut l r
 
 

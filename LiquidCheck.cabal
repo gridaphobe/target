@@ -91,4 +91,5 @@ test-suite test
                        tasty >= 0.8,
                        tasty-hunit >= 0.8,
                        -- for Data.Map
+                       containers,
                        deepseq

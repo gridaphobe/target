@@ -1,14 +1,17 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 module Test.LiquidCheck.Eval where
 
 import           Control.Applicative
 import           Control.Monad.State
+import           Data.Function
 import qualified Data.HashMap.Strict             as M
 import           Data.List
 import           Text.Printf
 
 import           GHC
-import           Language.Fixpoint.Types
+import           Language.Fixpoint.SmtLib2
+import           Language.Fixpoint.Types         hiding (R)
 import           Language.Haskell.Liquid.Measure
 import           Language.Haskell.Liquid.RefType (expandRApp)
 import           Language.Haskell.Liquid.Types   hiding (var)
@@ -88,10 +91,33 @@ applyMeasure m (EApp c xs) env = evalBody eq xs env
        $ find ((==ct) . show . ctor) $ eqns m
 applyMeasure m e           env = error $ printf "applyMeasure(%s, %s)" (showpp m) (showpp e)
 
+setSym :: Symbol
+setSym = "LC_SET"
+
+nubSort = nub . Data.List.sort
+
+mkSet = app setSym . nubSort
+
+evalSet "Set_emp" [e] env
+  = return $ if e == app setSym [] then 0 else 1
+evalSet "Set_sng" [e] env
+  = return $ mkSet [e]
+evalSet "Set_add" [e1, EApp _ e2] env
+  = return $ mkSet $ e1:e2
+evalSet "Set_cap" [EApp _ e1, EApp _ e2] env
+  = return $ mkSet $ intersect e1 e2
+evalSet "Set_cup" [EApp _ e1, EApp _ e2] env
+  = return $ mkSet $ e1 ++ e2
+evalSet "Set_dif" [EApp _ e1, EApp _ e2] env
+  = return $ mkSet $ e1 \\ e2
+evalSet "Set_sub" [EApp _ e1, EApp _ e2] env
+  = return $ if e1 \\ e2 == [] then 0 else 1
+
 evalBody eq xs env = go $ body eq
   where
     go (E e) = evalExpr (subst su e) env
     go (P p) = evalPred (subst su p) env >>= \b -> return $ if b then 0 else 1
+    go (R v (PBexp (EApp f e))) | val f == "Set_emp" = return $ app setSym []
     su = mkSubst $ zip (binds eq) xs
 
 
@@ -101,10 +127,14 @@ evalExpr (EVar x)       m = return $ m M.! x
 evalExpr (ESym s)       m = return $ ESym s
 evalExpr (EBin b e1 e2) m = evalBop b <$> evalExpr e1 m <*> evalExpr e2 m
 evalExpr (EApp f es)    m
+  | val f == "Set_emp" || val f == "Set_sng" || val f `M.member` smt_set_funs
+  = mapM (`evalExpr` m) es >>= \es' -> evalSet (val f) es' m
+  | otherwise
   = do ms <- find ((==f) . name) <$> gets measEnv
        case ms of
          Nothing -> EApp f <$> mapM (`evalExpr` m) es
          Just ms -> do e' <- evalExpr (head es) m
+                       --io $ print $ M.toList smt_set_funs
                        applyMeasure ms e' m
 evalExpr (EIte p e1 e2) m
   = do b <- evalPred p m
