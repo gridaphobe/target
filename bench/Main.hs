@@ -5,9 +5,10 @@ import Test.SmallCheck
 
 import Criterion.Main
 
+import Map (Map, Unit, balance, liquidTests)
 import JSON
-import List
-import RBTree
+import List (insert, prop_insert_sc)
+import RBTree (RBTree, add, prop_add_sc)
 import XMonad.Properties
 
 main = defaultMain [
@@ -55,5 +56,13 @@ main = defaultMain [
            --, bench "SmallCheck" $ smallCheck 6 prop_focus_left_master_sc
            ]
        | n <- [6]
+       ],
+     bgroup "Data.Map" 
+       [ bgroup name
+         [ bgroup (show n)
+           [ bench "LiquidCheck" $ testModule "bench/Map.hs" [liquidCheck f ("Map."++name) n] ]
+         | n <- [2..7]
+         ]
+       | (name, f) <- Map.liquidTests
        ]
     ]

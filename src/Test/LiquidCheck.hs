@@ -1,6 +1,7 @@
+{-# LANGUAGE ExistentialQuantification #-}
 module Test.LiquidCheck
   ( liquidCheck, testModule, testFun, testOne
-  , Constrain(..), Result(..), Testable(..))
+  , Constrain(..), Result(..), Testable(..), Test(..))
   where
 
 import           Control.Applicative
@@ -62,4 +63,8 @@ testOne d f name path
 --               let name = show f
 --                   file = TH.loc_filename loc
 --               [| testOne $(TH.varE f) $(TH.stringE name) $(TH.stringE file) |]
+
+data Test = forall t. Testable t => T t
+instance Testable Test where
+  test (T t) = test t
 

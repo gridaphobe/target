@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE RankNTypes #-}
 {-@ LIQUID "--totality" @-}
 {-# LANGUAGE CPP #-}
 #if __GLASGOW_HASKELL__
@@ -260,6 +261,10 @@ module Map (
             , MaybeS(..)
             , filterGt
             , filterLt
+
+            -- LIQUID
+            , Unit
+            , liquidTests
             ) where
 
 import Prelude hiding (lookup,map,filter,foldr,foldl,null)
@@ -279,6 +284,7 @@ import Data.Data
 
 import GHC.Generics
 import Test.LiquidCheck
+import Test.LiquidCheck.Gen (Gen)
 #endif
 
 -- Use macros to define strictness of functions.
@@ -326,7 +332,7 @@ data Unit = Unit deriving (Show, Generic)
 instance Constrain Unit
 
 tests = testModule "examples/Map.hs"
-  [liquidCheck (balance :: Char -> Unit -> Map Char Unit -> Map Char Unit -> Map Char Unit) "Map.balance" 5]
+  [liquidCheck (alter_insert :: Char -> Unit -> Map Char Unit -> Map Char Unit) "Map.alter_insert" 9]
 
 {--------------------------------------------------------------------
   Size balanced trees.
@@ -364,7 +370,7 @@ mlen :: Map k a -> Int
 mlen Tip = 0
 mlen (Bin s k v l r) = 1 + mlen l + mlen r
 
-{-@ type OMap k a = Map <{\root v -> v < root}, {\root v -> v > root}> k a @-}
+{-@ type OMap k a = {v:Map <{\root v -> v < root}, {\root v -> v > root}> k a | (isBalanced v)} @-}
 
 {-@ measure isJustS :: forall a. MaybeS a -> Prop
     isJustS (JustS x)  = true
@@ -1103,6 +1109,9 @@ alter_go f k (Bin sx kx x l r) = case compare k kx of
 #else
 {-# INLINE alter #-}
 #endif
+
+{-@ alter_insert :: (Ord k) => k -> v -> {v:OMap k v | (isBalanced v)} -> {v:OMap k v | (isBalanced v)} @-}
+alter_insert k v = alter (const (Just v)) k
 
 {--------------------------------------------------------------------
   Indexing
@@ -3159,3 +3168,27 @@ foldlStrict f = go
     go z []     = z
     go z (x:xs) = let z' = f z x in z' `seq` go z' xs
 {-# INLINE foldlStrict #-}
+
+
+
+--------------------------------------------------------------------
+-- LiquidCheck
+--------------------------------------------------------------------
+
+-- The values aren't interesting in terms of the properties we want to check,
+-- so treat the Map as a Set to reduce the search space
+type K = Char
+type V = Unit
+type M = Map Char Unit
+
+liquidTests :: [(String, Test)]
+liquidTests = [ ("insert",       T (insert :: K -> V -> M -> M))
+              , ("delete",       T (delete :: K -> M -> M))
+              , ("union",        T (union :: M -> M -> M))
+              , ("difference",   T (difference :: M -> M -> M))
+              , ("intersection", T (intersection :: M -> M -> M))
+              ]
+
+
+
+
