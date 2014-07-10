@@ -27,8 +27,8 @@ import           Test.LiquidCheck.Util
 
 getSpec :: FilePath -> IO GhcSpec
 getSpec target
-  = do cfg   <- mkOpts mempty
-       info  <- getGhcInfo cfg target
+  = do cfg  <- mkOpts mempty
+       info <- getGhcInfo cfg target
        case info of
          Left err -> error $ show err
          Right i  -> return $ spec i

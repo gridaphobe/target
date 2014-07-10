@@ -30,12 +30,12 @@ pos = testGroup "Pos" $
       "RBTree.add" "test/RBTree.hs" 3
   ] ++ [ mkSuccess f ("Map."++name) "test/Map.hs" 4 | (name, T f) <- Map.liquidTests]
 
-neg = testGroup "Neg"
+neg = testGroup "Neg" $
   [ mkFailure (List.insert_bad :: Int -> List Int -> List Int)
       "List.insert" "test/List.hs" 3
   , mkFailure (RBTree.add_bad :: Int -> RBTree Int -> RBTree Int)
       "RBTree.add" "test/RBTree.hs" 3
-  ]
+  ] ++ [ mkFailure f ("Map."++name) "test/Map.hs" 4 | (name, T f) <- Map.liquidTests_bad]
 
 mkSuccess :: Testable f => f -> String -> String -> Int -> TestTree
 mkSuccess f n fp d
@@ -54,30 +54,14 @@ mkFailure f n fp d
   --      [| shouldFail d $(TH.varE f) $(TH.stringE name) $(TH.stringE file) |]
 
 shouldSucceed d f name file
-  = do r <- silently $ testOne d f name file
+  = do r <- testOne d f name file
        assertString $ case r of
                        Passed _ -> ""
                        Failed s -> "Unexpected counter-example: " ++ s
 
 shouldFail d f name file
-  = do r <- silently $ testOne d f name file
+  = do r <- testOne d f name file
        assertBool "Expected counter-example" $ case r of
                                                Passed _ -> False
                                                _        -> True
 
-silently :: IO a -> IO a
-silently act = bracket setup reset $ \(act, o, e, n) -> act
-  where
-    setup
-      = do o <- hDuplicate stdout
-           e <- hDuplicate stderr
-           n <- openFile "/dev/null" WriteMode
-           hDuplicateTo n stdout
-           hDuplicateTo n stderr
-           return (act,o,e,n)
-    reset (_,o,e,n)
-      = do hDuplicateTo o stdout
-           hDuplicateTo e stderr
-           hClose o
-           hClose e
-           hClose n

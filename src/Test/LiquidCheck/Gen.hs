@@ -14,7 +14,7 @@ import           Data.List
 import           Data.Monoid
 import qualified Data.Text.Lazy                   as T
 
-import           Language.Fixpoint.SmtLib2
+import           Language.Fixpoint.SmtLib2 hiding (verbose)
 import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.Types
@@ -54,15 +54,21 @@ data GenState
        , sorts        :: !(S.HashSet T.Text)
        , modName      :: !Symbol
        , makingTy     :: !Symbol
+       , verbose      :: !Bool
+       , logging      :: !Bool
        } -- deriving (Show)
 
-initGS sp = GS def def def def def def dcons cts (measures sp) tyi free [] sigs def Nothing S.empty "" ""
+initGS sp = GS def def def def def def dcons cts (measures sp) tyi free [] sigs def Nothing S.empty "" "" False False
   where
     dcons = map (symbol *** id) (dconsP sp)
     cts   = map (symbol *** val) (ctors sp)
     tyi   = makeTyConInfo (tconsP sp)
     free  = map (second symbol) $ freeSyms sp
     sigs  = map (symbol *** val) $ tySigs sp
+
+whenVerbose x
+  = do v <- gets verbose
+       when v x
 
 setValues vs = modify $ \s@(GS {..}) -> s { values = vs }
 

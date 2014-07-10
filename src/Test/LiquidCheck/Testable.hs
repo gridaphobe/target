@@ -58,7 +58,7 @@ process1 d f vs cts x to = go vs 0
   where
     go []       !n = return $ Passed n
     go (vs:vss) !n =
-      do when (n `mod` 100 == 0) $ io $ printf "Checked %d inputs\n" n
+      do when (n `mod` 100 == 0) $ whenVerbose $ io $ printf "Checked %d inputs\n" n
          setValues vs
          a <- stitch d
          -- io $ print a
@@ -110,7 +110,7 @@ process2 d f vs cts xa xb to = go vs 0
   where
     go []       !n = return $ Passed n
     go (vs:vss) !n =
-      do when (n `mod` 100 == 0) $ io $ printf "Checked %d inputs\n" n
+      do when (n `mod` 100 == 0) $ whenVerbose $ io $ printf "Checked %d inputs\n" n
          setValues vs
          b <- stitch d
          a <- stitch d
@@ -158,7 +158,7 @@ process3 d f vs cts xa xb xc to = go vs 0
   where
     go []       !n = return $ Passed n
     go (vs:vss) !n =
-      do when (n `mod` 100 == 0) $ io $ printf "Checked %d inputs\n" n
+      do when (n `mod` 100 == 0) $ whenVerbose $ io $ printf "Checked %d inputs\n" n
          setValues vs
          c <- stitch d
          b <- stitch d
@@ -212,7 +212,7 @@ process4 sz f vs cts xa xb xc xd to = go vs 0
   where
     go []       !n = return $ Passed n
     go (vs:vss) !n =
-      do when (n `mod` 100 == 0) $ io $ printf "Checked %d inputs\n" n
+      do when (n `mod` 100 == 0) $ whenVerbose $ io $ printf "Checked %d inputs\n" n
          setValues vs
          d <- stitch sz
          c <- stitch sz
