@@ -25,17 +25,15 @@ tests = testGroup "Tests" [pos, neg]
 
 pos = testGroup "Pos" $
   [ mkSuccess (List.insert :: Int -> List Int -> List Int)
-      "List.insert" "test/List.hs" 3
-  , mkSuccess (RBTree.add :: Int -> RBTree Int -> RBTree Int)
-      "RBTree.add" "test/RBTree.hs" 3
-  ] ++ [ mkSuccess f ("Map."++name) "test/Map.hs" 5 | (name, T f) <- Map.liquidTests]
+      "List.insert" "test/List.hs" 3 ]
+  ++ [ mkSuccess f ("RBTree."++name) "test/RBTree.hs" 7 | (name, T f) <- RBTree.liquidTests]
+  ++ [ mkSuccess f ("Map."++name) "test/Map.hs" 5 | (name, T f) <- Map.liquidTests]
 
 neg = testGroup "Neg" $
   [ mkFailure (List.insert_bad :: Int -> List Int -> List Int)
-      "List.insert" "test/List.hs" 3
-  , mkFailure (RBTree.add_bad :: Int -> RBTree Int -> RBTree Int)
-      "RBTree.add" "test/RBTree.hs" 3
-  ] ++ [ mkFailure f ("Map."++name) "test/Map.hs" 5 | (name, T f) <- Map.liquidTests_bad]
+      "List.insert" "test/List.hs" 3 ]
+  ++ [ mkFailure f ("RBTree."++name) "test/RBTree.hs" 7 | (name, T f) <- RBTree.liquidTests_bad]
+  ++ [ mkFailure f ("Map."++name) "test/Map.hs" 5 | (name, T f) <- Map.liquidTests_bad]
 
 mkSuccess :: Testable f => f -> String -> String -> Int -> TestTree
 mkSuccess f n fp d
