@@ -82,6 +82,9 @@ test-suite test
   hs-source-dirs:      test
   ghc-options:         -O2
   main-is:             Main.hs
+  c-sources:           cbits/fpstring.c
+  include-dirs:        include
+  includes:            fpstring.h
   build-depends:       base,
                        template-haskell,
                        LiquidCheck,
@@ -92,4 +95,12 @@ test-suite test
                        tasty-hunit >= 0.8,
                        -- for Data.Map
                        containers,
-                       deepseq
+                       deepseq,
+                       -- for ByteString
+                       array,
+                       tagged,
+                       mtl,
+                       ghc-prim,
+                       liquid-fixpoint,
+                       liquidhaskell,
+                       unordered-containers

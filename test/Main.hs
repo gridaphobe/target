@@ -10,6 +10,7 @@ import           Test.Tasty.HUnit
 
 import           Test.LiquidCheck
 
+import qualified Data.ByteString.Internal as ByteString
 import qualified Map
 import           List                (List)
 import qualified List
@@ -28,6 +29,7 @@ pos = testGroup "Pos" $
       "List.insert" "test/List.hs" 3 ]
   ++ [ mkSuccess f ("RBTree."++name) "test/RBTree.hs" 7 | (name, T f) <- RBTree.liquidTests]
   ++ [ mkSuccess f ("Map."++name) "test/Map.hs" 5 | (name, T f) <- Map.liquidTests]
+  ++ [ mkSuccess f ("Data.ByteString.Internal."++name) "test/Data/ByteString/Internal.hs" 4 | (name, T f) <- ByteString.liquidTests]
 
 neg = testGroup "Neg" $
   [ mkFailure (List.insert_bad :: Int -> List Int -> List Int)

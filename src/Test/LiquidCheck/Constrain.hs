@@ -24,6 +24,7 @@ import           Data.Monoid
 import           Data.Proxy
 import           Data.Ratio
 import qualified Data.Text.Lazy                   as T
+import           Data.Word (Word8)
 import           GHC.Generics
 
 import           Encoding                         (zDecodeString)
@@ -109,6 +110,17 @@ instance Constrain Char where
        return x
   stitch  d = stitch d >>= \(x::Int) -> return . chr $ x + ord 'a'
   toExpr  c = ESym $ SL [c]
+
+instance Constrain Word8 where
+  getType _ = "GHC.Word.Word8"
+  gen _ d t = fresh [] FInt >>= \x ->
+    do _ <- gets depth
+       constrain $ var x `ge` 0
+       constrain $ var x `le` fromIntegral d
+       constrain $ ofReft x (toReft $ rt_reft t)
+       return x
+  stitch  d = stitch d >>= \(x::Int) -> return $ fromIntegral x
+  toExpr  i = ECon $ I $ fromIntegral i
 
 instance Constrain Bool where
   getType _ =  "GHC.Types.Bool"
