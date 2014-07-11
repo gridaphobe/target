@@ -36,7 +36,7 @@ instance (Constrain a, Constrain b) => Testable (a -> b) where
     a <- gen (Proxy :: Proxy a) d i
     cts <- gets freesyms
     vals <- allSat [symbol a]
-    process1 d f vals cts x o
+    process1 d f vals cts (x,i) o
     -- build up the haskell value
     --(xvs :: [a]) <- forM vals $ \ vs -> do
     --  setValues vs
@@ -54,13 +54,13 @@ instance (Constrain a, Constrain b) => Testable (a -> b) where
     --  (Passed 0) xvs
   test f d t = error $ show t
 
-process1 d f vs cts x to = go vs 0
+process1 d f vs cts (x,ti) to = go vs 0
   where
     go []       !n = return $ Passed n
     go (vs:vss) !n =
       do when (n `mod` 100 == 0) $ whenVerbose $ io $ printf "Checked %d inputs\n" n
          setValues vs
-         a <- stitch d
+         a <- stitch d ti
          -- io $ print a
          r <- io $ evaluate (f a)
          let env = map (second (`app` [])) cts
@@ -69,10 +69,6 @@ process1 d f vs cts x to = go vs 0
          case sat of
            False -> return $ Failed $ show a
            True  -> go vss (n+1) -- return $ Passed (n+1))
-
-fourth4 (_,_,_,d) = d
-
-stripQuals = snd . bkClass . fourth4 . bkUniv
 
 instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
   test f d (stripQuals -> (RFun xa ta (RFun xb tb to _) _)) = do
@@ -88,7 +84,7 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
     --   !a <- stitch d
     --   io $ print (a,b)
     --   return (a,b)
-    process2 d f vals cts xa xb to
+    process2 d f vals cts (xa,ta) (xb,tb) to
     -- foldM (\case
     --           r@(Failed _) -> const $ return r
     --           (Passed n) -> \vs -> do
@@ -106,16 +102,18 @@ instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
     --   (Passed 0) vals
   test f d t = error $ show t
 
-process2 d f vs cts xa xb to = go vs 0
+process2 d f vs cts (xa,ta) (xb,tb) to = go vs 0
   where
     go []       !n = return $ Passed n
     go (vs:vss) !n =
       do when (n `mod` 100 == 0) $ whenVerbose $ io $ printf "Checked %d inputs\n" n
          setValues vs
-         b <- stitch d
-         a <- stitch d
+         b <- stitch d tb
+         a <- stitch d ta
          -- io $ print (a,b)
          r <- io $ evaluate (f a b)
+         -- io $ print r
+         -- io $ putStrLn ""
          let env = map (second (`app` [])) cts
                 ++ [(xa, toExpr a),(xb, toExpr b)]
          sat <- evalType (M.fromList env) to (toExpr r)
@@ -133,7 +131,7 @@ instance (Constrain a, Constrain b, Constrain c, Constrain d)
     c <- gen (Proxy :: Proxy c) d tc'
     cts <- gets freesyms
     vals <- allSat [symbol a, symbol b, symbol c]
-    process3 d f vals cts xa xb xc to
+    process3 d f vals cts (xa, ta) (xb, tb) (xc, tc) to
     -- build up the haskell value
     -- (xvs :: [(a,b,c)]) <- forM vals $ \ vs -> do
     --   setValues vs
@@ -154,15 +152,15 @@ instance (Constrain a, Constrain b, Constrain c, Constrain d)
     --   (Passed 0) xvs
   test f d t = error $ show t
 
-process3 d f vs cts xa xb xc to = go vs 0
+process3 d f vs cts (xa, ta) (xb, tb) (xc, tc) to = go vs 0
   where
     go []       !n = return $ Passed n
     go (vs:vss) !n =
       do when (n `mod` 100 == 0) $ whenVerbose $ io $ printf "Checked %d inputs\n" n
          setValues vs
-         c <- stitch d
-         b <- stitch d
-         a <- stitch d
+         c <- stitch d tc
+         b <- stitch d tb
+         a <- stitch d ta
          -- io $ print (a,b,c)
          r <- io $ evaluate (f a b c)
          let env = map (second (`app` [])) cts
@@ -185,7 +183,7 @@ instance (Constrain a, Constrain b, Constrain c, Constrain d, Constrain e)
     d <- gen (Proxy :: Proxy d) sz td'
     cts <- gets freesyms
     vals <- allSat [symbol a, symbol b, symbol c, symbol d]
-    process4 sz f vals cts xa xb xc xd to
+    process4 sz f vals cts (xa,ta) (xb,tb) (xc,tc) (xd,td) to
     -- build up the haskell value
     -- (xvs :: [(a,b,c,d)]) <- forM vals $ \ vs -> do
     --   setValues vs
@@ -208,16 +206,16 @@ instance (Constrain a, Constrain b, Constrain c, Constrain d, Constrain e)
     --   (Passed 0) xvs
   test f d t = error $ show t
 
-process4 sz f vs cts xa xb xc xd to = go vs 0
+process4 sz f vs cts (xa,ta) (xb,tb) (xc,tc) (xd,td) to = go vs 0
   where
     go []       !n = return $ Passed n
     go (vs:vss) !n =
       do when (n `mod` 100 == 0) $ whenVerbose $ io $ printf "Checked %d inputs\n" n
          setValues vs
-         d <- stitch sz
-         c <- stitch sz
-         b <- stitch sz
-         a <- stitch sz
+         d <- stitch sz td
+         c <- stitch sz tc
+         b <- stitch sz tb
+         a <- stitch sz ta
          io $ print (a,b,c,d)
          r <- io $ evaluate (f a b c d)
          let env = map (second (`app` [])) cts

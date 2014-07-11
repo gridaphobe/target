@@ -9,8 +9,8 @@ module List where
 import GHC.Generics
 import Test.LiquidCheck
 import qualified Test.QuickCheck as QC
-import qualified Test.SmallCheck as SC
-import qualified Test.SmallCheck.Series as SC
+-- import qualified Test.SmallCheck as SC
+-- import qualified Test.SmallCheck.Series as SC
 import Control.Monad
 
 import Debug.Trace
@@ -45,6 +45,11 @@ mytake :: Int -> List Int -> List Int
 mytake 0 xs          = Nil
 mytake _ Nil         = Nil
 mytake n (Cons x xs) = x `Cons` mytake (n-1) xs
+
+{-@ mymap :: (Int -> Int) -> x:List Int -> {v:List Int | (llen v) = (llen x)} @-}
+mymap :: (Int -> Int) -> List Int -> List Int
+mymap f Nil         = Nil
+mymap f (Cons x xs) = Cons (f x) (mymap f xs)
 
 --------------------------------------------------------------------------------
 --- LiquidCheck
@@ -104,14 +109,14 @@ aall p (Cons x xs)
 --------------------------------------------------------------------------------
 --- SmallCheck
 --------------------------------------------------------------------------------
-instance SC.Serial m a => SC.Serial m (List a)
+-- instance SC.Serial m a => SC.Serial m (List a)
 
-prop_mytake_sorted_sc n xs = sorted xs && n >= 0 && aall (>=0) xs
-  SC.==> sorted zs && mmin (llen zs) n (llen xs)
-  where
-    zs = mytake n xs
+-- prop_mytake_sorted_sc n xs = sorted xs && n >= 0 && aall (>=0) xs
+--   SC.==> sorted zs && mmin (llen zs) n (llen xs)
+--   where
+--     zs = mytake n xs
 
-prop_insert_sc x ys = sorted ys SC.==> sorted (insert x ys)
+-- prop_insert_sc x ys = sorted ys SC.==> sorted (insert x ys)
 
 -- insert :: Int -> [Int] -> [Int]
 -- insert x [] = [x]

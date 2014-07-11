@@ -54,7 +54,7 @@ allSat :: [Symbol] -> Gen [[Value]]
 allSat roots = setup >>= io . go
   where
     setup = do
-       ctx <- io $ makeContext Z3
+       ctx <- gets smtContext
        -- declare sorts
        ss  <- S.toList <$> gets sorts
        let defSort b e = io $ smtWrite ctx (format "(define-sort {} () {})" (b,e))
@@ -89,16 +89,15 @@ allSat roots = setup >>= io . go
     go (ctx,vs,deps) = do
        resp <- command ctx CheckSat
        case resp of
-         Error e -> cleanupContext ctx >> error (T.unpack e)
-         Unsat   -> cleanupContext ctx >> return []
-         Sat     -> unsafeInterleaveIO $ do
+         Error e -> error (T.unpack e)
+         Unsat   -> return []
+         Sat     -> do
            Values model <- command ctx (GetValue [symbol v | (v,t) <- vs, t `elem` interps])
            -- print model
            let cs = V.toList $ refute roots (M.fromList model) deps vs
            -- i <- gets seed
            -- modify $ \s@(GS {..}) -> s { seed = seed + 1 }
-           command ctx $ Assert Nothing $ PNot $ pAnd cs
-           (map snd model:) <$> go (ctx,vs,deps)
+           (map snd model:) <$> unsafeInterleaveIO (command ctx (Assert Nothing $ PNot $ pAnd cs) >> go (ctx,vs,deps))
 
     ints vs = S.fromList [symbol v | (v,t) <- vs, t `elem` interps]
     interps = [FInt, boolsort, choicesort]

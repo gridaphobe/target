@@ -14,7 +14,6 @@ import qualified Data.ByteString.Internal as ByteString
 import qualified Map
 import           List                (List)
 import qualified List
-import           RBTree              (RBTree)
 import qualified RBTree
 
 
@@ -26,7 +25,8 @@ tests = testGroup "Tests" [pos, neg]
 
 pos = testGroup "Pos" $
   [ mkSuccess (List.insert :: Int -> List Int -> List Int)
-      "List.insert" "test/List.hs" 3 ]
+      "List.insert" "test/List.hs" 3
+  , mkSuccess (List.mymap) "List.mymap" "test/List.hs" 3 ]
   ++ [ mkSuccess f ("RBTree."++name) "test/RBTree.hs" 7 | (name, T f) <- RBTree.liquidTests]
   ++ [ mkSuccess f ("Map."++name) "test/Map.hs" 5 | (name, T f) <- Map.liquidTests]
   ++ [ mkSuccess f ("Data.ByteString.Internal."++name) "test/Data/ByteString/Internal.hs" 4 | (name, T f) <- ByteString.liquidTests]

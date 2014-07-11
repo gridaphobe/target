@@ -15,8 +15,8 @@ import           Debug.Trace
 import           GHC.Generics
 import           Test.LiquidCheck
 
-import qualified Test.SmallCheck                 as SC
-import qualified Test.SmallCheck.Series          as SC
+-- import qualified Test.SmallCheck                 as SC
+-- import qualified Test.SmallCheck.Series          as SC
 
 import           Language.Haskell.Liquid.Prelude
 
@@ -302,11 +302,11 @@ instance Constrain a => Constrain (RBTree a)
 
 -- main = testModule "RBTree.hs" $ map ($2) tests
 
-instance Monad m => SC.Serial m Color
-instance (Monad m, SC.Serial m a) => SC.Serial m (RBTree a)
+-- instance Monad m => SC.Serial m Color
+-- instance (Monad m, SC.Serial m a) => SC.Serial m (RBTree a)
 
-prop_add_sc :: Monad m => Int -> RBTree Int -> SC.Property m
-prop_add_sc x t = isRBT t SC.==> isRBT (add x t)
+-- prop_add_sc :: Monad m => Int -> RBTree Int -> SC.Property m
+-- prop_add_sc x t = isRBT t SC.==> isRBT (add x t)
 
 type E = Char
 type T = RBTree E

@@ -1,12 +1,20 @@
+{-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE BangPatterns #-}
 module Test.LiquidCheck.Util where
 
+import           Control.Applicative
 import           Control.Exception
 import           Control.Monad.IO.Class
+import           Data.Monoid
+import           Data.Generics                    (everywhere, mkT)
 import           Debug.Trace
 import           GHC.IO.Handle
 import           System.IO
 
+import           Language.Fixpoint.Types          hiding (prop)
+import           Language.Haskell.Liquid.PredType
+import           Language.Haskell.Liquid.RefType
+import           Language.Haskell.Liquid.Types    hiding (var)
 
 io ::  MonadIO m => IO a -> m a
 io = liftIO
@@ -39,3 +47,32 @@ silently !act = do
            hClose e
            hClose n
 
+
+applyPreds :: SpecType -> SpecType -> [(Symbol,SpecType)]
+applyPreds sp' dc = zip xs (map tx ts)
+  where
+    sp = removePreds <$> sp'
+    removePreds (U r _ _) = (U r mempty mempty)
+    (as, ps, _, t) = bkUniv dc
+    (xs, ts, rt)   = bkArrow . snd $ bkClass t
+    -- args  = reverse tyArgs
+    su    = [(tv, toRSort t, t) | tv <- as | t <- rt_args sp]
+    sup   = [(p, r) | p <- ps | r <- rt_pargs sp]
+    tx    = (\t -> replacePreds "applyPreds" t sup) . everywhere (mkT $ monosToPoly sup) . subsTyVars_meet su
+
+-- deriving instance (Show a, Show b, Show c) => Show (Ref a b c)
+
+-- onRefs f t@(RVar _ _) = t
+-- onRefs f t = t { rt_pargs = f <$> rt_pargs t }
+
+monosToPoly su r = foldr monoToPoly r su
+
+monoToPoly (p, r) (RMono _ (U _ (Pr [up]) _))
+  | pname p == pname up
+  = r
+monoToPoly _ m = m
+
+
+stripQuals = snd . bkClass . fourth4 . bkUniv
+
+fourth4 (_,_,_,d) = d

@@ -5,6 +5,7 @@ module Test.LiquidCheck.Gen where
 
 import           Control.Applicative
 import           Control.Arrow
+import           Control.Exception
 import           Control.Monad
 import           Control.Monad.State
 import           Data.Default
@@ -14,12 +15,12 @@ import           Data.List
 import           Data.Monoid
 import qualified Data.Text.Lazy                   as T
 
+import           Language.Fixpoint.Config  (SMTSolver(..))
 import           Language.Fixpoint.SmtLib2 hiding (verbose)
 import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.Types
 
-import           Encoding                         (zDecodeString)
 import           GHC
 
 import           Test.LiquidCheck.Types
@@ -30,10 +31,18 @@ newtype Gen a = Gen (StateT GenState IO a)
   deriving (Functor, Applicative, Monad, MonadIO, MonadState GenState)
 
 runGen :: GhcSpec -> Gen a -> IO a
-runGen e (Gen x) = evalStateT x (initGS e)
+runGen e (Gen x) = bracket (makeContext Z3) cleanupContext
+                           (evalStateT x . initGS e)
+  -- = do ctx <- makeContext Z3
+  --      a <- evalStateT act (initGS e ctx)
+  --      cleanupContext ctx
+  --      return a
 
-execGen :: GhcSpec -> Gen a -> IO GenState
-execGen e (Gen x) = execStateT x (initGS e)
+evalGen :: GenState -> Gen a -> IO a
+evalGen s (Gen x) = evalStateT x s
+
+-- execGen :: GhcSpec -> Gen a -> IO GenState
+-- execGen e (Gen x) = execStateT x (initGS e)
 
 data GenState
   = GS { seed         :: !Int
@@ -56,9 +65,10 @@ data GenState
        , makingTy     :: !Symbol
        , verbose      :: !Bool
        , logging      :: !Bool
+       , smtContext   :: !(Context)
        } -- deriving (Show)
 
-initGS sp = GS def def def def def def dcons cts (measures sp) tyi free [] sigs def Nothing S.empty "" "" False False
+initGS sp ctx = GS def def def def def def dcons cts (measures sp) tyi free [] sigs def Nothing S.empty "" "" False False ctx
   where
     dcons = map (symbol *** id) (dconsP sp)
     cts   = map (symbol *** val) (ctors sp)

@@ -686,10 +686,10 @@ instance Constrain ByteString where
        let su = mkSubst [("fplen", var $ S "len"), (fst tp, var p), (fst to, var o)]
        l <- gen (Proxy :: Proxy Int) (d-1) $ subst su (snd tl)
        make "Data.ByteString.Internal.PS" [p, o, l] $ FObj (getType px)
-  stitch d =
-    do l  <- stitch (d-1)
-       o  <- stitch (d-1)
-       ws <- stitch (d-1)
+  stitch d t =
+    do l  <- stitch (d-1) t
+       o  <- stitch (d-1) t
+       ws <- stitch (d-1) t
        let (PS fp _ _) = pack ws
        return $ PS fp o l
   toExpr b = app (S "Data.ByteString.fromList") [toExpr $ (unpack b :: [Word8])]

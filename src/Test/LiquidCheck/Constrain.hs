@@ -10,14 +10,15 @@
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE ViewPatterns #-}
 module Test.LiquidCheck.Constrain where
 
 import           Control.Applicative
 import           Control.Arrow                    (second)
 import           Control.Monad.State
 import           Data.Char
-import           Data.Generics                    (everywhere, mkT)
 import qualified Data.HashMap.Strict              as M
+import           Data.IORef
 import           Data.List
 import           Data.Maybe
 import           Data.Monoid
@@ -26,15 +27,18 @@ import           Data.Ratio
 import qualified Data.Text.Lazy                   as T
 import           Data.Word (Word8)
 import           GHC.Generics
+import           System.IO.Unsafe
+import           Text.Show.Functions
 
-import           Encoding                         (zDecodeString)
 import           Language.Fixpoint.SmtLib2
 import           Language.Fixpoint.Types          hiding (prop)
 import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Types    hiding (var)
 
+import           Test.LiquidCheck.Driver
 import           Test.LiquidCheck.Expr
+import           Test.LiquidCheck.Eval
 import           Test.LiquidCheck.Gen
 import           Test.LiquidCheck.Types
 import           Test.LiquidCheck.Util
@@ -47,7 +51,7 @@ import Text.Printf
 class Show a => Constrain a where
   getType :: Proxy a -> Symbol
   gen     :: Proxy a -> Int -> SpecType -> Gen Variable
-  stitch  :: Int -> Gen a
+  stitch  :: Int -> SpecType -> Gen a
   toExpr  :: a -> Expr
 
   default getType :: (Generic a, GConstrain (Rep a))
@@ -59,8 +63,8 @@ class Show a => Constrain a where
   gen p = ggen (reproxyRep p)
 
   default stitch :: (Generic a, GConstrain (Rep a))
-                 => Int -> Gen a
-  stitch d = to <$> gstitch d
+                 => Int -> SpecType -> Gen a
+  stitch d t = to <$> gstitch d
 
   default toExpr :: (Generic a, GConstrain (Rep a))
                  => a -> Expr
@@ -91,13 +95,13 @@ instance Constrain Int where
        constrain $ var x `ge` fromIntegral (negate d)
        constrain $ var x `le` fromIntegral d
        return x
-  stitch _ = read . T.unpack <$> pop
+  stitch _ _ = read . T.unpack <$> pop
   toExpr i = ECon $ I $ fromIntegral i
 
 instance Constrain Integer where
   getType _ = "GHC.Integer.Type.Integer"
   gen _ d t = gen (Proxy :: Proxy Int) d t
-  stitch  d = stitch d >>= \(x::Int) -> return . fromIntegral $ x + d
+  stitch d t = stitch d t >>= \(x::Int) -> return . fromIntegral $ x + d
   toExpr  x = toExpr (fromIntegral x :: Int)
 
 instance Constrain Char where
@@ -108,7 +112,7 @@ instance Constrain Char where
        constrain $ var x `le` fromIntegral d
        constrain $ ofReft x (toReft $ rt_reft t)
        return x
-  stitch  d = stitch d >>= \(x::Int) -> return . chr $ x + ord 'a'
+  stitch d t = stitch d t >>= \(x::Int) -> return . chr $ x + ord 'a'
   toExpr  c = ESym $ SL [c]
 
 instance Constrain Word8 where
@@ -119,15 +123,15 @@ instance Constrain Word8 where
        constrain $ var x `le` fromIntegral d
        constrain $ ofReft x (toReft $ rt_reft t)
        return x
-  stitch  d = stitch d >>= \(x::Int) -> return $ fromIntegral x
-  toExpr  i = ECon $ I $ fromIntegral i
+  stitch d t = stitch d t >>= \(x::Int) -> return $ fromIntegral x
+  toExpr i   = ECon $ I $ fromIntegral i
 
 instance Constrain Bool where
   getType _ =  "GHC.Types.Bool"
   gen _ d t = fresh [] boolsort >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
        return x
-  stitch _ = pop >>= \case
+  stitch _ _ = pop >>= \case
     "true"  -> return True
     "false" -> return False
 
@@ -141,21 +145,56 @@ instance (Num a, Integral a, Constrain a) => Constrain (Ratio a) where
     do gen (Proxy :: Proxy Int) d t
        gen (Proxy :: Proxy Int) d t
        return x
-  stitch d = do x :: Int <- stitch d
-                y' :: Int <- stitch d
-                -- we should really modify `t' above to have Z3 generate non-zero denoms
-                let y = if y' == 0 then 1 else y'
-                let toA z = fromIntegral z :: a
-                return $ toA x % toA y
+  stitch d t = do x :: Int <- stitch d t
+                  y' :: Int <- stitch d t
+                  -- we should really modify `t' above to have Z3 generate non-zero denoms
+                  let y = if y' == 0 then 1 else y'
+                  let toA z = fromIntegral z :: a
+                  return $ toA x % toA y
   toExpr x = EApp (dummyLoc "GHC.Real.:%") [toExpr (numerator x), toExpr (denominator x)]
 
 
--- instance (Constrain a, Constrain b) => Constrain (a -> b) where
---   getType _ = "FUNCTION"
---   gen p d t = fresh [] (FObj (S "FUNCTION"))
---   stitch  d = return $ \a -> unsafePerformIO $ do
---     error "WHAT GOES HERE??"
---   toExpr  f = error "HOW??"
+instance (Constrain a, Constrain b) => Constrain (a -> b) where
+  getType _ = "FUNCTION"
+  gen p d t = fresh [] (FObj (S "FUNCTION"))
+  stitch d (stripQuals -> RFun xa ta to _)
+    = do mref  <- io $ newIORef []
+         state' <- get
+         let state = state' { variables = [], choices = [], constraints = []
+                            , values = [], deps = [], constructors = [] }
+         return $ \a -> unsafePerformIO $ evalGen state $ do
+           let e = toExpr a
+           mv <- lookup e <$> io (readIORef mref)
+           case mv of
+             Just v  -> return v
+             Nothing -> do
+               cts <- gets freesyms
+               let env = map (second (`app` [])) cts
+               b <- evalType (M.fromList env) ta e
+               case b of
+                 False -> error "failed pre-condition check"
+                 True  -> do
+                   ctx <- gets smtContext
+                   io $ command ctx Push
+                   xe <- genExpr e $ FInt -- FObj (getType (Proxy :: Proxy a))
+                   let su = mkSubst [(xa, var xe)]
+                   xo <- gen (Proxy :: Proxy b) d (subst su to)
+                   vs <- gets variables
+                   mapM_ (\ x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
+                   cs <- gets constraints
+                   mapM_ (\c -> io . command ctx $ Assert Nothing c) cs
+                   resp <- io $ command ctx CheckSat
+                   Values model <- io $ command ctx (GetValue [symbol v | (v,t) <- vs,
+                                                               t `elem` [FInt, choicesort, boolsort]])
+                   setValues (map snd model)
+                   o  <- stitch d to
+                   io (modifyIORef mref ((e,o):))
+                   io $ command ctx Pop
+                   return o
+  toExpr  f = var $ S "FUNCTION"
+
+genExpr :: Expr -> Sort -> Gen Variable
+genExpr _ s = fresh [] s
 
 -- instance Show (a -> b) where
 --   show _ = "<function>"
@@ -256,43 +295,19 @@ make5 c (p1,p2,p3,p4,p5) t s d
        x5 <- gen p5 (d-1) (subst su $ snd t5)
        make c [x1,x2,x3,x4,x5] s
 
-applyPreds :: SpecType -> SpecType -> [(Symbol,SpecType)]
-applyPreds sp' dc = zip xs (map tx ts)
-  where
-    sp = removePreds <$> sp'
-    removePreds (U r _ _) = (U r mempty mempty)
-    (as, ps, _, t) = bkUniv dc
-    (xs, ts, rt)   = bkArrow . snd $ bkClass t
-    -- args  = reverse tyArgs
-    su    = [(tv, toRSort t, t) | tv <- as | t <- rt_args sp]
-    sup   = [(p, r) | p <- ps | r <- rt_pargs sp]
-    tx    = (\t -> replacePreds "applyPreds" t sup) . everywhere (mkT $ monosToPoly sup) . subsTyVars_meet su
-
--- deriving instance (Show a, Show b, Show c) => Show (Ref a b c)
-
--- onRefs f t@(RVar _ _) = t
--- onRefs f t = t { rt_pargs = f <$> rt_pargs t }
-
-monosToPoly su r = foldr monoToPoly r su
-
-monoToPoly (p, r) (RMono _ (U _ (Pr [up]) _))
-  | pname p == pname up
-  = r
-monoToPoly _ m = m
-
 
 -- apply4 :: (Constrain a, Constrain b, Constrain c, Constrain d)
 --        => (a -> b -> c -> d -> e) -> Int -> Gen e
-apply4 c d
-  = do
-       v4 <- cons
-       v3 <- cons
-       v2 <- cons
-       v1 <- cons
-       return $ c v1 v2 v3 v4
-  where
-    cons :: Constrain a => Gen a
-    cons = stitch (d-1)
+-- apply4 c d
+--   = do
+--        v4 <- cons
+--        v3 <- cons
+--        v2 <- cons
+--        v1 <- cons
+--        return $ c v1 v2 v3 v4
+--   where
+--     cons :: Constrain a => Gen a
+--     cons = stitch (d-1)
 
 
 ofReft :: Variable -> Reft -> Pred
@@ -349,7 +364,7 @@ instance (Constrain a) => GConstrain (K1 i a) where
   --                             then d
   --                             else depth
   --                 gen p' d' t
-  gstitch d  = K1 <$> stitch d
+  gstitch d = K1 <$> stitch d undefined
   -- gstitch d  = do let p = Proxy :: Proxy a
   --                 ty <- gets makingTy
   --                 depth <- gets depth

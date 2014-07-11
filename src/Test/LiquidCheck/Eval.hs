@@ -16,7 +16,7 @@ import           Language.Haskell.Liquid.Measure
 import           Language.Haskell.Liquid.RefType (expandRApp)
 import           Language.Haskell.Liquid.Types   hiding (var)
 
-import           Test.LiquidCheck.Constrain
+-- import           Test.LiquidCheck.Constrain
 import           Test.LiquidCheck.Expr
 import           Test.LiquidCheck.Gen
 import           Test.LiquidCheck.Util
@@ -69,7 +69,6 @@ evalPred (PIff p q)      m = and <$> sequence [ evalPred (p `imp` q) m
 evalPred (PAtom b e1 e2) m = evalBrel b <$> evalExpr e1 m <*> evalExpr e2 m
 evalPred (PBexp e)       m = (==0) <$> evalExpr e m
 evalPred p               m = error $ "evalPred: " ++ show p
--- evalPred (PBexp e)       m = undefined -- ofExpr e
 -- evalPred (PAll ss p)     m = undefined
 -- evalPred PTop            m = undefined
 
@@ -135,8 +134,8 @@ evalExpr (EApp f es)    m
   = do ms <- find ((==f) . name) <$> gets measEnv
        case ms of
          Nothing -> EApp f <$> mapM (`evalExpr` m) es
+                       --FIXME: should really extend this to multi-param measures..
          Just ms -> do e' <- evalExpr (head es) m
-                       --io $ print $ M.toList smt_set_funs
                        applyMeasure ms e' m
 evalExpr (EIte p e1 e2) m
   = do b <- evalPred p m
