@@ -356,22 +356,22 @@ instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
 
 instance (Constrain a) => GConstrain (K1 i a) where
   gtype p    = getType (reproxy p :: Proxy a)
-  ggen p d t = gen (reproxy p :: Proxy a) d t
-  -- ggen p d t = do let p' = reproxy p :: Proxy a
-  --                 ty <- gets makingTy
-  --                 depth <- gets depth
-  --                 let d' = if getType p' == ty
-  --                             then d
-  --                             else depth
-  --                 gen p' d' t
-  gstitch d = K1 <$> stitch d undefined
-  -- gstitch d  = do let p = Proxy :: Proxy a
-  --                 ty <- gets makingTy
-  --                 depth <- gets depth
-  --                 let d' = if getType p == ty
-  --                             then d
-  --                             else depth
-  --                 K1 <$> stitch d'
+  -- ggen p d t = gen (reproxy p :: Proxy a) d t
+  ggen p d t = do let p' = reproxy p :: Proxy a
+                  ty <- gets makingTy
+                  depth <- gets depth
+                  let d' = if getType p' == ty
+                              then d
+                              else depth
+                  gen p' d' t
+  -- gstitch d = K1 <$> stitch d undefined
+  gstitch d  = do let p = Proxy :: Proxy a
+                  ty <- gets makingTy
+                  depth <- gets depth
+                  let d' = if getType p == ty
+                              then d
+                              else depth
+                  K1 <$> stitch d' undefined
   gtoExpr (K1 x) = toExpr x
 
 qualify :: Datatype d => D1 d f a -> String -> String

@@ -12,6 +12,8 @@ import           GHC.IO.Handle
 import           System.IO
 
 import           Language.Fixpoint.Types          hiding (prop)
+import           Language.Haskell.Liquid.CmdLine
+import           Language.Haskell.Liquid.GhcInterface
 import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Types    hiding (var)
@@ -76,3 +78,11 @@ monoToPoly _ m = m
 stripQuals = snd . bkClass . fourth4 . bkUniv
 
 fourth4 (_,_,_,d) = d
+
+getSpec :: FilePath -> IO GhcSpec
+getSpec target
+  = do cfg  <- mkOpts mempty
+       info <- getGhcInfo cfg target
+       case info of
+         Left err -> error $ show err
+         Right i  -> return $ spec i

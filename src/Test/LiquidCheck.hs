@@ -25,14 +25,6 @@ import           Test.LiquidCheck.Types
 import           Test.LiquidCheck.Util
 
 
-getSpec :: FilePath -> IO GhcSpec
-getSpec target
-  = do cfg  <- mkOpts mempty
-       info <- getGhcInfo cfg target
-       case info of
-         Left err -> error $ show err
-         Right i  -> return $ spec i
-
 testModule :: FilePath -> [Gen Result] -> IO ()
 testModule m ts
   = do sp <- getSpec m
