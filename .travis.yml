@@ -13,6 +13,7 @@ install:
  - pushd /tmp/fixpoint && cabal install && popd
  - pushd /tmp/liquidhaskell && cabal install && popd
  - cabal install --only-dependencies --enable-tests
+ - mkdir .liquid
 
 # Here starts the actual work to be performed for the package under
 # test; any command which exits with a non-zero exit code causes the
@@ -22,7 +23,7 @@ script:
  - cabal install -v2
 
  # getting weird cabal mismatch error without the re-configure...
- - cabal configure --enable-tests && cabal build && ./dist/build/test/test
+ - cabal configure --enable-tests && cabal build && cabal exec ./dist/build/test/test
 
  # makes sure the .cabal file is reasonable
  - cabal check
