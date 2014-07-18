@@ -3,7 +3,7 @@ module Main where
 
 import           Control.Exception
 import           GHC.IO.Handle
-import qualified Language.Haskell.TH as TH
+-- import qualified Language.Haskell.TH as TH
 import           System.IO
 import           Test.Tasty
 import           Test.Tasty.HUnit

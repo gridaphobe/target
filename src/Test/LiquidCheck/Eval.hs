@@ -111,8 +111,9 @@ evalSet "Set_dif" [EApp _ e1, EApp _ e2] env
   = return $ mkSet $ e1 \\ e2
 evalSet "Set_sub" [EApp _ e1, EApp _ e2] env
   = return $ if e1 \\ e2 == [] then 0 else 1
-evalSet "Set_mem" [EApp _ e1, e2] env
-  = return $ if e2 `elem` e1 then 0 else 1
+evalSet "Set_mem" [e1, EApp f e2] env | val f == setSym
+  = return $ if e1 `elem` e2 then 0 else 1
+evalSet f es env = error $ printf "evalSet(%s, %s)" (show f) (show es)
 
 evalBody eq xs env = go $ body eq
   where
