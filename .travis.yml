@@ -6,8 +6,8 @@ notifications:
     - gridaphobe@gmail.com
 
 install:
- - git clone --branch=faststring git://github.com/gridaphobe/liquid-fixpoint.git /tmp/fixpoint
- - git clone --branch=faststring git://github.com/gridaphobe/liquidhaskell.git /tmp/liquidhaskell
+ - git clone --branch=faststring git://github.com/ucsd-progsys/liquid-fixpoint.git /tmp/fixpoint
+ - git clone --branch=faststring git://github.com/ucsd-progsys/liquidhaskell.git /tmp/liquidhaskell
  - sudo apt-get update -qq
  - sudo apt-get install ocaml camlidl
  - pushd /tmp/fixpoint && cabal install && popd
