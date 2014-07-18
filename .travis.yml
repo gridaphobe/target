@@ -6,12 +6,12 @@ notifications:
     - gridaphobe@gmail.com
 
 install:
- - git clone git://github.com/gridaphobe/liquid-fixpoint.git /tmp/fixpoint
- - git clone git://github.com/gridaphobe/liquidhaskell.git /tmp/liquidhaskell
+ - git clone --branch=faststring git://github.com/gridaphobe/liquid-fixpoint.git /tmp/fixpoint
+ - git clone --branch=faststring git://github.com/gridaphobe/liquidhaskell.git /tmp/liquidhaskell
  - sudo apt-get update -qq
  - sudo apt-get install ocaml camlidl
- - pushd /tmp/fixpoint && git checkout origin/faststring && cabal install && popd
- - pushd /tmp/liquidhaskell && git checkout origin/faststring && cabal install && popd
+ - pushd /tmp/fixpoint && cabal install && popd
+ - pushd /tmp/liquidhaskell && cabal install && popd
  - cabal install --only-dependencies --enable-tests
 
 # Here starts the actual work to be performed for the package under
