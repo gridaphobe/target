@@ -74,11 +74,11 @@ subst :: Expr -> Int -> Expr -> Expr
 subst e1 v e2@(Var v')
   = if v == v' then e1 else e2
 subst e1 v e2@(Lam v' e')
-  | v == v'            = e1
+  | v == v'            = subst e1 v (freshen e2) -- BUGGY in ICFP14 paper: e1
   | v `Set.member` fvs = subst e1 v (freshen e2)
   | otherwise          = Lam v' (subst e1 v e')
   where
-    fvs = freeVars e2
+    fvs = freeVars e1
 subst e v (App e1 e2)
   = App e1' e2'
   where
