@@ -7,7 +7,6 @@
 
 {-@ LIQUID "--no-termination"   @-}
 
-
 module RBTree where
 
 import           Debug.Trace

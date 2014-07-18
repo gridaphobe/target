@@ -41,4 +41,4 @@ freeVars (App x y) = freeVars x `Set.union` freeVars y
 {-@ inv :: Closed -> Valid @-}
 inv e = freeVars e == Set.empty
 
-tests = testModule "examples/Expr.hs" [ liquidCheck inv "Expr.inv" 4 ]
+tests = testModule "examples/Expr.hs" [ liquidCheck inv "Expr.inv" 3 ]
