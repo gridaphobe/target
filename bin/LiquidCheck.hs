@@ -25,6 +25,9 @@ import qualified GHC
 import qualified GHC.Exts
 import qualified GHC.Paths
 import qualified HscTypes as GHC
+import qualified Outputable as GHC
+import qualified Type as GHC
+import qualified TypeRep as GHC
 
 import           Test.LiquidCheck
 
@@ -52,19 +55,21 @@ main = do
   let m  = findModule hs
       fs = findFuns hs
   forM_ fs $ \fun -> do
-    let contents = subst tpl [ ("$module$", m), ("$file$", T.pack f), ("$fun$", m<>"."<>fun)]
+    t <- monomorphize f fun
+    let contents = subst tpl [ ("$module$", m), ("$file$", T.pack f), ("$fun$", m<>"."<>fun), ("$type$", t)]
         path     = mkPath f fun
     T.writeFile path contents
-    system $ printf "ghc --make -O2 %s -i%s" path (takeDirectory path)
+    system $ printf "rm -f %s" $ dropExtension path
+    system $ printf "ghc --make -fhpc -O2 %s -i%s -isrc" path (takeDirectory path)
     system $ printf "cabal exec %s" $ dropExtension path
   -- print m
   -- print fs
-  -- forM_ fs $ \fun -> do
-  --   putStrNow (fun ++ ": ")
-  --   rs <- checkMany f m fun
-  --   putStrLn "done"
-  --   forM_ rs $ \(d,t,r) -> printf "%d\t%.2f\t%s\n" d t (show r)
-  --   putStrLn ""
+  --forM_ fs $ \fun -> do
+  --  putStrNow (fun ++ ": ")
+  --  rs <- checkMany f m fun
+  --  putStrLn "done"
+  --  forM_ rs $ \(d,t,r) -> printf "%d\t%.2f\t%s\n" d t (show r)
+  --  putStrLn ""
   -- tests :: [IO Result] <- runGhc $ do
   --   loadModule f
   --   forM fs $ \fun -> do
@@ -76,6 +81,25 @@ subst :: T.Text -> [(T.Text, T.Text)] -> T.Text
 subst = foldr (\(x,y) t -> T.replace x y t)
 
 mkPath f fun = dropExtensions f <.> T.unpack fun <.> ".hs"
+
+monomorphize :: FilePath -> T.Text -> IO T.Text
+monomorphize file fun = runGhc $ do
+  loadModule file
+  df  <- GHC.getSessionDynFlags
+  int <- GHC.exprType "1 :: Int"
+  t   <- monomorphic df int <$> GHC.exprType (T.unpack fun)
+  let showInModule = GHC.showSDocForUser df GHC.neverQualify . GHC.ppr
+  return $ T.pack (showInModule t)
+
+monomorphic :: GHC.DynFlags -> GHC.Type -> GHC.Type -> GHC.Type
+monomorphic df int (GHC.TyVarTy _)     = int
+monomorphic df int (GHC.AppTy x y)     = GHC.AppTy (monomorphic df int x) (monomorphic df int y)
+monomorphic df int (GHC.TyConApp t ts) = GHC.TyConApp t $ map (monomorphic df int) ts
+monomorphic df int (GHC.FunTy i o)
+  | GHC.isClassPred i = monomorphic df int o
+  | otherwise         = GHC.FunTy (monomorphic df int i) (monomorphic df int o)
+monomorphic df int (GHC.ForAllTy a t)  = monomorphic df int t
+monomorphic df int t                   = error $ "Don't know how to monomorphize " ++ GHC.showPpr df t
 
 mkLiquidCheck d path m fun
   = printf "Test.LiquidCheck.testOne %d %s \"%s\" \"%s\""

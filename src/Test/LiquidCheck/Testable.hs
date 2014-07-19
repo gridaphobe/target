@@ -61,7 +61,7 @@ process1 d f vs cts (x,ti) to = go vs 0
       do when (n `mod` 100 == 0) $ whenVerbose $ io $ printf "Checked %d inputs\n" n
          setValues vs
          a <- stitch d ti
-         -- io $ print a
+         --io $ print a
          r <- io $ evaluate (f a)
          let env = map (second (`app` [])) cts
                 ++ [(x, toExpr a)]

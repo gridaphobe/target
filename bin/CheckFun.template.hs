@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Main where
 
-import qualified $module$
+import $module$
 
 import Control.Applicative
 import Control.Monad
@@ -31,7 +31,7 @@ checkMany spec = go 2
                   (d,Nothing) -> return [(n,d,TimedOut)]
                   (d,Just r)  -> ((n,d,Completed r):) <$> go (n+1)
     checkAt n = do putStrNow (printf "%d " n)
-                   timed $ timeout tenMinutes $ runGen spec $ testFun $fun$ "$fun$" n
+                   timed $ timeout tenMinutes $ runGen spec $ testFun ($fun$ :: $type$) "$fun$" n
 
 tenMinutes = 10 * 60 * 1000000
 
