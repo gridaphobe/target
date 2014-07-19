@@ -35,12 +35,13 @@ testModule m ts
            Failed x -> printf "Found counter-example: %s\n\n" x
 
 liquidCheck :: Testable f => f -> String -> Int -> Gen Result
-liquidCheck = testFun
+liquidCheck f name d
+  = do io $ printf "Testing %s\n" name -- (showpp ty)
+       testFun f name d
 
 testFun :: Testable f => f -> String -> Int -> Gen Result
 testFun f name d
   = do ty <- safeFromJust "testFun" . lookup (symbol name) <$> gets sigs
-       io $ printf "Testing %s\n" name -- (showpp ty)
        modify $ \s -> s { depth = d }
        test f d ty
 
