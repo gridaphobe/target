@@ -111,7 +111,9 @@ executable liquid-check
                   LiquidCheck,
                   ghc,
                   ghc-paths,
+                  directory,
                   filepath,
                   process,
                   text,
-                  time
+                  time,
+                  transformers

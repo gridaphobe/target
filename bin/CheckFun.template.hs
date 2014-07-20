@@ -21,7 +21,12 @@ main = do
   putStr ("$fun$" ++ ": ")
   rs <- checkMany spec
   putStrLn "done"
-  forM_ rs $ \(d,t,r) -> printf "%d\t%.2f\t%s\n" d t (show r)
+  withFile "_results/$fun$.tsv" WriteMode $ \h -> do
+    hPutStrLn h "Depth\tTime(s)\tResult"
+    forM_ rs $ \(d,t,r) -> do 
+      let s = printf "%d\t%.2f\t%s\n" d t (show r)
+      putStrLn s
+      hPutStrLn h s
   putStrLn ""
 
 checkMany :: GhcSpec -> IO [(Int, Double, Outcome)]
@@ -31,9 +36,9 @@ checkMany spec = go 2
                   (d,Nothing) -> return [(n,d,TimedOut)]
                   (d,Just r)  -> ((n,d,Completed r):) <$> go (n+1)
     checkAt n = do putStrNow (printf "%d " n)
-                   timed $ timeout tenMinutes $ runGen spec $ testFun ($fun$ :: $type$) "$fun$" n
+                   timed $ timeout twentyMinutes $ runGen spec $ testFun ($fun$ :: $type$) "$fun$" n
 
-tenMinutes = 10 * 60 * 1000000
+twentyMinutes = 20 * 60 * 1000000
 
 getTime :: IO Double
 getTime = realToFrac `fmap` getPOSIXTime
