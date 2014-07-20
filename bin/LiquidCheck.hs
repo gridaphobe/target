@@ -105,7 +105,7 @@ findModuleFuns file monos = runGhc $ do
   monos' <- forM monos $ \(v,t) -> (v,) <$> GHC.exprType ("undefined :: " ++ t)
   funTys <- forM funs $ \f -> do
     t    <- monomorphic df int monos' <$> GHC.exprType (T.unpack f)
-    return (f, T.pack (showInModule df t))
+    return (f, T.pack $ concat $ lines $ showInModule df t)
   return (T.pack $ GHC.moduleNameString $ GHC.ms_mod_name m, funTys)
 
 showInModule df = GHC.showSDocForUser df GHC.neverQualify . GHC.ppr

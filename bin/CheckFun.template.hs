@@ -34,6 +34,8 @@ checkMany spec = go 2
   where
     go n      = checkAt n >>= \case
                   (d,Nothing) -> return [(n,d,TimedOut)]
+                  (20,Just r) -> return [(n,20,Completed r)]
+                  (d,Just (Failed s)) -> return [(n,d,Completed (Failed s))]
                   (d,Just r)  -> ((n,d,Completed r):) <$> go (n+1)
     checkAt n = do putStrNow (printf "%d " n)
                    timed $ timeout twentyMinutes $ runGen spec $ testFun ($fun$ :: $type$) "$fun$" n

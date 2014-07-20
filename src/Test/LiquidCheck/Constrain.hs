@@ -138,6 +138,7 @@ instance Constrain Bool where
 instance Constrain a => Constrain [a]
 instance Constrain a => Constrain (Maybe a)
 instance (Constrain a, Constrain b) => Constrain (a,b)
+instance (Constrain a, Constrain b, Constrain c) => Constrain (a,b,c)
 
 instance (Num a, Integral a, Constrain a) => Constrain (Ratio a) where
   getType _ = "GHC.Real.Ratio"
