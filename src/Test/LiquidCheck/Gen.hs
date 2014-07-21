@@ -31,9 +31,9 @@ import           Test.LiquidCheck.Util
 newtype Gen a = Gen (StateT GenState IO a)
   deriving (Functor, Applicative, Monad, MonadIO, MonadState GenState)
 
-runGen :: GhcSpec -> Gen a -> IO a
-runGen e (Gen x) = bracket (makeContext Z3) cleanupContext
-                           (evalStateT x . initGS e)
+runGen :: GhcSpec -> FilePath -> Gen a -> IO a
+runGen e f (Gen x) = bracket (makeContext Z3) cleanupContext
+                             (evalStateT x . initGS f e)
   -- = do ctx <- makeContext Z3
   --      a <- evalStateT act (initGS e ctx)
   --      cleanupContext ctx
@@ -63,13 +63,14 @@ data GenState
        , chosen       :: !(Maybe Variable)
        , sorts        :: !(S.HashSet T.Text)
        , modName      :: !Symbol
+       , filePath     :: !Symbol
        , makingTy     :: !Symbol
        , verbose      :: !Bool
        , logging      :: !Bool
        , smtContext   :: !(Context)
        } -- deriving (Show)
 
-initGS sp ctx = GS def def def def def def dcons cts (measures sp) tyi free [] sigs def Nothing S.empty "" "" False False ctx
+initGS fp sp ctx = GS def def def def def def dcons cts (measures sp) tyi free [] sigs def Nothing S.empty "" (symbol fp) "" False False ctx
   where
     dcons = map (symbol *** id) (dconsP sp)
     cts   = map (symbol *** val) (ctors sp)
@@ -108,13 +109,15 @@ making ty act
 lookupCtor :: Symbol -> Gen SpecType
 lookupCtor c
   = do mt <- lookup c <$> gets ctorEnv
-       m  <- gets modName
+       m  <- gets filePath
        case mt of
          Just t -> return t
-         Nothing -> io $ runGhc $ do
-           loadModule (show m)
-           ofType <$> GHC.exprType (show c)
-
+         Nothing -> do
+           t <- io $ runGhc $ do
+                  loadModule (show m)
+                  ofType <$> GHC.exprType (show c)
+           modify $ \s@(GS {..}) -> s { ctorEnv = (c,t) : ctorEnv }
+           return t
 
 withFreshChoice :: (Variable -> Gen ()) -> Gen Variable
 withFreshChoice act

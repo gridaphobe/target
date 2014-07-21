@@ -105,13 +105,13 @@ runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
              x
 
 loadModule f = do target <- GHC.guessTarget f Nothing
-                  lcheck <- GHC.guessTarget "src/Test/LiquidCheck.hs" Nothing
-                  GHC.setTargets [target,lcheck]
+                  --lcheck <- GHC.guessTarget "src/Test/LiquidCheck.hs" Nothing
+                  GHC.setTargets [target] -- [target,lcheck]
                   GHC.load GHC.LoadAllTargets
                   modGraph <- GHC.getModuleGraph
                   let m = fromJust $ find ((==f) . GHC.msHsFilePath) modGraph
                   GHC.setContext [ GHC.IIModule (GHC.ms_mod_name m)
-                                 , GHC.IIDecl $ GHC.simpleImportDecl
-                                              $ GHC.mkModuleName "Test.LiquidCheck"
+                                 --, GHC.IIDecl $ GHC.simpleImportDecl
+                                 --             $ GHC.mkModuleName "Test.LiquidCheck"
                                  ]
                   return m
