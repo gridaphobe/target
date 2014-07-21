@@ -5,11 +5,18 @@ module Test.LiquidCheck.Util where
 import           Control.Applicative
 import           Control.Exception
 import           Control.Monad.IO.Class
+import           Data.List
+import           Data.Maybe
 import           Data.Monoid
 import           Data.Generics                    (everywhere, mkT)
 import           Debug.Trace
 import           GHC.IO.Handle
 import           System.IO
+
+import qualified DynFlags as GHC
+import qualified GHC
+import qualified GHC.Paths
+import qualified HscTypes as GHC
 
 import           Language.Fixpoint.Types          hiding (prop)
 import           Language.Haskell.Liquid.CmdLine
@@ -86,3 +93,25 @@ getSpec target
        case info of
          Left err -> error $ show err
          Right i  -> return $ spec i
+
+runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
+             df <- GHC.getSessionDynFlags
+             let df' = df { GHC.ghcMode   = GHC.CompManager
+                          , GHC.ghcLink   = GHC.NoLink --GHC.LinkInMemory
+                          , GHC.hscTarget = GHC.HscNothing --GHC.HscInterpreted
+                          , GHC.optLevel  = 2
+                          } `GHC.dopt_set` GHC.Opt_ImplicitImportQualified
+             GHC.setSessionDynFlags df'
+             x
+
+loadModule f = do target <- GHC.guessTarget f Nothing
+                  lcheck <- GHC.guessTarget "src/Test/LiquidCheck.hs" Nothing
+                  GHC.setTargets [target,lcheck]
+                  GHC.load GHC.LoadAllTargets
+                  modGraph <- GHC.getModuleGraph
+                  let m = fromJust $ find ((==f) . GHC.msHsFilePath) modGraph
+                  GHC.setContext [ GHC.IIModule (GHC.ms_mod_name m)
+                                 , GHC.IIDecl $ GHC.simpleImportDecl
+                                              $ GHC.mkModuleName "Test.LiquidCheck"
+                                 ]
+                  return m

@@ -25,8 +25,9 @@ import           Test.LiquidCheck.Util
 -- evalType :: Env -> RApp -> Expr -> Gen Bool
 evalType :: M.HashMap Symbol Expr -> SpecType -> Expr -> Gen Bool
 evalType m t e@(EApp c xs)
-  = do dcp <- (safeFromJust "evalType" . lookup (val c))
-              <$> gets ctorEnv
+  = do --dcp <- (safeFromJust "evalType" . lookup (val c))
+       --       <$> gets ctorEnv
+       dcp <- lookupCtor (val c)
        tyi <- gets tyconInfo
        vts <- freshen $ applyPreds (expandRApp M.empty tyi t) dcp
        liftM2 (&&) (evalReft m (toReft $ rt_reft t) e) (evalTypes m vts xs)

@@ -19,9 +19,10 @@ import           Language.Fixpoint.Config  (SMTSolver(..))
 import           Language.Fixpoint.SmtLib2 hiding (verbose)
 import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.PredType
+import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Types
 
-import           GHC
+import qualified GHC
 
 import           Test.LiquidCheck.Types
 import           Test.LiquidCheck.Util
@@ -54,7 +55,7 @@ data GenState
        , dconEnv      :: ![(Symbol, DataConP)]
        , ctorEnv      :: !DataConEnv
        , measEnv      :: !MeasureEnv
-       , tyconInfo    :: !(M.HashMap TyCon RTyCon)
+       , tyconInfo    :: !(M.HashMap GHC.TyCon RTyCon)
        , freesyms     :: ![(Symbol,Symbol)]
        , constructors :: ![Variable] -- (S.HashSet Variable)  --[(String, String)]
        , sigs         :: ![(Symbol, SpecType)]
@@ -103,6 +104,17 @@ making ty act
        r <- act
        modify $ \s -> s { makingTy = ty' }
        return r
+
+lookupCtor :: Symbol -> Gen SpecType
+lookupCtor c
+  = do mt <- lookup c <$> gets ctorEnv
+       m  <- gets modName
+       case mt of
+         Just t -> return t
+         Nothing -> io $ runGhc $ do
+           loadModule (show m)
+           ofType <$> GHC.exprType (show c)
+
 
 withFreshChoice :: (Variable -> Gen ()) -> Gen Variable
 withFreshChoice act
