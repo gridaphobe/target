@@ -66,7 +66,7 @@ main = do
     T.writeFile path contents
     system $ printf "rm -f \"%s\"" $ dropExtension path
     system $ printf "rm -f \"_results/%s.tix\"" $ dropExtension $ takeFileName path
-    system $ printf "ghc --make -fhpc -O2 \"%s\" -i%s -isrc" path (takeDirectory path)
+    system $ printf "ghc --make -fhpc -O2 \"%s\" -i%s:examples:src" path (takeDirectory path)
     system $ printf "cabal exec \"%s\"" $ dropExtension path
     system $ printf "mv \"%s.tix\" _results/" $ dropExtension $ takeFileName path
   -- print m
@@ -100,15 +100,15 @@ findModuleFuns file monos = runGhc $ do
                     , let spec = ws !! 1
                     ]
   df  <- GHC.getSessionDynFlags
-  let funs = [ f | f <- T.pack . showInModule df <$> names, f `elem` specs]
+  let funs = [ f | f <- T.pack . showInModule df GHC.neverQualify <$> names, f `elem` specs]
   int <- GHC.exprType "1 :: Int"
   monos' <- forM monos $ \(v,t) -> (v,) <$> GHC.exprType ("undefined :: " ++ t)
   funTys <- forM funs $ \f -> do
     t    <- monomorphic df int monos' <$> GHC.exprType (T.unpack f)
-    return (f, T.pack $ concat $ lines $ showInModule df t)
+    return (f, T.pack $ concat $ lines $ showInModule df (const $ GHC.NameQual $ GHC.ms_mod_name m, const False) t)
   return (T.pack $ GHC.moduleNameString $ GHC.ms_mod_name m, funTys)
 
-showInModule df = GHC.showSDocForUser df GHC.neverQualify . GHC.ppr
+showInModule df m = GHC.showSDocForUser df m . GHC.ppr
 
 subst :: T.Text -> [(T.Text, T.Text)] -> T.Text
 subst = foldr (\(x,y) t -> T.replace x y t)

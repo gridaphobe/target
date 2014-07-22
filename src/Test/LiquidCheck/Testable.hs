@@ -223,7 +223,7 @@ process4 sz f vs cts (xa,ta) (xb,tb) (xc,tc) (xd,td) to = go vs 0
          c <- stitch sz tc
          b <- stitch sz tb
          a <- stitch sz ta
-         io $ print (a,b,c,d)
+         --io $ print (a,b,c,d)
          er <- io $ try $ evaluate (f a b c d)
          case er of
            Left (e::SomeException) -> return $ Failed $ show (a, b, c, d)
