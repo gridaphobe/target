@@ -24,6 +24,7 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.Proxy
 import           Data.Ratio
+import qualified Data.Text                        as ST
 import qualified Data.Text.Lazy                   as T
 import           Data.Word (Word8)
 import           GHC.Generics
@@ -70,9 +71,9 @@ class Show a => Constrain a where
                  => a -> Expr
   toExpr = gtoExpr . from
 
-
 reproxyElem :: proxy (f a) -> Proxy a
 reproxyElem = reproxy
+{-# INLINE reproxyElem #-}
 
 
 
@@ -113,7 +114,7 @@ instance Constrain Char where
        constrain $ ofReft x (toReft $ rt_reft t)
        return x
   stitch d t = stitch d t >>= \(x::Int) -> return . chr $ x + ord 'a'
-  toExpr  c = ESym $ SL [c]
+  toExpr  c = ESym $ SL $ ST.singleton c
 
 instance Constrain Word8 where
   getType _ = "GHC.Word.Word8"
@@ -156,7 +157,7 @@ instance (Num a, Integral a, Constrain a) => Constrain (Ratio a) where
 
 instance (Constrain a, Constrain b) => Constrain (a -> b) where
   getType _ = "FUNCTION"
-  gen p d t = fresh [] (FObj (S "FUNCTION"))
+  gen p d t = fresh [] (FObj "FUNCTION")
   stitch d (stripQuals -> RFun xa ta to _)
     = do mref  <- io $ newIORef []
          state' <- get
@@ -191,7 +192,7 @@ instance (Constrain a, Constrain b) => Constrain (a -> b) where
                    io (modifyIORef mref ((e,o):))
                    io $ command ctx Pop
                    return o
-  toExpr  f = var $ S "FUNCTION"
+  toExpr  f = var ("FUNCTION" :: Symbol)
 
 genExpr :: Expr -> Sort -> Gen Variable
 genExpr _ s = fresh [] s

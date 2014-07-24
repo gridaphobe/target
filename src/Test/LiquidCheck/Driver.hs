@@ -18,7 +18,6 @@ import           System.FilePath
 import           System.IO.Unsafe
 import           Text.Printf
 
-import           FastString
 import           Language.Fixpoint.Config        (SMTSolver (..))
 import           Language.Fixpoint.SmtLib2
 import           Language.Fixpoint.Types
@@ -102,7 +101,7 @@ allSat roots = setup >>= io . go
     ints vs = S.fromList [symbol v | (v,t) <- vs, t `elem` interps]
     interps = [FInt, boolsort, choicesort]
     refute roots model deps vs
-      = V.map    (\(x,v) -> var x `eq` ESym (SL $ T.unpack v))
+      = V.map    (\(x,v) -> var x `eq` ESym (SL $ T.toStrict v))
       . V.filter (\(x,v) -> x `S.member` ints vs)
       $ realized
       where
@@ -112,9 +111,11 @@ generateDepGraph :: String -> V.Vector (Symbol,Symbol) -> Constraint -> IO ()
 generateDepGraph name deps constraints = writeFile (name <.> "dot") digraph
   where
     digraph = unlines $ ["digraph G {"] ++ edges ++ ["}"]
-    edges   = [ printf "\"%s\" -> \"%s\" [label=\"%s\"];" (unpackFS p) (unpackFS c) cs
-              | (S p, S c) <- V.toList deps
-              , let cs = intercalate "\\n" [T.unpack (smt2 p) | PImp (PBexp (EVar (S a))) p <- constraints, a == c]
+    edges   = [ printf "\"%s\" -> \"%s\" [label=\"%s\"];" (symbolString p) (symbolString c) cs
+              | (p, c) <- V.toList deps
+              , let cs = intercalate "\\n" [ T.unpack (smt2 p)
+                                           | PImp (PBexp (EVar a)) p <- constraints
+                                           , a == c]
               ]
 
 

@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 module Test.LiquidCheck.Types where
 
@@ -26,8 +27,8 @@ type DataConEnv = [(Symbol, SpecType)]
 type MeasureEnv = [Measure SpecType DataCon]
 
 boolsort, choicesort :: Sort
-boolsort   = FObj $ stringSymbol "Bool"
-choicesort = FObj $ stringSymbol "CHOICE"
+boolsort   = FObj "Bool"
+choicesort = FObj "CHOICE"
 
 data Result = Passed !Int
             | Failed !String

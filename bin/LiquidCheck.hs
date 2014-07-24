@@ -115,7 +115,7 @@ runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
                           , GHC.ghcLink   = GHC.LinkInMemory
                           , GHC.hscTarget = GHC.HscInterpreted
                           , GHC.optLevel  = 2
-                          } `GHC.dopt_set` GHC.Opt_ImplicitImportQualified
+                          } `GHC.gopt_set` GHC.Opt_ImplicitImportQualified
              GHC.setSessionDynFlags df'
              x
 

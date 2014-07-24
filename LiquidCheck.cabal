@@ -17,7 +17,6 @@ source-repository head
 library
   default-language:    Haskell2010
   hs-source-dirs:      src
-  ghc-options:         -O2
   ghc-prof-options:    -fprof-auto -caf-all
   exposed-modules:     Test.LiquidCheck,
                        Test.LiquidCheck.Constrain,
@@ -29,11 +28,11 @@ library
                        Test.LiquidCheck.Types,
                        Test.LiquidCheck.Util
 
-  build-depends:       transformers >= 0.4.1.0,
-                       base >=4.6 && <4.7,
+  build-depends:       transformers >= 0.3,
+                       base >=4.6 && <5,
                        filepath >= 1.3.0.1,
                        directory >= 1.2.0.1,
-                       ghc >= 7.6.3,
+                       ghc >= 7.8.3,
                        unordered-containers >= 0.2.3.0,
                        text >= 0.11.3.1,
                        containers >= 0.5.0.0,
@@ -42,7 +41,7 @@ library
                        liquidhaskell >= 0.2,
                        pretty,
                        data-default >= 0.5.3,
-                       tagged,
+                       tagged >= 0.7,
                        text-format,
                        syb >= 0.4.2,
                        vector
