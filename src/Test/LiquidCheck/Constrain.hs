@@ -71,6 +71,10 @@ class Show a => Constrain a where
                  => a -> Expr
   toExpr = gtoExpr . from
 
+reproxy :: proxy a -> Proxy b
+reproxy _ = Proxy
+{-# INLINE reproxy #-}
+
 reproxyElem :: proxy (f a) -> Proxy a
 reproxyElem = reproxy
 {-# INLINE reproxyElem #-}
@@ -84,7 +88,7 @@ instance Constrain () where
   getType _ = "()"
   gen _ _ _ = fresh [] (FObj "()")
   stitch _ _ = return ()
-  toExpr _   = app (stringSymbol "()") []
+  toExpr _   = app ("()" :: Symbol) []
 -- instance Constrain () where
 --   getType _ = "GHC.Types.()"
 --   gen _ _ _ = fresh [] (FObj "GHC.Types.()")
@@ -96,7 +100,6 @@ instance Constrain Int where
   gen _ d t = fresh [] FInt >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
        -- use the unfolding depth to constrain the range of Ints, like QuickCheck
-       _ <- gets depth
        constrain $ var x `ge` fromIntegral (negate d)
        constrain $ var x `le` fromIntegral d
        return x
@@ -112,8 +115,7 @@ instance Constrain Integer where
 instance Constrain Char where
   getType _ = "GHC.Types.Char"
   gen _ d t = fresh [] FInt >>= \x ->
-    do _ <- gets depth
-       constrain $ var x `ge` 0
+    do constrain $ var x `ge` 0
        constrain $ var x `le` fromIntegral d
        constrain $ ofReft x (toReft $ rt_reft t)
        return x
@@ -256,7 +258,8 @@ constrain p
 make2 c (pa,pb) t s d
   = do dcp <- lookupCtor c -- fromJust . lookup c <$> gets ctorEnv
        tyi <- gets tyconInfo
-       let [t1,t2] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
+       emb <- gets embEnv
+       let [t1,t2] = applyPreds (expandRApp emb tyi t) dcp
        x1 <- gen pa (d-1) (snd t1)
        let su = mkSubst [(fst t1, var x1)]
        x2 <- gen pb (d-1) (subst su $ snd t2)
@@ -267,7 +270,8 @@ make2 c (pa,pb) t s d
 make3 c (pa,pb,pc) t s d
   = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
        tyi <- gets tyconInfo
-       let [t1,t2,t3] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
+       emb <- gets embEnv
+       let [t1,t2,t3] = applyPreds (expandRApp emb tyi t) dcp
        x1 <- gen pa (d-1) (snd t1)
        let su = mkSubst [(fst t1, var x1)]
        x2 <- gen pb (d-1) (subst su $ snd t2)
@@ -278,7 +282,8 @@ make3 c (pa,pb,pc) t s d
 make4 c (p1,p2,p3,p4) t s d
   = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
        tyi <- gets tyconInfo
-       let [t1,t2,t3,t4] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
+       emb <- gets embEnv
+       let [t1,t2,t3,t4] = applyPreds (expandRApp emb tyi t) dcp
        x1 <- gen p1 (d-1) (snd t1)
        let su = mkSubst [(fst t1, var x1)]
        x2 <- gen p2 (d-1) (subst su $ snd t2)
@@ -291,7 +296,8 @@ make4 c (p1,p2,p3,p4) t s d
 make5 c (p1,p2,p3,p4,p5) t s d
   = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
        tyi <- gets tyconInfo
-       let [t1,t2,t3,t4,t5] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
+       emb <- gets embEnv
+       let [t1,t2,t3,t4,t5] = applyPreds (expandRApp emb tyi t) dcp
        x1 <- gen p1 (d-1) (snd t1)
        let su = mkSubst [(fst t1, var x1)]
        x2 <- gen p2 (d-1) (subst su $ snd t2)
@@ -447,11 +453,11 @@ ggenAlt :: (Constructor c, GConstrainProd f)
 ggenAlt (p :: Proxy (C1 c f a)) x d t
   = withFreshChoice $ \ch -> do
      let cn = conName (undefined :: C1 c f a)
-     mod <- show <$> gets modName
-     --dcp <- safeFromJust "ggenAlt" . lookup (symbol $ mod++"."++cn) <$> gets ctorEnv
+     mod <- symbolString <$> gets modName
      dcp <- lookupCtor (symbol $ mod++"."++cn)
      tyi <- gets tyconInfo
-     let ts = applyPreds (expandRApp (M.fromList []) tyi t) dcp
+     emb <- gets embEnv
+     let ts = applyPreds (expandRApp emb tyi t) dcp
      xs  <- ggenArgs (reproxyGElem p) d ts
      make' (symbol $ mod++"."++cn) x xs
 

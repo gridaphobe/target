@@ -54,6 +54,7 @@ allSat roots = setup >>= io . go
   where
     setup = do
        ctx <- gets smtContext
+       emb <- gets embEnv
        -- declare sorts
        ss  <- S.toList <$> gets sorts
        let defSort b e = io $ smtWrite ctx (format "(define-sort {} () {})" (b,e))
@@ -74,7 +75,7 @@ allSat roots = setup >>= io . go
        mapM_ (\ x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
        -- declare measures
        ms <- gets measEnv
-       mapM_ (\m -> io . command ctx $ makeDecl (val $ name m) (rTypeSort mempty $ sort m)) ms
+       mapM_ (\m -> io . command ctx $ makeDecl (val $ name m) (rTypeSort emb $ sort m)) ms
        -- assert constraints
        cs <- gets constraints
        mapM_ (\c -> do {i <- gets seed; modify $ \s@(GS {..}) -> s { seed = seed + 1 };

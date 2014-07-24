@@ -14,6 +14,7 @@ import qualified Test.QuickCheck as QC
 import Control.Monad
 
 import Debug.Trace
+import Data.Proxy
 
 --------------------------------------------------------------------------------
 --- Code
@@ -123,8 +124,7 @@ aall p (Cons x xs)
 -- insert x (y:ys) | x < y    = x : y : ys
 --                 | otherwise = y : insert x ys
 
--- tests = [ testFun mytake "Main.mytake" 6
---         -- , testFun insert "Main.insert" 2
---         ]
+tests = [ liquidCheck insert "List.insert" 2
+        ]
 
--- main = testModule "List.hs" tests
+--main = testModule "examples/List.hs" tests

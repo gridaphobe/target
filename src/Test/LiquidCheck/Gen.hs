@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE OverloadedStrings          #-}
 module Test.LiquidCheck.Gen where
@@ -9,6 +10,7 @@ import           Control.Exception
 import           Control.Monad
 import           Control.Monad.State
 import           Data.Default
+import           Data.Generics             (Data, Typeable, everywhere, mkT)
 import qualified Data.HashMap.Strict              as M
 import qualified Data.HashSet                     as S
 import           Data.List
@@ -20,6 +22,7 @@ import           Language.Fixpoint.SmtLib2 hiding (verbose)
 import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.RefType
+import           Language.Haskell.Liquid.Tidy
 import           Language.Haskell.Liquid.Types
 
 import qualified GHC
@@ -55,6 +58,7 @@ data GenState
        , dconEnv      :: ![(Symbol, DataConP)]
        , ctorEnv      :: !DataConEnv
        , measEnv      :: !MeasureEnv
+       , embEnv       :: !(TCEmb GHC.TyCon)
        , tyconInfo    :: !(M.HashMap GHC.TyCon RTyCon)
        , freesyms     :: ![(Symbol,Symbol)]
        , constructors :: ![Variable] -- (S.HashSet Variable)  --[(String, String)]
@@ -63,20 +67,23 @@ data GenState
        , chosen       :: !(Maybe Variable)
        , sorts        :: !(S.HashSet T.Text)
        , modName      :: !Symbol
-       , filePath     :: !Symbol
+       , filePath     :: !FilePath
        , makingTy     :: !Symbol
        , verbose      :: !Bool
        , logging      :: !Bool
        , smtContext   :: !(Context)
        } -- deriving (Show)
 
-initGS fp sp ctx = GS def def def def def def dcons cts (measures sp) tyi free [] sigs def Nothing S.empty "" (symbol fp) "" False False ctx
+initGS fp sp ctx = GS def def def def def def dcons cts meas (tcEmbeds sp) tyi free [] sigs def Nothing S.empty "" fp "" False False ctx
   where
-    dcons = map (symbol *** id) (dconsP sp)
-    cts   = map (symbol *** val) (ctors sp)
-    tyi   = makeTyConInfo (tconsP sp)
-    free  = map (second symbol) $ freeSyms sp
-    sigs  = map (symbol *** val) $ tySigs sp
+    dcons = tidy $ map (symbol *** id) (dconsP sp)
+    cts   = tidy $ map (symbol *** val) (ctors sp)
+    tyi   = tidy $ makeTyConInfo (tconsP sp)
+    free  = tidy $ map (symbol *** symbol) $ freeSyms sp
+    sigs  = tidy $ map (symbol *** val) $ tySigs sp
+    meas  = tidy $ measures sp
+    tidy :: forall a. Data a => a -> a
+    tidy  = everywhere (mkT tidySymbol)
 
 whenVerbose x
   = do v <- gets verbose
@@ -114,7 +121,7 @@ lookupCtor c
          Just t -> return t
          Nothing -> do
            t <- io $ runGhc $ do
-                  loadModule (show m)
+                  loadModule m
                   ofType <$> GHC.exprType (show c)
            modify $ \s@(GS {..}) -> s { ctorEnv = (c,t) : ctorEnv }
            return t

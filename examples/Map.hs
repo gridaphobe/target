@@ -390,7 +390,7 @@ mlen (Bin s k v l r) = 1 + mlen l + mlen r
   @-}
 
 {-@ measure mapKeys :: Map k a -> (Set k)
-    mapKeys (Tip) = {v | (? (Set_emp v))}
+    mapKeys (Tip) = {v | (Set_emp v)}
     mapKeys (Bin s k v l r) = (Set_cup (Set_sng k) (Set_cup (mapKeys l) (mapKeys r)))
   @-}
 

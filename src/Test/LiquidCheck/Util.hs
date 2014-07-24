@@ -99,8 +99,8 @@ runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
              let df' = df { GHC.ghcMode   = GHC.CompManager
                           , GHC.ghcLink   = GHC.NoLink --GHC.LinkInMemory
                           , GHC.hscTarget = GHC.HscNothing --GHC.HscInterpreted
-                          , GHC.optLevel  = 2
-                          } `GHC.dopt_set` GHC.Opt_ImplicitImportQualified
+                          , GHC.optLevel  = 0 --2
+                          } `GHC.gopt_set` GHC.Opt_ImplicitImportQualified
              GHC.setSessionDynFlags df'
              x
 

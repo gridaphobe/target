@@ -15,6 +15,7 @@ import           Text.Printf                          (printf)
 import           Language.Fixpoint.Types              (Located (..), symbol)
 import           Language.Haskell.Liquid.CmdLine      (mkOpts)
 import           Language.Haskell.Liquid.GhcInterface (getGhcInfo)
+import           Language.Haskell.Liquid.Tidy         (tidySymbol)
 import           Language.Haskell.Liquid.Types        (GhcInfo (..),
                                                        GhcSpec (..), showpp)
 
@@ -45,10 +46,12 @@ testFun f name d
        modify $ \s -> s { depth = d }
        test f d ty
 
+tidyVar = tidySymbol . symbol
+
 testOne :: Testable f => Int -> f -> String -> FilePath -> IO Result
 testOne d f name path
   = do sp <- getSpec path
-       let ty = val $ safeFromJust "testOne" $ lookup name $ map (first showpp) $ tySigs sp
+       let ty = val $ safeFromJust "testOne" $ lookup (symbol name) $ map (first tidyVar) $ tySigs sp
        runGen sp path $ test f d ty
 
 -- mkTest :: TH.Name -> TH.ExpQ

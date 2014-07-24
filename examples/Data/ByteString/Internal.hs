@@ -5,6 +5,7 @@
             UnboxedTuples, DeriveDataTypeable -}
 {-# OPTIONS_HADDOCK hide #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-@ LIQUID "-isrc" @-}
 -- |
 -- Module      : Data.ByteString.Internal
 -- License     : BSD-style
@@ -676,14 +677,15 @@ foreign import ccall unsafe "__hscore_memcpy_src_off"
 instance Constrain ByteString where
   getType _ = "Data.ByteString.Internal.ByteString"
   gen px d t =
-    do dcp <- safeFromJust "genBS" . lookup "Data.ByteString.Internal.PS" <$> gets ctorEnv
+    do dcp <- lookupCtor "Data.ByteString.Internal.PS"
        tyi <- gets tyconInfo
-       let [tp,to,tl] = applyPreds (expandRApp M.empty tyi t) dcp
-       let su = mkSubst [("fplen", var $ S "len")]
+       emb <- gets embEnv
+       let [tp,to,tl] = applyPreds (expandRApp emb tyi t) dcp
+       let su = mkSubst [("fplen", var $ ("len" :: Symbol))]
        p <- gen (Proxy :: Proxy [Word8]) (d-1) $ subst su (snd tp)
-       let su = mkSubst [("fplen", var $ S "len"), (fst tp, var p)]
+       let su = mkSubst [("fplen", var $ ("len" :: Symbol)), (fst tp, var p)]
        o <- gen (Proxy :: Proxy Int) (d-1) $ subst su (snd to)
-       let su = mkSubst [("fplen", var $ S "len"), (fst tp, var p), (fst to, var o)]
+       let su = mkSubst [("fplen", var $ ("len" :: Symbol)), (fst tp, var p), (fst to, var o)]
        l <- gen (Proxy :: Proxy Int) (d-1) $ subst su (snd tl)
        make "Data.ByteString.Internal.PS" [p, o, l] $ FObj (getType px)
   stitch d t =
@@ -692,7 +694,7 @@ instance Constrain ByteString where
        ws <- stitch (d-1) t
        let (PS fp _ _) = pack ws
        return $ PS fp o l
-  toExpr b = app (S "Data.ByteString.fromList") [toExpr $ (unpack b :: [Word8])]
+  toExpr b = app ("Data.ByteString.fromList" :: Symbol) [toExpr $ (unpack b :: [Word8])]
 
 pack str = unsafeCreate (length str) $ \(Ptr p) -> stToIO (go p 0# str)
     where
