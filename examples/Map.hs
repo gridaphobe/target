@@ -266,6 +266,7 @@ module Map (
             , Unit
             , liquidTests
             , liquidTests_bad
+            , Maybe, Char, Bool, Int, Either
             ) where
 
 import Prelude hiding (lookup,map,filter,foldr,foldl,null)
@@ -2474,7 +2475,9 @@ fromDistinctAscList xs
                         was found in the tree.
 --------------------------------------------------------------------}
 
-data MaybeS a = NothingS | JustS a -- LIQUID: !-annot-fix
+data MaybeS a = NothingS | JustS a deriving (Generic, Show) -- LIQUID: !-annot-fix
+
+instance Constrain a => Constrain (MaybeS a)
 
 
 {--------------------------------------------------------------------

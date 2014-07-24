@@ -101,7 +101,7 @@ tests = testModule "examples/Expr.hs"
           , liquidCheck subst "Expr.subst" 3
           ]
 
-main = tests
+--main = tests
 
 instance (Ord a, Constrain a) => Constrain (Set a) where
   getType _ = "Data.Set.Base.Set"

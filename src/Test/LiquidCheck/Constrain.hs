@@ -80,7 +80,11 @@ reproxyElem = reproxy
 --------------------------------------------------------------------------------
 --- Instances
 --------------------------------------------------------------------------------
-instance Constrain ()
+instance Constrain () where
+  getType _ = "()"
+  gen _ _ _ = fresh [] (FObj "()")
+  stitch _ _ = return ()
+  toExpr _   = app (stringSymbol "()") []
 -- instance Constrain () where
 --   getType _ = "GHC.Types.()"
 --   gen _ _ _ = fresh [] (FObj "GHC.Types.()")
@@ -139,6 +143,7 @@ instance Constrain Bool where
 instance Constrain a => Constrain [a]
 instance Constrain a => Constrain (Maybe a)
 instance (Constrain a, Constrain b) => Constrain (a,b)
+instance (Constrain a, Constrain b, Constrain c) => Constrain (a,b,c)
 
 instance (Num a, Integral a, Constrain a) => Constrain (Ratio a) where
   getType _ = "GHC.Real.Ratio"
@@ -213,7 +218,8 @@ choose x cs
 make :: Symbol -> [Variable] -> Sort -> Gen Variable
 make c vs s
   = do x  <- fresh vs s
-       t <- (safeFromJust "make" . lookup c) <$> gets ctorEnv
+       --t <- (safeFromJust "make" . lookup c) <$> gets ctorEnv
+       t <- lookupCtor c
        let (xs, _, rt) = bkArrowDeep t
            su          = mkSubst $ zip (map symbol xs) (map var vs)
            ct          = FFunc 0 $ map snd vs ++ [s]
@@ -227,14 +233,15 @@ make' c x vs
   = do Just ch <- gets chosen
        mapM_ (addDep ch) vs
        addConstraint $ prop (fst ch) `imp` (var (fst x) `eq` app c (map (var . fst) vs))
-       mt <- lookup c <$> gets ctorEnv
-       case mt of
-         Nothing -> addConstructor (c, FFunc 0 $ map snd vs ++ [snd x])
-         Just t  -> do
-           let (xs, _, rt) = bkArrowDeep t
-               su          = mkSubst $ zip (map symbol xs) (map var vs)
-           addConstructor (c, rTypeSort mempty t)
-           constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
+       --mt <- lookup c <$> gets ctorEnv
+       --case mt of
+       --  Nothing -> addConstructor (c, FFunc 0 $ map snd vs ++ [snd x])
+       --  Just t  -> do
+       t <- lookupCtor c
+       let (xs, _, rt) = bkArrowDeep t
+           su          = mkSubst $ zip (map symbol xs) (map var vs)
+       addConstructor (c, rTypeSort mempty t)
+       constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
 
 constrain :: Pred -> Gen ()
 constrain p
@@ -247,7 +254,7 @@ constrain p
 -- make2 :: forall a b. (Constrain a, Constrain b)
 --       => TH.Name -> (Proxy a, Proxy b) -> SpecType -> Sort -> Int -> Gen String
 make2 c (pa,pb) t s d
-  = do dcp <- fromJust . lookup c <$> gets ctorEnv
+  = do dcp <- lookupCtor c -- fromJust . lookup c <$> gets ctorEnv
        tyi <- gets tyconInfo
        let [t1,t2] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
        x1 <- gen pa (d-1) (snd t1)
@@ -258,7 +265,7 @@ make2 c (pa,pb) t s d
 -- make3 :: forall a b c. (Constrain a, Constrain b, Constrain c)
 --       => TH.Name -> (Proxy a, Proxy b, Proxy c) -> SpecType -> Sort -> Int -> Gen String
 make3 c (pa,pb,pc) t s d
-  = do dcp <- fromJust . lookup c <$> gets ctorEnv
+  = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
        tyi <- gets tyconInfo
        let [t1,t2,t3] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
        x1 <- gen pa (d-1) (snd t1)
@@ -269,7 +276,7 @@ make3 c (pa,pb,pc) t s d
        make c [x1,x2,x3] s
 
 make4 c (p1,p2,p3,p4) t s d
-  = do dcp <- fromJust . lookup c <$> gets ctorEnv
+  = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
        tyi <- gets tyconInfo
        let [t1,t2,t3,t4] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
        x1 <- gen p1 (d-1) (snd t1)
@@ -282,7 +289,7 @@ make4 c (p1,p2,p3,p4) t s d
        make c [x1,x2,x3,x4] s
 
 make5 c (p1,p2,p3,p4,p5) t s d
-  = do dcp <- fromJust . lookup c <$> gets ctorEnv
+  = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
        tyi <- gets tyconInfo
        let [t1,t2,t3,t4,t5] = applyPreds (expandRApp (M.fromList []) tyi t) dcp
        x1 <- gen p1 (d-1) (snd t1)
@@ -441,7 +448,8 @@ ggenAlt (p :: Proxy (C1 c f a)) x d t
   = withFreshChoice $ \ch -> do
      let cn = conName (undefined :: C1 c f a)
      mod <- show <$> gets modName
-     dcp <- safeFromJust "ggenAlt" . lookup (symbol $ mod++"."++cn) <$> gets ctorEnv
+     --dcp <- safeFromJust "ggenAlt" . lookup (symbol $ mod++"."++cn) <$> gets ctorEnv
+     dcp <- lookupCtor (symbol $ mod++"."++cn)
      tyi <- gets tyconInfo
      let ts = applyPreds (expandRApp (M.fromList []) tyi t) dcp
      xs  <- ggenArgs (reproxyGElem p) d ts

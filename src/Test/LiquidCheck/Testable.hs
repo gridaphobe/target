@@ -8,7 +8,7 @@
 module Test.LiquidCheck.Testable where
 
 import           Control.Arrow                 (second)
-import           Control.Exception             (evaluate)
+import           Control.Exception             (SomeException, evaluate, try)
 import           Control.Monad
 import           Control.Monad.State
 import qualified Data.HashMap.Strict           as M
@@ -61,14 +61,17 @@ process1 d f vs cts (x,ti) to = go vs 0
       do when (n `mod` 100 == 0) $ whenVerbose $ io $ printf "Checked %d inputs\n" n
          setValues vs
          a <- stitch d ti
-         -- io $ print a
-         r <- io $ evaluate (f a)
-         let env = map (second (`app` [])) cts
-                ++ [(x, toExpr a)]
-         sat <- evalType (M.fromList env) to (toExpr r)
-         case sat of
-           False -> return $ Failed $ show a
-           True  -> go vss (n+1) -- return $ Passed (n+1))
+         --io $ print a
+         er <- io $ try $ evaluate (f a)
+         case er of
+           Left (e::SomeException) -> return $ Failed $ show a
+           Right r -> do
+             let env = map (second (`app` [])) cts
+                    ++ [(x, toExpr a)]
+             sat <- evalType (M.fromList env) to (toExpr r)
+             case sat of
+               False -> return $ Failed $ show a
+               True  -> go vss (n+1) -- return $ Passed (n+1))
 
 instance (Constrain a, Constrain b, Constrain c) => Testable (a -> b -> c) where
   test f d (stripQuals -> (RFun xa ta (RFun xb tb to _) _)) = do
@@ -111,15 +114,16 @@ process2 d f vs cts (xa,ta) (xb,tb) to = go vs 0
          b <- stitch d tb
          a <- stitch d ta
          -- io $ print (a,b)
-         r <- io $ evaluate (f a b)
-         -- io $ print r
-         -- io $ putStrLn ""
-         let env = map (second (`app` [])) cts
-                ++ [(xa, toExpr a),(xb, toExpr b)]
-         sat <- evalType (M.fromList env) to (toExpr r)
-         case sat of
-           False -> return $ Failed $ show (a, b)
-           True  -> go vss (n+1) -- return $ Passed (n+1))
+         er <- io $ try $ evaluate (f a b)
+         case er of
+           Left (e::SomeException) -> return $ Failed $ show (a, b)
+           Right r -> do
+             let env = map (second (`app` [])) cts
+                    ++ [(xa, toExpr a),(xb, toExpr b)]
+             sat <- evalType (M.fromList env) to (toExpr r)
+             case sat of
+               False -> return $ Failed $ show (a, b)
+               True  -> go vss (n+1) -- return $ Passed (n+1))
 
 instance (Constrain a, Constrain b, Constrain c, Constrain d)
          => Testable (a -> b -> c -> d) where
@@ -162,13 +166,16 @@ process3 d f vs cts (xa, ta) (xb, tb) (xc, tc) to = go vs 0
          b <- stitch d tb
          a <- stitch d ta
          -- io $ print (a,b,c)
-         r <- io $ evaluate (f a b c)
-         let env = map (second (`app` [])) cts
-                ++ [(xa, toExpr a),(xb, toExpr b),(xc, toExpr c)]
-         sat <- evalType (M.fromList env) to (toExpr r)
-         case sat of
-           False -> return $ Failed $ show (a, b, c)
-           True  -> go vss (n+1) -- return $ Passed (n+1))
+         er <- io $ try $ evaluate (f a b c)
+         case er of
+           Left (e::SomeException) -> return $ Failed $ show (a, b, c)
+           Right r -> do
+             let env = map (second (`app` [])) cts
+                    ++ [(xa, toExpr a),(xb, toExpr b),(xc, toExpr c)]
+             sat <- evalType (M.fromList env) to (toExpr r)
+             case sat of
+               False -> return $ Failed $ show (a, b, c)
+               True  -> go vss (n+1) -- return $ Passed (n+1))
 
 
 instance (Constrain a, Constrain b, Constrain c, Constrain d, Constrain e)
@@ -216,11 +223,14 @@ process4 sz f vs cts (xa,ta) (xb,tb) (xc,tc) (xd,td) to = go vs 0
          c <- stitch sz tc
          b <- stitch sz tb
          a <- stitch sz ta
-         io $ print (a,b,c,d)
-         r <- io $ evaluate (f a b c d)
-         let env = map (second (`app` [])) cts
-                ++ [(xa, toExpr a),(xb, toExpr b),(xc, toExpr c),(xd, toExpr d)]
-         sat <- evalType (M.fromList env) to (toExpr r)
-         case sat of
-           False -> return $ Failed $ show (a, b, c, d)
-           True  -> go vss (n+1) -- return $ Passed (n+1))
+         --io $ print (a,b,c,d)
+         er <- io $ try $ evaluate (f a b c d)
+         case er of
+           Left (e::SomeException) -> return $ Failed $ show (a, b, c, d)
+           Right r -> do
+             let env = map (second (`app` [])) cts
+                    ++ [(xa, toExpr a),(xb, toExpr b),(xc, toExpr c),(xd, toExpr d)]
+             sat <- evalType (M.fromList env) to (toExpr r)
+             case sat of
+               False -> return $ Failed $ show (a, b, c, d)
+               True  -> go vss (n+1) -- return $ Passed (n+1))

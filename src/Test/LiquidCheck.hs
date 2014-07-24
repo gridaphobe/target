@@ -29,7 +29,7 @@ testModule :: FilePath -> [Gen Result] -> IO ()
 testModule m ts
   = do sp <- getSpec m
        forM_ ts $ \t -> do
-         res <- runGen sp t
+         res <- runGen sp m t
          case res of
            Passed n -> printf "OK. Passed %d tests\n\n" n
            Failed x -> printf "Found counter-example: %s\n\n" x
@@ -49,7 +49,7 @@ testOne :: Testable f => Int -> f -> String -> FilePath -> IO Result
 testOne d f name path
   = do sp <- getSpec path
        let ty = val $ safeFromJust "testOne" $ lookup name $ map (first showpp) $ tySigs sp
-       runGen sp $ test f d ty
+       runGen sp path $ test f d ty
 
 -- mkTest :: TH.Name -> TH.ExpQ
 -- mkTest f = do loc <- TH.location

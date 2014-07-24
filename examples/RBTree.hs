@@ -223,7 +223,7 @@ isB _ = False
   @-}
 
 {-@ measure isB        :: RBTree a -> Prop
-    isB (Leaf)         = true
+    isB (Leaf)         = false
     isB (Node c x l r) = c == B
   @-}
 
