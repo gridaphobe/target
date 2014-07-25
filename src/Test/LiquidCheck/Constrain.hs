@@ -24,8 +24,8 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.Proxy
 import           Data.Ratio
-import qualified Data.Text                        as ST
-import qualified Data.Text.Lazy                   as T
+import qualified Data.Text                        as T
+import qualified Data.Text.Lazy                   as LT
 import           Data.Word (Word8)
 import           GHC.Generics
 import           System.IO.Unsafe
@@ -120,7 +120,7 @@ instance Constrain Char where
        constrain $ ofReft x (toReft $ rt_reft t)
        return x
   stitch d t = stitch d t >>= \(x::Int) -> return . chr $ x + ord 'a'
-  toExpr  c = ESym $ SL $ ST.singleton c
+  toExpr  c = ESym $ SL $ T.singleton c
 
 instance Constrain Word8 where
   getType _ = "GHC.Word.Word8"

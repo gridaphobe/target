@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -12,7 +13,8 @@ import qualified Data.HashSet                    as S
 import           Data.List                       hiding (sort)
 import           Data.Monoid
 import           Data.Text.Format
-import qualified Data.Text.Lazy                  as T
+import qualified Data.Text                       as T
+import qualified Data.Text.Lazy                  as LT
 import qualified Data.Vector                     as V
 import           System.FilePath
 import           System.IO.Unsafe
@@ -50,9 +52,9 @@ reaches root model deps = go root
         reached  = V.map snd . V.filter ((==root).fst)
 
 allSat :: [Symbol] -> Gen [[Value]]
-allSat roots = setup >>= io . go
+allSat roots = {-# SCC "allSat" #-} setup >>= io . go
   where
-    setup = do
+    setup = {-# SCC "allSat.setup" #-} do
        ctx <- gets smtContext
        emb <- gets embEnv
        -- declare sorts
@@ -86,13 +88,13 @@ allSat roots = setup >>= io . go
        return (ctx,vs,deps)
 
     go :: (Context, [Variable], V.Vector (Symbol,Symbol)) -> IO [[Value]]
-    go (ctx,vs,deps) = do
+    go (!ctx,!vs,!deps) = {-# SCC "allSat.go" #-} do
        resp <- command ctx CheckSat
        case resp of
          Error e -> error (T.unpack e)
          Unsat   -> return []
          Sat     -> do
-           Values model <- command ctx (GetValue [symbol v | (v,t) <- vs, t `elem` interps])
+           Values model <- {-# SCC "allSat.go.GetValue" #-} command ctx (GetValue [v | (v,t) <- vs, t `elem` interps])
            -- print model
            let cs = V.toList $ refute roots (M.fromList model) deps vs
            -- i <- gets seed
@@ -101,12 +103,12 @@ allSat roots = setup >>= io . go
 
     ints vs = S.fromList [symbol v | (v,t) <- vs, t `elem` interps]
     interps = [FInt, boolsort, choicesort]
-    refute roots model deps vs
-      = V.map    (\(x,v) -> var x `eq` ESym (SL $ T.toStrict v))
+    refute !roots !model !deps !vs
+      = {-# SCC "refute" #-} V.map    (\(x,v) -> var x `eq` ESym (SL v))
       . V.filter (\(x,v) -> x `S.member` ints vs)
       $ realized
       where
-        realized = V.concat $ map (\root -> reaches root model deps) roots
+        realized = {-# SCC "realized" #-} V.concat $ map (\root -> reaches root model deps) roots
 
 generateDepGraph :: String -> V.Vector (Symbol,Symbol) -> Constraint -> IO ()
 generateDepGraph name deps constraints = writeFile (name <.> "dot") digraph
@@ -114,7 +116,7 @@ generateDepGraph name deps constraints = writeFile (name <.> "dot") digraph
     digraph = unlines $ ["digraph G {"] ++ edges ++ ["}"]
     edges   = [ printf "\"%s\" -> \"%s\" [label=\"%s\"];" (symbolString p) (symbolString c) cs
               | (p, c) <- V.toList deps
-              , let cs = intercalate "\\n" [ T.unpack (smt2 p)
+              , let cs = intercalate "\\n" [ LT.unpack (smt2 p)
                                            | PImp (PBexp (EVar a)) p <- constraints
                                            , a == c]
               ]

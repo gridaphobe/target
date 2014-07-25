@@ -9,7 +9,7 @@ import           Language.Haskell.Liquid.Types
 
 import           GHC
 
-import qualified Data.Text.Lazy as T
+import qualified Data.Text as T
 
 type Constraint = [Pred]
 type Variable   = ( Symbol -- the name
