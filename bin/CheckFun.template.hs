@@ -32,16 +32,16 @@ main = do
 checkMany :: GhcSpec -> IO [(Int, Double, Outcome)]
 checkMany spec = go 2
   where
-    go 20     = return []
+    go 10     = return []
     go n      = checkAt n >>= \case
                   (d,Nothing) -> return [(n,d,TimedOut)]
                   --NOTE: ignore counter-examples for the sake of exploring coverage
                   --(d,Just (Failed s)) -> return [(n,d,Completed (Failed s))]
                   (d,Just r)  -> ((n,d,Completed r):) <$> go (n+1)
     checkAt n = do putStrNow (printf "%d " n)
-                   timed $ timeout twentyMinutes $ runGen spec "$file$" $ testFun ($fun$ :: $type$) "$fun$" n
+                   timed $ timeout time $ runGen spec "$file$" $ testFun ($fun$ :: $type$) "$fun$" n
 
-twentyMinutes = 10 * 60 * 1000000
+time = $timeout$ * 60 * 1000000
 
 getTime :: IO Double
 getTime = realToFrac `fmap` getPOSIXTime

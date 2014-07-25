@@ -241,26 +241,26 @@ module Map (
             , maxViewWithKey
 
             -- * Debugging
-            , showTree
-            , showTreeWith
-            , valid
+            -- , showTree
+            -- , showTreeWith
+            -- , valid
 
-            -- Used by the strict version
-            , bin
-            , balance
-            , balanced
-            , balanceL
-            , balanceR
-            , delta
-            , join
-            , merge
-            , glue
-            , trim, zoo1, zoo2
-            , trimLookupLo
-            , foldlStrict
-            , MaybeS(..)
-            , filterGt
-            , filterLt
+            -- -- Used by the strict version
+            -- , bin
+            -- , balance
+            -- , balanced
+            -- , balanceL
+            -- , balanceR
+            -- , delta
+            -- , join
+            -- , merge
+            -- , glue
+            -- , trim, zoo1, zoo2
+            -- , trimLookupLo
+            -- , foldlStrict
+            -- , MaybeS(..)
+            -- , filterGt
+            -- , filterLt
 
             -- LIQUID
             , Unit

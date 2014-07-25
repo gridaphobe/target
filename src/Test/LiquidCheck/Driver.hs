@@ -80,9 +80,10 @@ allSat roots = {-# SCC "allSat" #-} setup >>= io . go
        mapM_ (\m -> io . command ctx $ makeDecl (val $ name m) (rTypeSort emb $ sort m)) ms
        -- assert constraints
        cs <- gets constraints
-       mapM_ (\c -> do {i <- gets seed; modify $ \s@(GS {..}) -> s { seed = seed + 1 };
-                        io . command ctx $ Assert (Just i) c})
-         cs
+       --mapM_ (\c -> do {i <- gets seed; modify $ \s@(GS {..}) -> s { seed = seed + 1 };
+       --                 io . command ctx $ Assert (Just i) c})
+       --  cs
+       mapM_ (\c -> io . command ctx $ Assert Nothing c) cs
        deps <- V.fromList . map (symbol *** symbol) <$> gets deps
        -- io $ generateDepGraph "deps" deps cs
        return (ctx,vs,deps)
