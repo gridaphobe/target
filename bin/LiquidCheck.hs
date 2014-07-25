@@ -52,7 +52,7 @@ findModule hs = case [m | "module":m:_ <- T.words <$> T.lines hs] of
                   m:_ -> m
 
 main = do
-  f:monos <- getArgs
+  f:time:monos <- getArgs
   hs  <- T.readFile f
   tpl <- T.readFile "bin/CheckFun.template.hs"
   --let m  = findModule hs
@@ -61,7 +61,7 @@ main = do
   createDirectoryIfMissing True "_results"
   forM_ fs $ \(fun,t) -> do
     --t <- monomorphize f fun
-    let contents = subst tpl [ ("$module$", m), ("$file$", T.pack f), ("$fun$", m<>"."<>fun), ("$type$", t)]
+    let contents = subst tpl [ ("$module$", m), ("$file$", T.pack f), ("$fun$", m<>"."<>fun), ("$type$", t), ("$timeout$", T.pack time)]
         path     = mkPath f fun
     T.writeFile path contents
     system $ printf "rm -f \"%s\"" $ dropExtension path
@@ -177,19 +177,20 @@ runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
              let df' = df { GHC.ghcMode   = GHC.CompManager
                           , GHC.ghcLink   = GHC.NoLink --GHC.LinkInMemory
                           , GHC.hscTarget = GHC.HscNothing --GHC.HscInterpreted
-                          , GHC.optLevel  = 2
+                          , GHC.optLevel  = 0
+                          , GHC.includePaths  = ["src"]
                           } `GHC.gopt_set` GHC.Opt_ImplicitImportQualified
              GHC.setSessionDynFlags df'
              x
 
 loadModule f = do target <- GHC.guessTarget f Nothing
-                  lcheck <- GHC.guessTarget "src/Test/LiquidCheck.hs" Nothing
-                  GHC.setTargets [target,lcheck]
+                  --lcheck <- GHC.guessTarget "src/Test/LiquidCheck.hs" Nothing
+                  GHC.setTargets [target] -- [target,lcheck]
                   GHC.load GHC.LoadAllTargets
                   modGraph <- GHC.getModuleGraph
                   let m = fromJust $ find ((==f) . GHC.msHsFilePath) modGraph
                   GHC.setContext [ GHC.IIModule (GHC.ms_mod_name m)
-                                 , GHC.IIDecl $ GHC.simpleImportDecl
-                                              $ GHC.mkModuleName "Test.LiquidCheck"
+                                 -- , GHC.IIDecl $ GHC.simpleImportDecl
+                                 --              $ GHC.mkModuleName "Test.LiquidCheck"
                                  ]
                   return m

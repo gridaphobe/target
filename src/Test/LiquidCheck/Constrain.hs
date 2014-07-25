@@ -85,8 +85,8 @@ reproxyElem = reproxy
 --- Instances
 --------------------------------------------------------------------------------
 instance Constrain () where
-  getType _ = "()"
-  gen _ _ _ = fresh [] (FObj "()")
+  getType _ = "GHC.Types.Unit"
+  gen _ _ _ = fresh [] (FObj "GHC.Types.Unit")
   stitch _ _ = return ()
   toExpr _   = app ("()" :: Symbol) []
 -- instance Constrain () where
