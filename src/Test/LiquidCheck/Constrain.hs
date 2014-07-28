@@ -103,8 +103,8 @@ instance Constrain Int where
   gen _ d t = fresh [] FInt >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
        -- use the unfolding depth to constrain the range of Ints, like QuickCheck
-       constrain $ var x `ge` fromIntegral (negate d)
-       constrain $ var x `le` fromIntegral d
+       constrain $ var x `gt` fromIntegral (negate d)
+       constrain $ var x `lt` fromIntegral d
        return x
   stitch _ _ = read . T.unpack <$> pop
   toExpr i = ECon $ I $ fromIntegral i
@@ -119,7 +119,7 @@ instance Constrain Char where
   getType _ = FObj "GHC.Types.Char"
   gen _ d t = fresh [] FInt >>= \x ->
     do constrain $ var x `ge` 0
-       constrain $ var x `le` fromIntegral d
+       constrain $ var x `lt` fromIntegral d
        constrain $ ofReft x (toReft $ rt_reft t)
        return x
   stitch d t = stitch d t >>= \(x::Int) -> return . chr $ x + ord 'a'
@@ -130,7 +130,7 @@ instance Constrain Word8 where
   gen _ d t = fresh [] FInt >>= \x ->
     do _ <- gets depth
        constrain $ var x `ge` 0
-       constrain $ var x `le` fromIntegral d
+       constrain $ var x `lt` fromIntegral (d-1)
        constrain $ ofReft x (toReft $ rt_reft t)
        return x
   stitch d t = stitch d t >>= \(x::Int) -> return $ fromIntegral x
@@ -208,6 +208,7 @@ instance (Constrain a, Constrain b) => Constrain (a -> b) where
                                                                t `elem` [FInt, choicesort, boolsort]])
                    setValues (map snd model)
                    o  <- stitch d to
+                   -- io $ printf "%s -> %s\n" (show a) (show o)
                    io (modifyIORef mref ((e,o):))
                    io $ command ctx Pop
                    return o
