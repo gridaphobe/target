@@ -9,6 +9,10 @@ infix 5 `ge`
 ge  = PAtom Ge
 infix 5 `le`
 le  = PAtom Le
+infix 5 `gt`
+gt  = PAtom Gt
+infix 5 `lt`
+lt  = PAtom Lt
 infix 3 `iff`
 iff = PIff
 infix 3 `imp`
