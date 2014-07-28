@@ -71,10 +71,34 @@ data GenState
        , makingTy     :: !Symbol
        , verbose      :: !Bool
        , logging      :: !Bool
-       , smtContext   :: !(Context)
-       } -- deriving (Show)
+       , smtContext   :: !Context
+       }
 
-initGS fp sp ctx = GS def def def def def def dcons cts meas (tcEmbeds sp) tyi free [] sigs def Nothing S.empty "" fp "" False False ctx
+initGS fp sp ctx 
+  = GS { seed         = 0
+       , variables    = []
+       , choices      = []
+       , constraints  = []
+       , values       = []
+       , deps         = []
+       , dconEnv      = dcons
+       , ctorEnv      = cts
+       , measEnv      = meas
+       , embEnv       = tcEmbeds sp
+       , tyconInfo    = tyi
+       , freesyms     = free
+       , constructors = []
+       , sigs         = sigs
+       , depth        = 0
+       , chosen       = Nothing
+       , sorts        = S.empty
+       , modName      = ""
+       , filePath     = fp
+       , makingTy     = ""
+       , verbose      = False
+       , logging      = False
+       , smtContext   = ctx
+       } 
   where
     dcons = tidy $ map (symbol *** id) (dconsP sp)
     cts   = tidy $ map (symbol *** val) (ctors sp)

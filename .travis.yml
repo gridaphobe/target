@@ -1,34 +1,42 @@
-language: haskell
-ghc: 7.8
+# NB: don't set `language: haskell` here
 
 notifications:
   email:
     - gridaphobe@gmail.com
 
-install:
+# Note: the distinction between `before_install` and `install` is not important.
+before_install:
+ - travis_retry sudo add-apt-repository -y ppa:hvr/ghc
+ - travis_retry sudo apt-get update
+ - travis_retry sudo apt-get install cabal-install-1.18 ghc-7.8.3 ocaml camlidl
+ - export PATH="$HOME/.cabal/bin:/opt/ghc/7.8.3/bin:/opt/cabal/1.18/bin:$PATH"
+ - cabal update
  - git clone git://github.com/ucsd-progsys/liquid-fixpoint.git /tmp/fixpoint
  - git clone git://github.com/ucsd-progsys/liquidhaskell.git /tmp/liquidhaskell
- - sudo apt-get update -qq
- - sudo apt-get install ocaml camlidl
  - pushd /tmp/fixpoint && cabal install && popd
  - pushd /tmp/liquidhaskell && cabal install && popd
+ - curl http://goto.ucsd.edu/~gridaphobe/z3 -o "$HOME/.cabal/bin/z3"
+ - chmod a+x "$HOME/.cabal/bin/z3"
+
+install:
  - cabal install --only-dependencies --enable-tests
- - mkdir .liquid
 
-# Here starts the actual work to be performed for the package under
-# test; any command which exits with a non-zero exit code causes the
-# build to fail.
+# Here starts the actual work to be performed for the package under test; any command which exits with a non-zero exit code causes the build to fail.
 script:
- # -v2 provides useful information for debugging
- - cabal install -v2
-
- # getting weird cabal mismatch error without the re-configure...
- - cabal configure --enable-tests && cabal build && cabal exec ./dist/build/test/test
-
- # makes sure the .cabal file is reasonable
+ - cabal configure --enable-tests -v2  # -v2 provides useful information for debugging
+ - cabal build
+ - cabal copy
+ - cabal register
+ - ./dist/build/test/test
  - cabal check
+ - cabal sdist   # tests that a source-distribution can be generated
 
- # tests that a source-distribution can be generated
- - cabal sdist
-
-# EOF
+# The following scriptlet checks that the resulting source distribution can be built & installed
+ - export SRC_TGZ=$(cabal-1.18 info . | awk '{print $2 ".tar.gz";exit}') ;
+   cd dist/;
+   if [ -f "$SRC_TGZ" ]; then
+      cabal install "$SRC_TGZ";
+   else
+      echo "expected '$SRC_TGZ' not found";
+      exit 1;
+   fi
