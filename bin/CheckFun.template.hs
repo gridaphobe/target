@@ -18,28 +18,29 @@ import Test.LiquidCheck.Util
 main :: IO ()
 main = do
   spec <- getSpec "$file$"
-  putStr ("$fun$" ++ ": ")
-  rs <- checkMany spec
-  putStrLn "done"
+  putStrLn ("$fun$" ++ ": ")
   withFile "_results/$fun$.tsv" WriteMode $ \h -> do
     hPutStrLn h "Depth\tTime(s)\tResult"
-    forM_ rs $ \(d,t,r) -> do 
-      let s = printf "%d\t%.2f\t%s\n" d t (show r)
-      putStrLn s
-      hPutStrLn h s
+    checkMany spec h
+  putStrLn "done"
   putStrLn ""
 
-checkMany :: GhcSpec -> IO [(Int, Double, Outcome)]
-checkMany spec = go 2
+checkMany :: GhcSpec -> Handle -> IO [(Int, Double, Outcome)]
+checkMany spec h = go 2
   where
     go 10     = return []
     go n      = checkAt n >>= \case
-                  (d,Nothing) -> return [(n,d,TimedOut)]
+                  (d,Nothing) -> do let s = printf "%d\t%.2f\t%s" n d (show TimedOut)
+                                    putStrLn s >> hFlush stdout
+                                    hPutStrLn h s >> hFlush h
+                                    return [(n,d,TimedOut)]
                   --NOTE: ignore counter-examples for the sake of exploring coverage
                   --(d,Just (Failed s)) -> return [(n,d,Completed (Failed s))]
-                  (d,Just r)  -> ((n,d,Completed r):) <$> go (n+1)
-    checkAt n = do putStrNow (printf "%d " n)
-                   timed $ timeout time $ runGen spec "$file$" $ testFun ($fun$ :: $type$) "$fun$" n
+                  (d,Just r)  -> do let s = printf "%d\t%.2f\t%s" n d (show (Completed r))
+                                    putStrLn s >> hFlush stdout
+                                    hPutStrLn h s >> hFlush h
+                                    ((n,d,Completed r):) <$> go (n+1)
+    checkAt n = timed $ timeout time $ runGen spec "$file$" $ testFun ($fun$ :: $type$) "$fun$" n
 
 time = $timeout$ * 60 * 1000000
 

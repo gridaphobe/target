@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ViewPatterns #-}
 module Main where
 
 import           Control.Applicative
@@ -60,20 +61,19 @@ main = do
   (m,fs) <- findModuleFuns f (pairs monos)
   createDirectoryIfMissing True "_results"
   forM_ fs $ \(fun,t) -> do
-    --t <- monomorphize f fun
     let contents = subst tpl [ ("$module$", m), ("$file$", T.pack f), ("$fun$", m<>"."<>fun), ("$type$", t), ("$timeout$", T.pack time)]
         path     = mkPath f fun
     T.writeFile path contents
     system $ printf "rm -f \"%s\"" $ dropExtension path
     system $ printf "rm -f \"_results/%s.tix\"" $ dropExtension $ takeFileName path
     system $ printf "ghc --make -fhpc -O2 \"%s\" -i%s:examples:src" path (takeDirectory path)
-    system $ printf "cabal exec \"%s\"" $ dropExtension path
+    system $ printf "timeout -k30s 15m \"%s\"" $ dropExtension path
     system $ printf "mv \"%s.tix\" _results/" $ dropExtension $ takeFileName path
   -- print m
   -- print fs
-  --forM_ fs $ \fun -> do
+  --forM_ fs $ \(T.unpack -> fun, T.unpack -> ty) -> do
   --  putStrNow (fun ++ ": ")
-  --  rs <- checkMany f m fun
+  --  rs <- checkMany f (T.unpack m) fun ty
   --  putStrLn "done"
   --  forM_ rs $ \(d,t,r) -> printf "%d\t%.2f\t%s\n" d t (show r)
   --  putStrLn ""
@@ -140,27 +140,31 @@ monomorphic df int monos (GHC.ForAllTy a t)
 monomorphic df int monos t
   = error $ "Don't know how to monomorphize " ++ GHC.showPpr df t
 
-mkLiquidCheck d path m fun
-  = printf "Test.LiquidCheck.testOne %d %s \"%s\" \"%s\""
-           d fun (m++"."++fun) path
+mkLiquidCheck d path m fun ty
+  = printf "Test.LiquidCheck.testOne %d (%s :: %s) \"%s\" \"%s\""
+           d fun ty (m++"."++fun) path
 
 data Outcome = Completed Result
              | TimedOut
              deriving (Show)
 
-checkMany :: FilePath -> String -> String -> IO [(Int, Double, Outcome)]
-checkMany path mod fun = go 2
+checkMany :: FilePath -> String -> String -> String -> IO [(Int, Double, Outcome)]
+checkMany path mod fun ty = go 2
   where
+    go 11     = return []
     go n      = checkAt n >>= \case
                   (d,Nothing) -> return [(n,d,TimedOut)]
                   (d,Just r)  -> ((n,d,Completed r):) <$> go (n+1)
-    checkAt n = do test <- runGhc $ do
+    checkAt :: Int -> IO (Double, Maybe Result)
+    checkAt n = do (test :: IO Result) <- runGhc $ do
                      loadModule path
-                     GHC.Exts.unsafeCoerce# <$> GHC.compileExpr (mkLiquidCheck n path mod fun)
+                     let liquidCheck = mkLiquidCheck n path mod fun ty
+                     GHC.liftIO $ print liquidCheck
+                     GHC.Exts.unsafeCoerce# <$> GHC.compileExpr liquidCheck
                    putStrNow (printf "%d " n)
-                   timed $ timeout tenMinutes test
+                   timed $ timeout timeLimit test
 
-tenMinutes = 2 * 60 * 1000000
+timeLimit = 5 * 60 * 1000000
 
 getTime :: IO Double
 getTime = realToFrac `fmap` getPOSIXTime
@@ -175,10 +179,11 @@ putStrNow s = putStr s >> hFlush stdout
 runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
              df <- GHC.getSessionDynFlags
              let df' = df { GHC.ghcMode   = GHC.CompManager
-                          , GHC.ghcLink   = GHC.NoLink --GHC.LinkInMemory
-                          , GHC.hscTarget = GHC.HscNothing --GHC.HscInterpreted
-                          , GHC.optLevel  = 0
-                          , GHC.includePaths  = ["src"]
+                          , GHC.ghcLink   = GHC.LinkInMemory
+                          , GHC.hscTarget = GHC.HscInterpreted
+                          , GHC.optLevel  = 2
+                          -- , GHC.verbosity = 3
+                          -- , GHC.includePaths  = ["src"]
                           } `GHC.gopt_set` GHC.Opt_ImplicitImportQualified
              GHC.setSessionDynFlags df'
              x

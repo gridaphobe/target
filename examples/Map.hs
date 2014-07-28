@@ -252,7 +252,7 @@ module Map (
             -- , balanceL
             -- , balanceR
             -- , delta
-            -- , join
+            -- , join'
             -- , merge
             -- , glue
             -- , trim, zoo1, zoo2
@@ -1478,10 +1478,10 @@ union t1 t2 = hedgeUnion NothingS NothingS t1 t2
                           ->  OMap {v: k | (KeyBetween lo hi v)} a @-}
 hedgeUnion :: Ord a => MaybeS a -> MaybeS a -> Map a b -> Map a b -> Map a b
 hedgeUnion _   _   t1  Tip = t1
-hedgeUnion blo bhi Tip (Bin _ kx x l r) = join kx x (filterGt blo l) (filterLt bhi r)
+hedgeUnion blo bhi Tip (Bin _ kx x l r) = join' kx x (filterGt blo l) (filterLt bhi r)
 hedgeUnion _   _   t1  (Bin _ kx x Tip Tip) = insertR kx x t1 -- According to benchmarks, this special case increases
                                                               -- performance up to 30%. It does not help in difference or intersection.
-hedgeUnion blo bhi (Bin _ kx x l r) t2 = join kx x (hedgeUnion blo bmi l (trim blo bmi t2))
+hedgeUnion blo bhi (Bin _ kx x l r) t2 = join' kx x (hedgeUnion blo bmi l (trim blo bmi t2))
                                                    (hedgeUnion bmi bhi r (trim bmi bhi t2))
   where bmi = JustS kx
 #if __GLASGOW_HASKELL__ >= 700
@@ -1545,7 +1545,7 @@ difference t1 t2   = hedgeDiff NothingS NothingS t1 t2
 {-@ Decrease hedgeDiff 5 @-}
 hedgeDiff :: Ord a => MaybeS a -> MaybeS a -> Map a b -> Map a c -> Map a b
 hedgeDiff _  _   Tip _                  = Tip
-hedgeDiff blo bhi (Bin _ kx x l r) Tip  = join kx x (filterGt blo l) (filterLt bhi r)
+hedgeDiff blo bhi (Bin _ kx x l r) Tip  = join' kx x (filterGt blo l) (filterLt bhi r)
 hedgeDiff blo bhi t (Bin _ kx _ l r)    = merge kx (hedgeDiff blo bmi (trim blo bmi t) l)
                                                    (hedgeDiff bmi bhi (trim bmi bhi t) r)
   where bmi = JustS kx
@@ -1621,7 +1621,7 @@ hedgeInt _ _ _   Tip = Tip
 hedgeInt _ _ Tip _   = Tip
 hedgeInt blo bhi (Bin _ kx x l r) t2 = let l' = hedgeInt blo bmi l (trim blo bmi t2)
                                            r' = hedgeInt bmi bhi r (trim bmi bhi t2)
-                                       in if kx `member` t2 then join kx x l' r' else merge kx l' r'
+                                       in if kx `member` t2 then join' kx x l' r' else merge kx l' r'
   where bmi = JustS kx
 
 #if __GLASGOW_HASKELL__ >= 700
@@ -1724,7 +1724,7 @@ hedgeMerge :: Ord k => (k -> a -> b -> Maybe c)
 hedgeMerge f g1 g2 blo bhi   t1  Tip 
   = g1 blo bhi t1
 hedgeMerge f g1 g2 blo bhi Tip (Bin _ kx x l r) 
-  = g2 blo bhi $ join kx x (filterGt blo l) (filterLt bhi r)
+  = g2 blo bhi $ join' kx x (filterGt blo l) (filterLt bhi r)
 hedgeMerge f g1 g2 blo bhi (Bin _ kx x l r) t2  
   = let bmi = JustS kx 
         l' = hedgeMerge f g1 g2 blo bmi l (trim blo bmi t2)
@@ -1733,11 +1733,11 @@ hedgeMerge f g1 g2 blo bhi (Bin _ kx x l r) t2
     in case found of
          Nothing -> case g1 blo bhi (singleton kx x) of
                       Tip -> merge kx l' r'
-                      (Bin _ _ x' Tip Tip) -> join kx x' l' r'
+                      (Bin _ _ x' Tip Tip) -> join' kx x' l' r'
                       _ -> error "mergeWithKey: Given function only1 does not fulfil required conditions (see documentation)"
          Just x2 -> case f kx x x2 of
                       Nothing -> merge kx l' r'
-                      Just x' -> join kx x' l' r'
+                      Just x' -> join' kx x' l' r'
 {-# INLINE mergeWithKey #-}
 
 {--------------------------------------------------------------------
@@ -1852,7 +1852,7 @@ filter p m
 filterWithKey :: (k -> a -> Bool) -> Map k a -> Map k a
 filterWithKey _ Tip = Tip
 filterWithKey p (Bin _ kx x l r)
-  | p kx x    = join kx x (filterWithKey p l) (filterWithKey p r)
+  | p kx x    = join' kx x (filterWithKey p l) (filterWithKey p r)
   | otherwise = merge kx (filterWithKey p l) (filterWithKey p r)
 
 -- | /O(n)/. Partition the map according to a predicate. The first
@@ -1880,8 +1880,8 @@ partition p m
 partitionWithKey :: (k -> a -> Bool) -> Map k a -> (Map k a, Map k a)
 partitionWithKey _ Tip = (Tip,Tip)
 partitionWithKey p (Bin _ kx x l r)
-  | p kx x    = (join kx x l1 r1,merge kx l2 r2)
-  | otherwise = (merge kx l1 r1,join kx x l2 r2)
+  | p kx x    = (join' kx x l1 r1,merge kx l2 r2)
+  | otherwise = (merge kx l1 r1,join' kx x l2 r2)
   where
     (l1,l2) = partitionWithKey p l
     (r1,r2) = partitionWithKey p r
@@ -1904,7 +1904,7 @@ mapMaybe f = mapMaybeWithKey (\_ x -> f x)
 mapMaybeWithKey :: (k -> a -> Maybe b) -> Map k a -> Map k b
 mapMaybeWithKey _ Tip = Tip
 mapMaybeWithKey f (Bin _ kx x l r) = case f kx x of
-  Just y  -> join kx y (mapMaybeWithKey f l) (mapMaybeWithKey f r)
+  Just y  -> join' kx y (mapMaybeWithKey f l) (mapMaybeWithKey f r)
   Nothing -> merge kx (mapMaybeWithKey f l) (mapMaybeWithKey f r)
 
 -- | /O(n)/. Map values and separate the 'Left' and 'Right' results.
@@ -1934,8 +1934,8 @@ mapEither f m
 mapEitherWithKey :: (k -> a -> Either b c) -> Map k a -> (Map k b, Map k c)
 mapEitherWithKey _ Tip = (Tip, Tip)
 mapEitherWithKey f (Bin _ kx x l r) = case f kx x of
-  Left y  -> (join kx y l1 r1, merge kx l2 r2)
-  Right z -> (merge kx l1 r1, join kx z l2 r2)
+  Left y  -> (join' kx y l1 r1, merge kx l2 r2)
+  Right z -> (merge kx l1 r1, join' kx z l2 r2)
  where
     (l1,l2) = mapEitherWithKey f l
     (r1,r2) = mapEitherWithKey f r
@@ -2593,7 +2593,7 @@ filterGt (JustS b) t = filterGt' b t
 -- LIQUID TXREC-TOPLEVEL-ISSUE
 filterGt' _   Tip = Tip
 filterGt' b' (Bin _ kx x l r) =
-          case compare b' kx of LT -> join kx x (filterGt' b' l) r
+          case compare b' kx of LT -> join' kx x (filterGt' b' l) r
                                 EQ -> r
                                 GT -> filterGt' b' r
 #if __GLASGOW_HASKELL__ >= 700
@@ -2608,7 +2608,7 @@ filterLt (JustS b) t = filterLt' b t
 -- LIQUID TXREC-TOPLEVEL-ISSUE
 filterLt' _   Tip = Tip
 filterLt' b' (Bin _ kx x l r) =
-          case compare kx b' of LT -> join kx x l (filterLt' b' r)
+          case compare kx b' of LT -> join' kx x l (filterLt' b' r)
                                 EQ -> l
                                 GT -> filterLt' b' l
 #if __GLASGOW_HASKELL__ >= 700
@@ -2634,8 +2634,8 @@ split k t = k `seq`
   case t of
     Tip            -> (Tip, Tip)
     Bin _ kx x l r -> case compare k kx of
-      LT -> let (lt,gt) = split k l in (lt,join kx x gt r)
-      GT -> let (lt,gt) = split k r in (join kx x l lt,gt)
+      LT -> let (lt,gt) = split k l in (lt,join' kx x gt r)
+      GT -> let (lt,gt) = split k r in (join' kx x l lt,gt)
       EQ -> (l,r)
 #if __GLASGOW_HASKELL__ >= 700
 {-# INLINABLE split #-}
@@ -2656,8 +2656,8 @@ splitLookup k t = k `seq`
   case t of
     Tip            -> (Tip,Nothing,Tip)
     Bin _ kx x l r -> case compare k kx of
-      LT -> let (lt,z,gt) = splitLookup k l in (lt,z,join kx x gt r)
-      GT -> let (lt,z,gt) = splitLookup k r in (join kx x l lt,z,gt)
+      LT -> let (lt,z,gt) = splitLookup k l in (lt,z,join' kx x gt r)
+      GT -> let (lt,z,gt) = splitLookup k r in (join' kx x l lt,z,gt)
       EQ -> (l,Just x,r)
 #if __GLASGOW_HASKELL__ >= 700
 {-# INLINABLE splitLookup #-}
@@ -2675,7 +2675,7 @@ splitLookup k t = k `seq`
     [balance k x l r] Restores the balance and size.
                       Assumes that the original tree was balanced and
                       that [l] or [r] has changed by at most one element.
-    [join k x l r]    Restores balance and size.
+    [join' k x l r]    Restores balance and size.
 
   Furthermore, we can construct a new tree from two trees. Both operations
   assume that all values in [l] < all values in [r] and that [l] and [r]
@@ -2685,35 +2685,35 @@ splitLookup k t = k `seq`
     [merge l r]       Merges two trees and restores balance.
 
   Note: in contrast to Adam's paper, we use (<=) comparisons instead
-  of (<) comparisons in [join], [merge] and [balance].
+  of (<) comparisons in [join'], [merge] and [balance].
   Quickcheck (on [difference]) showed that this was necessary in order
   to maintain the invariants. It is quite unsatisfactory that I haven't
   been able to find out why this is actually the case! Fortunately, it
   doesn't hurt to be a bit more conservative.
 --------------------------------------------------------------------}
 {--------------------------------------------------------------------
-  Join
+  Join'
 --------------------------------------------------------------------}
 
-{-@ join :: k:k -> a -> OMap {v:k | v < k} a -> OMap {v:k| v > k} a -> OMap k a @-}
-join :: k -> a -> Map k a -> Map k a -> Map k a
-join k x m1 m2 = joinT k x m1 m2 (mlen m1 + mlen m2)
---LIQUID join kx x Tip r  = insertMin kx x r
---LIQUID join kx x l Tip  = insertMax kx x l
---LIQUID join kx x l@(Bin sizeL ky y ly ry) r@(Bin sizeR kz z lz rz)
---LIQUID   | delta*sizeL < sizeR  = balanceL kz z (join kx x l lz) rz
---LIQUID   | delta*sizeR < sizeL  = balanceR ky y ly (join kx x ry r)
+{-@ join' :: k:k -> a -> OMap {v:k | v < k} a -> OMap {v:k| v > k} a -> OMap k a @-}
+join' :: k -> a -> Map k a -> Map k a -> Map k a
+join' k x m1 m2 = join'T k x m1 m2 (mlen m1 + mlen m2)
+--LIQUID join' kx x Tip r  = insertMin kx x r
+--LIQUID join' kx x l Tip  = insertMax kx x l
+--LIQUID join' kx x l@(Bin sizeL ky y ly ry) r@(Bin sizeR kz z lz rz)
+--LIQUID   | delta*sizeL < sizeR  = balanceL kz z (join' kx x l lz) rz
+--LIQUID   | delta*sizeR < sizeL  = balanceR ky y ly (join' kx x ry r)
 --LIQUID   | otherwise            = bin kx x l r
 
-{-@ joinT :: k:k -> a -> a:OMap {v:k | v < k} a -> b:OMap {v:k| v > k} a -> SumMLen a b -> OMap k a @-}
-{-@ Decrease joinT 5 @-}
+{-@ join'T :: k:k -> a -> a:OMap {v:k | v < k} a -> b:OMap {v:k| v > k} a -> SumMLen a b -> OMap k a @-}
+{-@ Decrease join'T 5 @-}
 {- LIQUID WITNESS -}
-joinT :: k -> a -> Map k a -> Map k a -> Int -> Map k a
-joinT kx x Tip r _ = insertMin kx x r
-joinT kx x l Tip _ = insertMax kx x l
-joinT kx x l@(Bin sizeL ky y ly ry) r@(Bin sizeR kz z lz rz) d
-  | delta*sizeL < sizeR  = balanceL kz z (joinT kx x l lz (d-(mlen rz)-1)) rz
-  | delta*sizeR < sizeL  = balanceR ky y ly (joinT kx x ry r (d-(mlen ly)-1))
+join'T :: k -> a -> Map k a -> Map k a -> Int -> Map k a
+join'T kx x Tip r _ = insertMin kx x r
+join'T kx x l Tip _ = insertMax kx x l
+join'T kx x l@(Bin sizeL ky y ly ry) r@(Bin sizeR kz z lz rz) d
+  | delta*sizeL < sizeR  = balanceL kz z (join'T kx x l lz (d-(mlen rz)-1)) rz
+  | delta*sizeR < sizeL  = balanceR ky y ly (join'T kx x ry r (d-(mlen ly)-1))
   | otherwise            = bin kx x l r
 
 -- insertMin and insertMax don't perform potentially expensive comparisons.
@@ -3259,20 +3259,20 @@ union_bad t1 t2 = hedgeUnion_bad NothingS NothingS t1 t2
 
 hedgeUnion_bad :: Ord a => MaybeS a -> MaybeS a -> Map a b -> Map a b -> Map a b
 hedgeUnion_bad _   _   t1  Tip = t1
---LIQUID: injected bug in join
-hedgeUnion_bad blo bhi Tip (Bin _ kx x l r) = join_bad kx x (filterGt blo l) (filterLt bhi r)
+--LIQUID: injected bug in join'
+hedgeUnion_bad blo bhi Tip (Bin _ kx x l r) = join'_bad kx x (filterGt blo l) (filterLt bhi r)
 hedgeUnion_bad _   _   t1  (Bin _ kx x Tip Tip) = insertR kx x t1 -- According to benchmarks, this special case increases
                                                               -- performance up to 30%. It does not help in difference or intersection.
-hedgeUnion_bad blo bhi (Bin _ kx x l r) t2 = join_bad kx x (hedgeUnion_bad blo bmi l (trim blo bmi t2))
+hedgeUnion_bad blo bhi (Bin _ kx x l r) t2 = join'_bad kx x (hedgeUnion_bad blo bmi l (trim blo bmi t2))
                                                    (hedgeUnion_bad bmi bhi r (trim bmi bhi t2))
   where bmi = JustS kx
 
-join_bad kx x Tip r  = insertMin kx x r
-join_bad kx x l Tip  = insertMax kx x l
-join_bad kx x l@(Bin sizeL ky y ly ry) r@(Bin sizeR kz z lz rz)
+join'_bad kx x Tip r  = insertMin kx x r
+join'_bad kx x l Tip  = insertMax kx x l
+join'_bad kx x l@(Bin sizeL ky y ly ry) r@(Bin sizeR kz z lz rz)
   --LIQUID changed both < to > to inject bug
-  | delta*sizeL > sizeR  = balanceL kz z (join_bad kx x l lz) rz
-  | delta*sizeR > sizeL  = balanceR ky y ly (join_bad kx x ry r)
+  | delta*sizeL > sizeR  = balanceL kz z (join'_bad kx x l lz) rz
+  | delta*sizeR > sizeL  = balanceR ky y ly (join'_bad kx x ry r)
   | otherwise            = bin kx x l r
 
 
@@ -3283,7 +3283,7 @@ difference_bad t1 t2   = hedgeDiff_bad NothingS NothingS t1 t2
 
 hedgeDiff_bad :: Ord a => MaybeS a -> MaybeS a -> Map a b -> Map a c -> Map a b
 hedgeDiff_bad _  _   Tip _                  = Tip
-hedgeDiff_bad blo bhi (Bin _ kx x l r) Tip  = join_bad kx x (filterGt blo l) (filterLt bhi r)
+hedgeDiff_bad blo bhi (Bin _ kx x l r) Tip  = join'_bad kx x (filterGt blo l) (filterLt bhi r)
 hedgeDiff_bad blo bhi t (Bin _ kx _ l r)    = merge_bad kx (hedgeDiff_bad blo bmi (trim_bad blo bmi t) l)
                                                    (hedgeDiff_bad bmi bhi (trim_bad bmi bhi t) r)
   where bmi = JustS kx
@@ -3307,7 +3307,7 @@ hedgeInt_bad _ _ _   Tip = Tip
 hedgeInt_bad _ _ Tip _   = Tip
 hedgeInt_bad blo bhi (Bin _ kx x l r) t2 = let l' = hedgeInt_bad blo bmi l (trim_bad blo bmi t2)
                                                r' = hedgeInt_bad bmi bhi r (trim_bad bmi bhi t2)
-                                           in if kx `member` t2 then join kx x l' r' else merge kx l' r'
+                                           in if kx `member` t2 then join' kx x l' r' else merge kx l' r'
   where bmi = JustS kx
 
 trim_bad :: Ord k => MaybeS k -> MaybeS k -> Map k a -> Map k a
