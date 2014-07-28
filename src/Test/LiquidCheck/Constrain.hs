@@ -31,10 +31,13 @@ import           GHC.Generics
 import           System.IO.Unsafe
 import           Text.Show.Functions
 
+import qualified GHC
+
 import           Language.Fixpoint.SmtLib2
 import           Language.Fixpoint.Types          hiding (prop)
 import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.RefType
+import           Language.Haskell.Liquid.Tidy     (tidySymbol)
 import           Language.Haskell.Liquid.Types    hiding (var)
 
 import           Test.LiquidCheck.Driver
@@ -50,13 +53,13 @@ import Text.Printf
 --- Constrainable Data
 --------------------------------------------------------------------------------
 class Show a => Constrain a where
-  getType :: Proxy a -> Symbol
+  getType :: Proxy a -> Sort
   gen     :: Proxy a -> Int -> SpecType -> Gen Variable
   stitch  :: Int -> SpecType -> Gen a
   toExpr  :: a -> Expr
 
   default getType :: (Generic a, GConstrain (Rep a))
-                  => Proxy a -> Symbol
+                  => Proxy a -> Sort
   getType p = gtype (reproxyRep p)
 
   default gen :: (Generic a, GConstrain (Rep a))
@@ -85,7 +88,7 @@ reproxyElem = reproxy
 --- Instances
 --------------------------------------------------------------------------------
 instance Constrain () where
-  getType _ = "GHC.Types.Unit"
+  getType _ = FObj "GHC.Types.Unit"
   gen _ _ _ = fresh [] (FObj "GHC.Types.Unit")
   stitch _ _ = return ()
   toExpr _   = app ("()" :: Symbol) []
@@ -96,7 +99,7 @@ instance Constrain () where
 --   toExpr _  = app (stringSymbol "()") []
 
 instance Constrain Int where
-  getType _ = "GHC.Types.Int"
+  getType _ = FObj "GHC.Types.Int"
   gen _ d t = fresh [] FInt >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
        -- use the unfolding depth to constrain the range of Ints, like QuickCheck
@@ -107,13 +110,13 @@ instance Constrain Int where
   toExpr i = ECon $ I $ fromIntegral i
 
 instance Constrain Integer where
-  getType _ = "GHC.Integer.Type.Integer"
+  getType _ = FObj "GHC.Integer.Type.Integer"
   gen _ d t = gen (Proxy :: Proxy Int) d t
   stitch d t = stitch d t >>= \(x::Int) -> return . fromIntegral $ x + d
   toExpr  x = toExpr (fromIntegral x :: Int)
 
 instance Constrain Char where
-  getType _ = "GHC.Types.Char"
+  getType _ = FObj "GHC.Types.Char"
   gen _ d t = fresh [] FInt >>= \x ->
     do constrain $ var x `ge` 0
        constrain $ var x `le` fromIntegral d
@@ -123,7 +126,7 @@ instance Constrain Char where
   toExpr  c = ESym $ SL $ T.singleton c
 
 instance Constrain Word8 where
-  getType _ = "GHC.Word.Word8"
+  getType _ = FObj "GHC.Word.Word8"
   gen _ d t = fresh [] FInt >>= \x ->
     do _ <- gets depth
        constrain $ var x `ge` 0
@@ -134,7 +137,7 @@ instance Constrain Word8 where
   toExpr i   = ECon $ I $ fromIntegral i
 
 instance Constrain Bool where
-  getType _ =  "GHC.Types.Bool"
+  getType _ = FObj "GHC.Types.Bool"
   gen _ d t = fresh [] boolsort >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
        return x
@@ -148,7 +151,7 @@ instance (Constrain a, Constrain b) => Constrain (a,b)
 instance (Constrain a, Constrain b, Constrain c) => Constrain (a,b,c)
 
 instance (Num a, Integral a, Constrain a) => Constrain (Ratio a) where
-  getType _ = "GHC.Real.Ratio"
+  getType _ = FObj "GHC.Real.Ratio"
   gen _ d t = fresh [] (FObj "GHC.Real.Ratio") >>= \x ->
     do gen (Proxy :: Proxy Int) d t
        gen (Proxy :: Proxy Int) d t
@@ -161,10 +164,19 @@ instance (Num a, Integral a, Constrain a) => Constrain (Ratio a) where
                   return $ toA x % toA y
   toExpr x = EApp (dummyLoc "GHC.Real.:%") [toExpr (numerator x), toExpr (denominator x)]
 
+getCtors :: SpecType -> [GHC.DataCon]
+getCtors (RApp c _ _ _) = GHC.tyConDataCons $ rTyCon c
+getCtors (RAppTy t _ _) = getCtors t
+getCtors t              = error $ "getCtors: " ++ showpp t
 
 instance (Constrain a, Constrain b) => Constrain (a -> b) where
-  getType _ = "FUNCTION"
-  gen p d t = fresh [] (FObj "FUNCTION")
+  getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)]
+  gen p d (stripQuals -> RFun _ ta _ _)
+    = do forM_ (getCtors ta) $ \dc -> do
+           let c = tidySymbol $ symbol dc
+           t <- lookupCtor c
+           addConstructor (c, rTypeSort mempty t)
+         fresh [] (FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)])
   stitch d (stripQuals -> RFun xa ta to _)
     = do mref  <- io $ newIORef []
          state' <- get
@@ -338,7 +350,7 @@ reproxyRep = reproxy
 --- Sums of Products
 --------------------------------------------------------------------------------
 class GConstrain f where
-  gtype        :: Proxy (f a) -> Symbol
+  gtype        :: Proxy (f a) -> Sort
   ggen         :: Proxy (f a) -> Int    -> SpecType -> Gen Variable
   gstitch      :: Int -> Gen (f a)
   gtoExpr      :: f a -> Expr
@@ -347,22 +359,22 @@ reproxyGElem :: Proxy (M1 d c f a) -> Proxy (f a)
 reproxyGElem = reproxy
 
 instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
-  gtype p = qualifiedDatatypeName (undefined :: D1 c f a)
+  gtype p = FObj $ qualifiedDatatypeName (undefined :: D1 c f a)
 
   ggen p d t
     = inModule mod . making sort $ do
-        x  <- fresh [] $ FObj sort
+        x  <- fresh [] sort
         xs <- ggenAlts (reproxyGElem p) x d t
         choose x xs
         constrain $ ofReft x $ toReft $ rt_reft t
         return x
     where
       mod  = symbol $ GHC.Generics.moduleName (undefined :: D1 c f a)
-      sort = qualifiedDatatypeName (undefined :: D1 c f a)
+      sort = FObj $ qualifiedDatatypeName (undefined :: D1 c f a)
 
   gstitch d = M1 <$> making sort (fst <$> gstitchAlts d)
     where
-      sort = qualifiedDatatypeName (undefined :: D1 c f a)
+      sort = FObj $ qualifiedDatatypeName (undefined :: D1 c f a)
 
   gtoExpr c@(M1 x) = app (qualify c (symbolString $ val d)) xs
     where
@@ -444,7 +456,7 @@ instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
   gtoExprAlts c@(M1 x)  = app (symbol $ conName c) (gtoExprs x)
 
 gisRecursive :: (Constructor c, GConstrainProd f)
-             => Proxy (C1 c f a) -> Symbol -> Bool
+             => Proxy (C1 c f a) -> Sort -> Bool
 gisRecursive (p :: Proxy (C1 c f a)) t
   = t `elem` gconArgTys (reproxyGElem p)
 
@@ -471,7 +483,7 @@ gstitchAlt d
 --- Products
 --------------------------------------------------------------------------------
 class GConstrainProd f where
-  gconArgTys  :: Proxy (f a) -> [Symbol]
+  gconArgTys  :: Proxy (f a) -> [Sort]
   ggenArgs    :: Proxy (f a) -> Int -> [(Symbol,SpecType)] -> Gen [Variable]
   gstitchArgs :: Int -> Gen (f a)
   gtoExprs    :: f a -> [Expr]

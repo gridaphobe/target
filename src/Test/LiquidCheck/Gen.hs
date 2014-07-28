@@ -18,6 +18,7 @@ import           Data.Monoid
 import qualified Data.Text.Lazy                   as T
 
 import           Language.Fixpoint.Config  (SMTSolver(..))
+import           Language.Fixpoint.Names   ()
 import           Language.Fixpoint.SmtLib2 hiding (verbose)
 import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.PredType
@@ -30,6 +31,9 @@ import qualified GHC
 import           Test.LiquidCheck.Types
 import           Test.LiquidCheck.Util
 
+
+instance Symbolic T.Text where
+  symbol = symbol . T.toStrict
 
 newtype Gen a = Gen (StateT GenState IO a)
   deriving (Functor, Applicative, Monad, MonadIO, MonadState GenState)
@@ -65,10 +69,10 @@ data GenState
        , sigs         :: ![(Symbol, SpecType)]
        , depth        :: !Int
        , chosen       :: !(Maybe Variable)
-       , sorts        :: !(S.HashSet T.Text)
+       , sorts        :: !(S.HashSet Sort)
        , modName      :: !Symbol
        , filePath     :: !FilePath
-       , makingTy     :: !Symbol
+       , makingTy     :: !Sort
        , verbose      :: !Bool
        , logging      :: !Bool
        , smtContext   :: !Context
@@ -94,7 +98,7 @@ initGS fp sp ctx
        , sorts        = S.empty
        , modName      = ""
        , filePath     = fp
-       , makingTy     = ""
+       , makingTy     = FObj ""
        , verbose      = False
        , logging      = False
        , smtContext   = ctx
@@ -166,11 +170,21 @@ fresh :: [Variable] -> Sort -> Gen Variable
 fresh xs sort
   = do n <- gets seed
        modify $ \s@(GS {..}) -> s { seed = seed + 1 }
-       modify $ \s@(GS {..}) -> s { sorts = S.insert (smt2 sort) sorts }
-       let x = (symbol $ T.unpack (smt2 sort) ++ show n, sort)
+       let sorts' = sortTys sort
+       -- io $ print sorts'
+       modify $ \s@(GS {..}) -> s { sorts = S.union (S.fromList (arrowize sort : sorts')) sorts }
+       let x = (symbol $ T.unpack (T.intercalate "->" $ map smt2 sorts') ++ show n, sort)
+       -- io $ print x
        modify $ \s@(GS {..}) -> s { variables = x : variables }
        mapM_ (addDep x) xs
        return x
+
+sortTys :: Sort -> [Sort]
+sortTys (FFunc _ ts) = concatMap sortTys ts
+sortTys t            = [t]
+
+arrowize :: Sort -> Sort
+arrowize = FObj . symbol . T.intercalate "->" . map smt2 . sortTys
 
 freshChoice :: [Variable] -> Gen Variable
 freshChoice xs

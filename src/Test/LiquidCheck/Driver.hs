@@ -62,10 +62,11 @@ allSat roots = {-# SCC "allSat" #-} setup >>= io . go
        let defSort b e = io $ smtWrite ctx (format "(define-sort {} () {})" (b,e))
        -- FIXME: combine this with the code in `fresh`
        forM_ ss $ \case
-         "Int" -> return ()
-         "GHC.Types.Bool"   -> defSort ("GHC.Types.Bool" :: T.Text) ("Bool" :: T.Text)
-         "CHOICE" -> defSort ("CHOICE" :: T.Text) ("Bool" :: T.Text)
-         s        -> defSort s ("Int" :: T.Text)
+         FObj "Int" -> return ()
+         FInt       -> return ()
+         FObj "GHC.Types.Bool"   -> defSort ("GHC.Types.Bool" :: T.Text) ("Bool" :: T.Text)
+         FObj "CHOICE" -> defSort ("CHOICE" :: T.Text) ("Bool" :: T.Text)
+         s        -> defSort (smt2 s) ("Int" :: T.Text)
        -- declare constructors
        cts <- gets constructors
        mapM_ (\ (c,t) -> io . command ctx $ makeDecl (symbol c) t) cts
@@ -74,7 +75,7 @@ allSat roots = {-# SCC "allSat" #-} setup >>= io . go
          void $ io $ command ctx $ Distinct nullary
        -- declare variables
        vs <- gets variables
-       mapM_ (\ x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
+       mapM_ (\ x -> io . command ctx $ Declare (symbol x) [] (arrowize $ snd x)) vs
        -- declare measures
        ms <- gets measEnv
        mapM_ (\m -> io . command ctx $ makeDecl (val $ name m) (rTypeSort emb $ sort m)) ms
