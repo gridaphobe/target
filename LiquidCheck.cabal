@@ -86,6 +86,7 @@ test-suite test
   includes:            fpstring.h
   build-depends:       base,
                        LiquidCheck,
+                       ghc,
                        liquidhaskell >= 0.2,
                        QuickCheck >= 2.6,
                        smallcheck >= 1.1,
