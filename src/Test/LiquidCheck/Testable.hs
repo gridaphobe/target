@@ -165,7 +165,7 @@ process3 d f vs cts (xa, ta) (xb, tb) (xc, tc) to = go vs 0
          c <- stitch d tc
          b <- stitch d tb
          a <- stitch d ta
-         -- io $ print (a,b,c)
+         --io $ print (a,b,c)
          er <- io $ try $ evaluate (f a b c)
          --io $ print er
          case er of
