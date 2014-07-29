@@ -1,4 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Main where
 
 import           Control.Exception
@@ -37,7 +39,7 @@ neg = testGroup "Neg" $
   ++ [ mkFailure f ("RBTree."++name) "test/RBTree.hs" 7 | (name, T f) <- RBTree.liquidTests_bad]
   ++ [ mkFailure f ("Map."++name) "test/Map.hs" 5 | (name, T f) <- Map.liquidTests_bad]
 
-mkSuccess :: Testable f => f -> String -> String -> Int -> TestTree
+mkSuccess :: CanTest f => f -> String -> String -> Int -> TestTree
 mkSuccess f n fp d
   = testCase (n ++ "/" ++ show d) $ shouldSucceed d f n fp
   -- = do loc <- TH.location
@@ -45,7 +47,7 @@ mkSuccess f n fp d
   --          file = TH.loc_filename loc
   --      [| shouldSucceed d $(TH.varE f) $(TH.stringE name) $(TH.stringE file) |]
 
-mkFailure :: Testable f => f -> String -> String -> Int -> TestTree
+mkFailure :: CanTest f => f -> String -> String -> Int -> TestTree
 mkFailure f n fp d
   = testCase (n ++ "/" ++ show d) $ shouldFail d f n fp
   -- = do loc <- TH.location

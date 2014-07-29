@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleContexts          #-}
 module Test.LiquidCheck
   ( liquidCheck, testModule, testFun, testOne
-  , Constrain(..), Result(..), Testable(..), Test(..))
+  , Constrain(..), Result(..), Testable(..), Test(..), CanTest)
   where
 
 import           Control.Applicative
