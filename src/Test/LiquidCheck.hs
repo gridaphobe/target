@@ -1,4 +1,6 @@
+{-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts          #-}
 module Test.LiquidCheck
   ( liquidCheck, testModule, testFun, testOne
   , Constrain(..), Result(..), Testable(..), Test(..))
@@ -35,12 +37,12 @@ testModule m ts
            Passed n -> printf "OK. Passed %d tests\n\n" n
            Failed x -> printf "Found counter-example: %s\n\n" x
 
-liquidCheck :: Testable f => f -> String -> Int -> Gen Result
+liquidCheck :: CanTest f => f -> String -> Int -> Gen Result
 liquidCheck f name d
   = do io $ printf "Testing %s\n" name -- (showpp ty)
        testFun f name d
 
-testFun :: Testable f => f -> String -> Int -> Gen Result
+testFun :: CanTest f => f -> String -> Int -> Gen Result
 testFun f name d
   = do ty <- safeFromJust "testFun" . lookup (symbol name) <$> gets sigs
        modify $ \s -> s { depth = d }
@@ -48,7 +50,7 @@ testFun f name d
 
 tidyVar = tidySymbol . symbol
 
-testOne :: Testable f => Int -> f -> String -> FilePath -> IO Result
+testOne :: CanTest f => Int -> f -> String -> FilePath -> IO Result
 testOne d f name path
   = do sp <- getSpec path
        let ty = val $ safeFromJust "testOne" $ lookup (symbol name) $ map (first tidyVar) $ tySigs sp
@@ -60,7 +62,6 @@ testOne d f name path
 --                   file = TH.loc_filename loc
 --               [| testOne $(TH.varE f) $(TH.stringE name) $(TH.stringE file) |]
 
-data Test = forall t. Testable t => T t
-instance Testable Test where
-  test (T t) = test t
-
+data Test = forall t. CanTest t => T t
+-- instance Testable Test where
+--   test (T t) = test t
