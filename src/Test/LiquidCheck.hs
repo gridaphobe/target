@@ -6,26 +6,27 @@ module Test.LiquidCheck
   , Constrain(..), Result(..), Testable(..), Test(..), CanTest)
   where
 
-import           Control.Applicative
-import           Control.Arrow                        (first)
-import           Control.Monad
-import           Control.Monad.State
-import           Data.Maybe
-import           Data.Monoid
-import           Text.Printf                          (printf)
+import Control.Applicative
+import Control.Arrow                        (first)
+import Control.Monad
+import Control.Monad.State
+import Data.Maybe
+import Data.Monoid
+import Text.Printf                          (printf)
 
-import           Language.Fixpoint.Types              (Located (..), symbol)
-import           Language.Haskell.Liquid.CmdLine      (mkOpts)
-import           Language.Haskell.Liquid.GhcInterface (getGhcInfo)
-import           Language.Haskell.Liquid.Tidy         (tidySymbol)
-import           Language.Haskell.Liquid.Types        (GhcInfo (..),
-                                                       GhcSpec (..), showpp)
+import Language.Fixpoint.Names
+import Language.Fixpoint.Types              (Located (..), symbol)
+import Language.Haskell.Liquid.CmdLine      (mkOpts)
+import Language.Haskell.Liquid.GhcInterface (getGhcInfo)
+import Language.Haskell.Liquid.Tidy         (tidySymbol)
+import Language.Haskell.Liquid.Types        (GhcInfo (..),
+                                             GhcSpec (..), showpp)
 
-import           Test.LiquidCheck.Constrain
-import           Test.LiquidCheck.Gen
-import           Test.LiquidCheck.Testable
-import           Test.LiquidCheck.Types
-import           Test.LiquidCheck.Util
+import Test.LiquidCheck.Constrain
+import Test.LiquidCheck.Gen
+import Test.LiquidCheck.Testable
+import Test.LiquidCheck.Types
+import Test.LiquidCheck.Util
 
 
 testModule :: FilePath -> [Gen Result] -> IO ()
@@ -48,20 +49,12 @@ testFun f name d
        modify $ \s -> s { depth = d }
        test f d ty
 
+tidyVar :: Symbolic a => a -> Symbol
 tidyVar = tidySymbol . symbol
 
-testOne :: CanTest f => Int -> f -> String -> FilePath -> IO Result
-testOne d f name path
+testOne :: CanTest f => f -> String -> Int -> FilePath -> IO Result
+testOne f name d path
   = do sp <- getSpec path
-       let ty = val $ safeFromJust "testOne" $ lookup (symbol name) $ map (first tidyVar) $ tySigs sp
-       runGen sp path $ test f d ty
-
--- mkTest :: TH.Name -> TH.ExpQ
--- mkTest f = do loc <- TH.location
---               let name = show f
---                   file = TH.loc_filename loc
---               [| testOne $(TH.varE f) $(TH.stringE name) $(TH.stringE file) |]
+       runGen sp path $ testFun f name d
 
 data Test = forall t. CanTest t => T t
--- instance Testable Test where
---   test (T t) = test t

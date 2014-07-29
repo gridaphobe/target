@@ -29,40 +29,32 @@ pos = testGroup "Pos" $
   [ mkSuccess (List.insert :: Int -> List Int -> List Int)
       "List.insert" "test/List.hs" 3
   , mkSuccess (List.mymap) "List.mymap" "test/List.hs" 3 ]
-  ++ [ mkSuccess f ("RBTree."++name) "test/RBTree.hs" 7 | (name, T f) <- RBTree.liquidTests]
+  ++ [ mkSuccess f ("RBTree."++name) "test/RBTree.hs" 6 | (name, T f) <- RBTree.liquidTests]
   ++ [ mkSuccess f ("Map."++name) "test/Map.hs" 5 | (name, T f) <- Map.liquidTests]
-  ++ [ mkSuccess f ("Data.ByteString.Internal."++name) "test/Data/ByteString/Internal.hs" 4 | (name, T f) <- ByteString.liquidTests]
+  -- ++ [ mkSuccess f ("Data.ByteString.Internal."++name) "test/Data/ByteString/Internal.hs" 4 | (name, T f) <- ByteString.liquidTests]
 
 neg = testGroup "Neg" $
   [ mkFailure (List.insert_bad :: Int -> List Int -> List Int)
       "List.insert" "test/List.hs" 3 ]
-  ++ [ mkFailure f ("RBTree."++name) "test/RBTree.hs" 7 | (name, T f) <- RBTree.liquidTests_bad]
+  ++ [ mkFailure f ("RBTree."++name) "test/RBTree.hs" 6 | (name, T f) <- RBTree.liquidTests_bad]
   ++ [ mkFailure f ("Map."++name) "test/Map.hs" 5 | (name, T f) <- Map.liquidTests_bad]
 
 mkSuccess :: CanTest f => f -> String -> String -> Int -> TestTree
 mkSuccess f n fp d
   = testCase (n ++ "/" ++ show d) $ shouldSucceed d f n fp
-  -- = do loc <- TH.location
-  --      let name = show f
-  --          file = TH.loc_filename loc
-  --      [| shouldSucceed d $(TH.varE f) $(TH.stringE name) $(TH.stringE file) |]
 
 mkFailure :: CanTest f => f -> String -> String -> Int -> TestTree
 mkFailure f n fp d
   = testCase (n ++ "/" ++ show d) $ shouldFail d f n fp
-  -- = do loc <- TH.location
-  --      let name = show f
-  --          file = TH.loc_filename loc
-  --      [| shouldFail d $(TH.varE f) $(TH.stringE name) $(TH.stringE file) |]
 
 shouldSucceed d f name file
-  = do r <- testOne d f name file
+  = do r <- testOne f name d file
        assertString $ case r of
                        Passed _ -> ""
                        Failed s -> "Unexpected counter-example: " ++ s
 
 shouldFail d f name file
-  = do r <- testOne d f name file
+  = do r <- testOne f name d file
        assertBool "Expected counter-example" $ case r of
                                                Passed _ -> False
                                                _        -> True
