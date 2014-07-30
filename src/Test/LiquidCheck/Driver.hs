@@ -96,7 +96,11 @@ allSat roots = {-# SCC "allSat" #-} setup >>= io . go
          Error e -> error (T.unpack e)
          Unsat   -> return []
          Sat     -> do
-           Values model <- {-# SCC "allSat.go.GetValue" #-} command ctx (GetValue [v | (v,t) <- vs, t `elem` interps])
+           let real = [v | (v,t) <- vs, t `elem` interps]
+           Values model <- {-# SCC "allSat.go.GetValue" #-}
+             if null real
+             then return $ Values []
+             else command ctx (GetValue real)
            -- print model
            let cs = V.toList $ refute roots (M.fromList model) deps vs
            -- i <- gets seed

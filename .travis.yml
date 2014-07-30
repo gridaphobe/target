@@ -10,7 +10,6 @@ before_install:
  - travis_retry sudo apt-get update
  - travis_retry sudo apt-get install cabal-install-1.20 ghc-7.8.3 ocaml camlidl
  - export PATH="$HOME/.cabal/bin:/opt/ghc/7.8.3/bin:/opt/cabal/1.20/bin:$PATH"
- - ls /opt/ghc/7.8.3/bin
  - sudo /opt/ghc/7.8.3/bin/ghc-pkg expose ghc
  - cabal-1.20 update
  - git clone git://github.com/ucsd-progsys/liquid-fixpoint.git /tmp/fixpoint

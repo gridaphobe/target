@@ -173,7 +173,7 @@ fresh xs sort
        let sorts' = sortTys sort
        -- io $ print sorts'
        modify $ \s@(GS {..}) -> s { sorts = S.union (S.fromList (arrowize sort : sorts')) sorts }
-       let x = (symbol $ T.unpack (T.intercalate "->" $ map smt2 sorts') ++ show n, sort)
+       let x = (symbol $ T.unpack (T.intercalate "->" $ map (T.fromStrict.symbolText.unObj) sorts') ++ show n, sort)
        -- io $ print x
        modify $ \s@(GS {..}) -> s { variables = x : variables }
        mapM_ (addDep x) xs
@@ -184,7 +184,11 @@ sortTys (FFunc _ ts) = concatMap sortTys ts
 sortTys t            = [t]
 
 arrowize :: Sort -> Sort
-arrowize = FObj . symbol . T.intercalate "->" . map smt2 . sortTys
+arrowize = FObj . symbol . T.intercalate "->" . map (T.fromStrict . symbolText . unObj) . sortTys
+
+unObj FInt     = "Int"
+unObj (FObj s) = s
+unObj s        = error $ "unObj: " ++ show s
 
 freshChoice :: [Variable] -> Gen Variable
 freshChoice xs

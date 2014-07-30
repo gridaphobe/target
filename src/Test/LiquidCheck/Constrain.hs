@@ -15,6 +15,7 @@ module Test.LiquidCheck.Constrain where
 
 import           Control.Applicative
 import           Control.Arrow                    (second)
+import qualified Control.Exception                as Ex
 import           Control.Monad.State
 import           Data.Char
 import qualified Data.HashMap.Strict              as M
@@ -197,29 +198,40 @@ instance (Constrain a, Constrain b) => Constrain (a -> b) where
                  True  -> do
                    ctx <- gets smtContext
                    io $ command ctx Push
-                   xe <- genExpr e $ FInt -- FObj (getType (Proxy :: Proxy a))
+                   xe <- genExpr e
                    let su = mkSubst [(xa, var xe)]
                    xo <- gen (Proxy :: Proxy b) d (subst su to)
                    vs <- gets variables
-                   mapM_ (\ x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
+                   mapM_ (\x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
                    cs <- gets constraints
                    mapM_ (\c -> io . command ctx $ Assert Nothing c) cs
                    resp <- io $ command ctx CheckSat
-                   Values model <- io $ command ctx (GetValue [symbol v | (v,t) <- vs,
-                                                               t `elem` [FInt, choicesort, boolsort]])
+                   when (resp == Unsat) $ Ex.throw SmtFailedToProduceOutput
+                   let real = [symbol v | (v,t) <- vs, t `elem` [FInt, choicesort, boolsort]]
+                   Values model <- if null real then return $ Values []
+                                   else io $ command ctx (GetValue real)
                    setValues (map snd model)
                    o  <- stitch d to
-                   -- io $ printf "%s -> %s\n" (show a) (show o)
+                   whenVerbose $ io $ printf "%s -> %s\n" (show a) (show o)
                    io (modifyIORef mref ((e,o):))
                    io $ command ctx Pop
                    return o
   toExpr  f = var ("FUNCTION" :: Symbol)
 
-genExpr :: Expr -> Sort -> Gen Variable
-genExpr _ s = fresh [] s
-
--- instance Show (a -> b) where
---   show _ = "<function>"
+genExpr :: Expr -> Gen Variable
+genExpr (EApp (val -> c) es)
+  = do xes <- mapM genExpr es
+       (xs, _, to) <- bkArrowDeep . stripQuals <$> lookupCtor c
+       let su  = mkSubst $ zip xs $ map (var . fst) xes
+           to' = subst su to
+       x <- fresh [] $ FObj $ symbol $ rTyCon $ rt_tycon to'
+       addConstraint $ ofReft x (toReft $ rt_reft to')
+       return x
+genExpr (ECon (I i))
+  = do x <- fresh [] FInt
+       addConstraint $ var x `eq` expr i
+       return x
+genExpr e = error $ "genExpr: " ++ show e
 
 choose :: Variable -> [Variable] -> Gen ()
 choose x cs

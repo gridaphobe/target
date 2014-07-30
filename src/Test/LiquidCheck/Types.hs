@@ -1,7 +1,11 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 module Test.LiquidCheck.Types where
+
+import qualified Control.Exception             as Ex
+import           Data.Typeable
 
 import           Language.Fixpoint.SmtLib2
 import           Language.Fixpoint.Types
@@ -9,7 +13,15 @@ import           Language.Haskell.Liquid.Types
 
 import           GHC
 
-import qualified Data.Text as T
+import qualified Data.Text                     as T
+
+data LiquidException = SmtFailedToProduceOutput
+  deriving Typeable
+
+instance Show LiquidException where
+  show SmtFailedToProduceOutput = "The SMT solver was unable to produce an output value."
+
+instance Ex.Exception LiquidException
 
 type Constraint = [Pred]
 type Variable   = ( Symbol -- the name
