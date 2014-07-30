@@ -263,10 +263,9 @@ module Map (
             -- , filterLt
 
             -- LIQUID
-            , Unit
-            , liquidTests
-            , liquidTests_bad
-            , Maybe, Char, Bool, Int, Either
+            -- , liquidTests
+            -- , liquidTests_bad
+            , Maybe, Char, Bool, Int, Either, MaybeS
             ) where
 
 import Prelude hiding (lookup,map,filter,foldr,foldl,null)
@@ -311,7 +310,7 @@ infixl 9 !,\\ --
 -- > fromList [(5,'a'), (3,'b')] ! 1    Error: element not in the map
 -- > fromList [(5,'a'), (3,'b')] ! 5 == 'a'
 
-{- Data.Map.Base.! :: (Ord k) => OMap k a -> k -> a @-}
+{-@ Map.! :: (Ord k) => OMap k a -> k -> a @-}
 (!) :: Ord k => Map k a -> k -> a
 m ! k = find k m
 #if __GLASGOW_HASKELL__ >= 700
@@ -319,7 +318,7 @@ m ! k = find k m
 #endif
 
 -- | Same as 'difference'.
-{- Data.Map.Base.\\ :: Ord k => OMap k a -> OMap k b -> OMap k a @-}
+{-@ Map.\\ :: Ord k => OMap k a -> OMap k b -> OMap k a @-}
 (\\) :: Ord k => Map k a -> Map k b -> Map k a
 m1 \\ m2 = difference m1 m2
 #if __GLASGOW_HASKELL__ >= 700
@@ -1108,9 +1107,6 @@ alter_go f k (Bin sx kx x l r) = case compare k kx of
 {-# INLINE alter #-}
 #endif
 
-{-@ alter_insert :: (Ord k) => k -> v -> {v:OMap k v | (isBalanced v)} -> {v:OMap k v | (isBalanced v)} @-}
-alter_insert k v = alter (const (Just v)) k
-
 {--------------------------------------------------------------------
   Indexing
 --------------------------------------------------------------------}
@@ -1401,8 +1397,8 @@ maxView Tip = Nothing
 maxView x   = let (_, m, t) = deleteFindMax x in Just (m, t)
 
 -- Update the 1st component of a tuple (special case of Control.Arrow.first)
-first :: (a -> b) -> (a, c) -> (b, c)
-first f (x, y) = (f x, y)
+-- first :: (a -> b) -> (a, c) -> (b, c)
+-- first f (x, y) = (f x, y)
 
 {--------------------------------------------------------------------
   Union.
@@ -2060,7 +2056,9 @@ mapKeysWith c f = fromListWith c . foldrWithKey (\k x xs -> (f k, x) : xs) []
 -- > mapKeysMonotonic (\ k -> k * 2) (fromList [(5,"a"), (3,"b")]) == fromList [(6, "b"), (10, "a")]
 -- > valid (mapKeysMonotonic (\ k -> k * 2) (fromList [(5,"a"), (3,"b")])) == True
 -- > valid (mapKeysMonotonic (\ _ -> 1)     (fromList [(5,"a"), (3,"b")])) == False
--- LIQUIDFAIL
+{-LIQUID argh... mapKeysMonotonic :: (x:k1 -> {v:k2 | x <= v}) -> OMap k1 a -> OMap k2 a @-}
+{-@ mapKeysMonotonic :: (x:k1 -> k2) -> OMap k1 a -> OMap k2 a @-}
+-- LIQUID: approximating monotonicity..
 mapKeysMonotonic :: (k1->k2) -> Map k1 a -> Map k2 a
 mapKeysMonotonic _ Tip = Tip
 mapKeysMonotonic f (Bin sz k x l r) =
@@ -2079,6 +2077,7 @@ mapKeysMonotonic f (Bin sz k x l r) =
 --
 -- > let f a len = len + (length a)
 -- > foldr f 0 (fromList [(5,"a"), (3,"bbb")]) == 4
+{-@ foldr :: (a -> b -> b) -> b -> OMap k a -> b @-}
 foldr :: (a -> b -> b) -> b -> Map k a -> b
 foldr f z = go z
   where
@@ -2089,6 +2088,7 @@ foldr f z = go z
 -- | /O(n)/. A strict version of 'foldr'. Each application of the operator is
 -- evaluated before using the result in the next application. This
 -- function is strict in the starting value.
+{-@ foldr' :: (a -> b -> b) -> b -> OMap k a -> b @-}
 foldr' :: (a -> b -> b) -> b -> Map k a -> b
 foldr' f z = go z
   where
@@ -2106,6 +2106,7 @@ foldr' f z = go z
 --
 -- > let f len a = len + (length a)
 -- > foldl f 0 (fromList [(5,"a"), (3,"bbb")]) == 4
+{-@ foldl :: (a -> b -> a) -> a -> OMap k b -> a @-}
 foldl :: (a -> b -> a) -> a -> Map k b -> a
 foldl f z = go z
   where
@@ -2116,6 +2117,7 @@ foldl f z = go z
 -- | /O(n)/. A strict version of 'foldl'. Each application of the operator is
 -- evaluated before using the result in the next application. This
 -- function is strict in the starting value.
+{-@ foldl' :: (a -> b -> a) -> a -> OMap k b -> a @-}
 foldl' :: (a -> b -> a) -> a -> Map k b -> a
 foldl' f z = go z
   where
@@ -2134,6 +2136,7 @@ foldl' f z = go z
 --
 -- > let f k a result = result ++ "(" ++ (show k) ++ ":" ++ a ++ ")"
 -- > foldrWithKey f "Map: " (fromList [(5,"a"), (3,"b")]) == "Map: (5:a)(3:b)"
+{-@ foldrWithKey :: (k -> a -> b -> b) -> b -> OMap k a -> b @-}
 foldrWithKey :: (k -> a -> b -> b) -> b -> Map k a -> b
 foldrWithKey f z = go z
   where
@@ -2144,6 +2147,7 @@ foldrWithKey f z = go z
 -- | /O(n)/. A strict version of 'foldrWithKey'. Each application of the operator is
 -- evaluated before using the result in the next application. This
 -- function is strict in the starting value.
+{-@ foldrWithKey' :: (k -> a -> b -> b) -> b -> OMap k a -> b @-}
 foldrWithKey' :: (k -> a -> b -> b) -> b -> Map k a -> b
 foldrWithKey' f z = go z
   where
@@ -2162,6 +2166,7 @@ foldrWithKey' f z = go z
 --
 -- > let f result k a = result ++ "(" ++ (show k) ++ ":" ++ a ++ ")"
 -- > foldlWithKey f "Map: " (fromList [(5,"a"), (3,"b")]) == "Map: (3:b)(5:a)"
+{-@ foldlWithKey :: (a -> k -> b -> a) -> a -> OMap k b -> a @-}
 foldlWithKey :: (a -> k -> b -> a) -> a -> Map k b -> a
 foldlWithKey f z = go z
   where
@@ -2172,6 +2177,7 @@ foldlWithKey f z = go z
 -- | /O(n)/. A strict version of 'foldlWithKey'. Each application of the operator is
 -- evaluated before using the result in the next application. This
 -- function is strict in the starting value.
+{-@ foldlWithKey' :: (a -> k -> b -> a) -> a -> OMap k b -> a @-}
 foldlWithKey' :: (a -> k -> b -> a) -> a -> Map k b -> a
 foldlWithKey' f z = go z
   where
@@ -2190,6 +2196,7 @@ foldlWithKey' f z = go z
 -- > elems (fromList [(5,"a"), (3,"b")]) == ["b","a"]
 -- > elems empty == []
 
+{-@ elems :: m:OMap k a -> {v:[a] | len v = mlen m} @-}
 elems :: Map k a -> [a]
 elems = foldr (:) []
 
@@ -2200,6 +2207,7 @@ elems = foldr (:) []
 -- > keys empty == []
 
 {- LIQUID: SUMMARY-VALUES: keys :: OMap k a -> [k]<{v: k | v >= fld}> @-}
+{-@ keys  :: m:OMap k a -> {v:[k]<{\x y -> x < y}> | len v = mlen m} @-}
 keys  :: Map k a -> [k]
 keys = foldrWithKey (\k _ ks -> k : ks) []
 
@@ -2210,6 +2218,7 @@ keys = foldrWithKey (\k _ ks -> k : ks) []
 -- > assocs empty == []
 
 {- LIQUID: SUMMARY-VALUES: assocs :: OMap k a -> [(k, a)]<{v: (k, a) | fst(v) >= fst(fld) }> @-}
+{-@ assocs  :: m:OMap k a -> {v:[(k,a)]<{\x y -> fst x < fst y}> | len v = mlen m} @-}
 assocs :: Map k a -> [(k,a)]
 assocs m
   = toAscList m
@@ -2243,7 +2252,7 @@ assocs m
 -- > fromList [(5,"a"), (3,"b"), (5, "c")] == fromList [(5,"c"), (3,"b")]
 -- > fromList [(5,"c"), (3,"b"), (5, "a")] == fromList [(5,"a"), (3,"b")]
 
-{-@ fromList :: (Ord k) => [(k,a)] -> OMap k a @-}
+{-@ fromList :: (Ord k) => kvs:[(k,a)] -> {v:OMap k a | mlen v = len kvs} @-}
 fromList :: Ord k => [(k,a)] -> Map k a
 fromList xs
   = foldlStrict ins empty xs
@@ -2258,7 +2267,7 @@ fromList xs
 -- > fromListWith (++) [(5,"a"), (5,"b"), (3,"b"), (3,"a"), (5,"a")] == fromList [(3, "ab"), (5, "aba")]
 -- > fromListWith (++) [] == empty
 
-{-@ fromListWith :: (Ord k) => (a -> a -> a) -> [(k,a)] -> OMap k a @-}
+{-@ fromListWith :: (Ord k) => (a -> a -> a) -> kvs:[(k,a)] -> {v:OMap k a | mlen v = len kvs} @-}
 fromListWith :: Ord k => (a -> a -> a) -> [(k,a)] -> Map k a
 fromListWith f xs
   = fromListWithKey (\_ x y -> f x y) xs
@@ -2272,7 +2281,7 @@ fromListWith f xs
 -- > fromListWithKey f [(5,"a"), (5,"b"), (3,"b"), (3,"a"), (5,"a")] == fromList [(3, "3ab"), (5, "5a5ba")]
 -- > fromListWithKey f [] == empty
 
-{-@ fromListWithKey :: (Ord k) => (k -> a -> a -> a) -> [(k,a)] -> OMap k a @-}
+{-@ fromListWithKey :: (Ord k) => (k -> a -> a -> a) -> kvs:[(k,a)] -> {v:OMap k a | mlen v = len kvs} @-}
 fromListWithKey :: Ord k => (k -> a -> a -> a) -> [(k,a)] -> Map k a
 fromListWithKey f xs
   = foldlStrict ins empty xs
@@ -2288,6 +2297,7 @@ fromListWithKey f xs
 -- > toList empty == []
 
 {- LIQUIDTODO: toList:: OMap k a -> [(k, a)]<{v: (k, a) | fst(v) > fst(fld) }> @-}
+{-@ toList :: m:OMap k a -> {v:[(k,a)]<{\x y -> fst x < fst y}> | len v = mlen m} @-}
 toList :: Map k a -> [(k,a)]
 toList = toAscList
 
@@ -2297,6 +2307,7 @@ toList = toAscList
 -- > toAscList (fromList [(5,"a"), (3,"b")]) == [(3,"b"), (5,"a")]
 
 {- LIQUIDTODO: toAscList :: OMap k a -> [(k, a)]<{v: (k, a) | fst(v) > fst(fld) }> @-}
+{-@ toAscList :: m:OMap k a -> {v:[(k,a)]<{\x y -> fst x < fst y}> | len v = mlen m} @-}
 toAscList :: Map k a -> [(k,a)]
 toAscList = foldrWithKey (\k x xs -> (k,x):xs) []
 
@@ -2306,6 +2317,7 @@ toAscList = foldrWithKey (\k x xs -> (k,x):xs) []
 -- > toDescList (fromList [(5,"a"), (3,"b")]) == [(5,"a"), (3,"b")]
 
 {- LIQUIDTODO: toAscList :: OMap k a -> [(k, a)]<{v: (k, a) | fst(v) < fst(fld) }> @-}
+{-@ toDescList :: m:OMap k a -> {v:[(k,a)]<{\x y -> fst x > fst y}> | len v = mlen m} @-}
 toDescList :: Map k a -> [(k,a)]
 toDescList = foldlWithKey (\xs k x -> (k,x):xs) []
 
@@ -2313,9 +2325,11 @@ toDescList = foldlWithKey (\xs k x -> (k,x):xs) []
 #if __GLASGOW_HASKELL__
 -- The foldrFB and foldlFB are fold{r,l}WithKey equivalents, used for list fusion.
 -- They are important to convert unfused methods back, see mapFB in prelude.
+{-@ foldrFB :: (k -> a -> b -> b) -> b -> OMap k a -> b @-}
 foldrFB :: (k -> a -> b -> b) -> b -> Map k a -> b
 foldrFB = foldrWithKey
 {-# INLINE[0] foldrFB #-}
+{-@ foldlFB :: (a -> k -> b -> a) -> a -> OMap k b -> a @-}
 foldlFB :: (a -> k -> b -> a) -> a -> Map k b -> a
 foldlFB = foldlWithKey
 {-# INLINE[0] foldlFB #-}
@@ -2998,101 +3012,101 @@ instance (Ord k, Ord v) => Ord (Map k v) where
 -- LIQUID   showsPrec d m  = showParen (d > 10) $
 -- LIQUID     showString "fromList " . shows (toList m)
 
--- | /O(n)/. Show the tree that implements the map. The tree is shown
--- in a compressed, hanging format. See 'showTreeWith'.
-showTree :: (Show k,Show a) => Map k a -> String
-showTree m
-  = showTreeWith showElem True False m
-  where
-    showElem k x  = show k ++ ":=" ++ show x
-
-
-{- | /O(n)/. The expression (@'showTreeWith' showelem hang wide map@) shows
- the tree that implements the map. Elements are shown using the @showElem@ function. If @hang@ is
- 'True', a /hanging/ tree is shown otherwise a rotated tree is shown. If
- @wide@ is 'True', an extra wide version is shown.
-
->  Map> let t = fromDistinctAscList [(x,()) | x <- [1..5]]
->  Map> putStrLn $ showTreeWith (\k x -> show (k,x)) True False t
->  (4,())
->  +--(2,())
->  |  +--(1,())
->  |  +--(3,())
->  +--(5,())
->
->  Map> putStrLn $ showTreeWith (\k x -> show (k,x)) True True t
->  (4,())
->  |
->  +--(2,())
->  |  |
->  |  +--(1,())
->  |  |
->  |  +--(3,())
->  |
->  +--(5,())
->
->  Map> putStrLn $ showTreeWith (\k x -> show (k,x)) False True t
->  +--(5,())
->  |
->  (4,())
->  |
->  |  +--(3,())
->  |  |
->  +--(2,())
->     |
->     +--(1,())
-
--}
-showTreeWith :: (k -> a -> String) -> Bool -> Bool -> Map k a -> String
-showTreeWith showelem hang wide t
-  | hang      = (showsTreeHang showelem wide [] t) ""
-  | otherwise = (showsTree showelem wide [] [] t) ""
-
-{-@ Decrease showsTree 5 @-}
-showsTree :: (k -> a -> String) -> Bool -> [String] -> [String] -> Map k a -> ShowS
-showsTree showelem wide lbars rbars t
-  = case t of
-      Tip -> showsBars lbars . showString "|\n"
-      Bin _ kx x Tip Tip
-          -> showsBars lbars . showString (showelem kx x) . showString "\n"
-      Bin _ kx x l r
-          -> showsTree showelem wide (withBar rbars) (withEmpty rbars) r .
-             showWide wide rbars .
-             showsBars lbars . showString (showelem kx x) . showString "\n" .
-             showWide wide lbars .
-             showsTree showelem wide (withEmpty lbars) (withBar lbars) l
-
-{-@ Decrease showsTreeHang 4 @-}
-showsTreeHang :: (k -> a -> String) -> Bool -> [String] -> Map k a -> ShowS
-showsTreeHang showelem wide bars t
-  = case t of
-      Tip -> showsBars bars . showString "|\n"
-      Bin _ kx x Tip Tip
-          -> showsBars bars . showString (showelem kx x) . showString "\n"
-      Bin _ kx x l r
-          -> showsBars bars . showString (showelem kx x) . showString "\n" .
-             showWide wide bars .
-             showsTreeHang showelem wide (withBar bars) l .
-             showWide wide bars .
-             showsTreeHang showelem wide (withEmpty bars) r
-
-showWide :: Bool -> [String] -> String -> String
-showWide wide bars
-  | wide      = showString (concat (reverse bars)) . showString "|\n"
-  | otherwise = id
-
-showsBars :: [String] -> ShowS
-showsBars bars
-  = case bars of
-      [] -> id
-      _  -> showString (concat (reverse (tail bars))) . showString node
-
-node :: String
-node           = "+--"
-
-withBar, withEmpty :: [String] -> [String]
-withBar bars   = "|  ":bars
-withEmpty bars = "   ":bars
+-- -- | /O(n)/. Show the tree that implements the map. The tree is shown
+-- -- in a compressed, hanging format. See 'showTreeWith'.
+-- showTree :: (Show k,Show a) => Map k a -> String
+-- showTree m
+--   = showTreeWith showElem True False m
+--   where
+--     showElem k x  = show k ++ ":=" ++ show x
+-- 
+-- 
+-- {- | /O(n)/. The expression (@'showTreeWith' showelem hang wide map@) shows
+--  the tree that implements the map. Elements are shown using the @showElem@ function. If @hang@ is
+--  'True', a /hanging/ tree is shown otherwise a rotated tree is shown. If
+--  @wide@ is 'True', an extra wide version is shown.
+-- 
+-- >  Map> let t = fromDistinctAscList [(x,()) | x <- [1..5]]
+-- >  Map> putStrLn $ showTreeWith (\k x -> show (k,x)) True False t
+-- >  (4,())
+-- >  +--(2,())
+-- >  |  +--(1,())
+-- >  |  +--(3,())
+-- >  +--(5,())
+-- >
+-- >  Map> putStrLn $ showTreeWith (\k x -> show (k,x)) True True t
+-- >  (4,())
+-- >  |
+-- >  +--(2,())
+-- >  |  |
+-- >  |  +--(1,())
+-- >  |  |
+-- >  |  +--(3,())
+-- >  |
+-- >  +--(5,())
+-- >
+-- >  Map> putStrLn $ showTreeWith (\k x -> show (k,x)) False True t
+-- >  +--(5,())
+-- >  |
+-- >  (4,())
+-- >  |
+-- >  |  +--(3,())
+-- >  |  |
+-- >  +--(2,())
+-- >     |
+-- >     +--(1,())
+-- 
+-- -}
+-- showTreeWith :: (k -> a -> String) -> Bool -> Bool -> Map k a -> String
+-- showTreeWith showelem hang wide t
+--   | hang      = (showsTreeHang showelem wide [] t) ""
+--   | otherwise = (showsTree showelem wide [] [] t) ""
+-- 
+-- {- Decrease showsTree 5 @-}
+-- showsTree :: (k -> a -> String) -> Bool -> [String] -> [String] -> Map k a -> ShowS
+-- showsTree showelem wide lbars rbars t
+--   = case t of
+--       Tip -> showsBars lbars . showString "|\n"
+--       Bin _ kx x Tip Tip
+--           -> showsBars lbars . showString (showelem kx x) . showString "\n"
+--       Bin _ kx x l r
+--           -> showsTree showelem wide (withBar rbars) (withEmpty rbars) r .
+--              showWide wide rbars .
+--              showsBars lbars . showString (showelem kx x) . showString "\n" .
+--              showWide wide lbars .
+--              showsTree showelem wide (withEmpty lbars) (withBar lbars) l
+-- 
+-- {- Decrease showsTreeHang 4 @-}
+-- showsTreeHang :: (k -> a -> String) -> Bool -> [String] -> Map k a -> ShowS
+-- showsTreeHang showelem wide bars t
+--   = case t of
+--       Tip -> showsBars bars . showString "|\n"
+--       Bin _ kx x Tip Tip
+--           -> showsBars bars . showString (showelem kx x) . showString "\n"
+--       Bin _ kx x l r
+--           -> showsBars bars . showString (showelem kx x) . showString "\n" .
+--              showWide wide bars .
+--              showsTreeHang showelem wide (withBar bars) l .
+--              showWide wide bars .
+--              showsTreeHang showelem wide (withEmpty bars) r
+-- 
+-- showWide :: Bool -> [String] -> String -> String
+-- showWide wide bars
+--   | wide      = showString (concat (reverse bars)) . showString "|\n"
+--   | otherwise = id
+-- 
+-- showsBars :: [String] -> ShowS
+-- showsBars bars
+--   = case bars of
+--       [] -> id
+--       _  -> showString (concat (reverse (tail bars))) . showString node
+-- 
+-- node :: String
+-- node           = "+--"
+-- 
+-- withBar, withEmpty :: [String] -> [String]
+-- withBar bars   = "|  ":bars
+-- withEmpty bars = "   ":bars
 
 {--------------------------------------------------------------------
   Typeable
@@ -3109,37 +3123,37 @@ withEmpty bars = "   ":bars
 -- > valid (fromAscList [(3,"b"), (5,"a")]) == True
 -- > valid (fromAscList [(5,"a"), (3,"b")]) == False
 
-valid :: Ord k => Map k a -> Bool
-valid t
-  = balanced t && ordered t && validsize t
-
-ordered :: Ord a => Map a b -> Bool
-ordered t
-  = bounded (const True) (const True) t
-  where
-    bounded lo hi t'
-      = case t' of
-          Tip              -> True
-          Bin _ kx _ l r  -> (lo kx) && (hi kx) && bounded lo (<kx) l && bounded (>kx) hi r
-
--- | Exported only for "Debug.QuickCheck"
-balanced :: Map k a -> Bool
-balanced t
-  = case t of
-      Tip            -> True
-      Bin _ _ _ l r  -> (size l + size r <= 1 || (size l <= delta*size r && size r <= delta*size l)) &&
-                        balanced l && balanced r
-
-validsize :: Map a b -> Bool
-validsize t
-  = (realsize t == Just (size t))
-  where
-    realsize t'
-      = case t' of
-          Tip            -> Just 0
-          Bin sz _ _ l r -> case (realsize l,realsize r) of
-                            (Just n,Just m)  | n+m+1 == sz  -> Just sz
-                            _                               -> Nothing
+--valid :: Ord k => Map k a -> Bool
+--valid t
+--  = balanced t && ordered t && validsize t
+--
+--ordered :: Ord a => Map a b -> Bool
+--ordered t
+--  = bounded (const True) (const True) t
+--  where
+--    bounded lo hi t'
+--      = case t' of
+--          Tip              -> True
+--          Bin _ kx _ l r  -> (lo kx) && (hi kx) && bounded lo (<kx) l && bounded (>kx) hi r
+--
+---- | Exported only for "Debug.QuickCheck"
+--balanced :: Map k a -> Bool
+--balanced t
+--  = case t of
+--      Tip            -> True
+--      Bin _ _ _ l r  -> (size l + size r <= 1 || (size l <= delta*size r && size r <= delta*size l)) &&
+--                        balanced l && balanced r
+--
+--validsize :: Map a b -> Bool
+--validsize t
+--  = (realsize t == Just (size t))
+--  where
+--    realsize t'
+--      = case t' of
+--          Tip            -> Just 0
+--          Bin sz _ _ l r -> case (realsize l,realsize r) of
+--                            (Just n,Just m)  | n+m+1 == sz  -> Just sz
+--                            _                               -> Nothing
 
 {--------------------------------------------------------------------
   Utilities
@@ -3160,137 +3174,137 @@ foldlStrict f = go
 -- The values aren't interesting in terms of the properties we want to check,
 -- so treat the Map as a Set to reduce the search space
 type K = Char
-type V = Unit
-type M = Map Char Unit
+type V = ()
+type M = Map Char ()
 
-liquidTests :: [(String, Test)]
-liquidTests = [ ("insert",       T (insert :: K -> V -> M -> M))
-              , ("delete",       T (delete :: K -> M -> M))
-              , ("union",        T (union :: M -> M -> M))
-              , ("difference",   T (difference :: M -> M -> M))
-              , ("intersection", T (intersection :: M -> M -> M))
-              ]
-
-
-liquidTests_bad :: [(String, Test)]
-liquidTests_bad = [ ("insert",       T (insert_bad :: K -> V -> M -> M))
-                  , ("delete",       T (delete_bad :: K -> M -> M))
-                  , ("union",        T (union_bad :: M -> M -> M))
-                  , ("difference",   T (difference_bad :: M -> M -> M))
-                  , ("intersection", T (intersection_bad :: M -> M -> M))
-                  ]
-
-insert_bad = go
-  where
-    go :: Ord k => k -> a -> Map k a -> Map k a
-    STRICT_1_OF_3(go)
-    go kx x Tip = singleton kx x
-    go kx x (Bin sz ky y l r) =
-        case compare kx ky of
-                  -- Bin ky y (go kx x l) r 
-            --LIQUID: swapped balanceL and balanceR to inject bug
-            LT -> balanceR ky y (go kx x l) r
-            GT -> balanceL ky y l (go kx x r)
-            EQ -> Bin sz kx x l r
-
-
-delete_bad = go
-  where
-    go :: Ord k => k -> Map k a -> Map k a
-    STRICT_1_OF_2(go)
-    go _ Tip = Tip
-    go k (Bin _ kx x l r) =
-        case compare k kx of
-            --LIQUID: swapped balanceL and balanceR to inject bug
-            LT -> balanceL kx x (go k l) r
-            GT -> balanceR kx x l (go k r)
-            EQ -> glue kx l r
-
---LIQUID: having trouble injecting bugs here..
-glue_bad :: k -> Map k a -> Map k a -> Map k a
-glue_bad _    Tip r = r
-glue_bad _    l Tip = l
-glue_bad kcut l r
-  | size l > size r = let (km, m, l') = deleteFindMax l in balanceR km m l' r
-  | otherwise       = let (km, m, r') = deleteFindMin r in balanceL km m l r'
-
-
-union_bad :: Ord k => Map k a -> Map k a -> Map k a
-union_bad Tip t2  = t2
-union_bad t1 Tip  = t1
-union_bad t1 t2 = hedgeUnion_bad NothingS NothingS t1 t2
-
-hedgeUnion_bad :: Ord a => MaybeS a -> MaybeS a -> Map a b -> Map a b -> Map a b
-hedgeUnion_bad _   _   t1  Tip = t1
---LIQUID: injected bug in join'
-hedgeUnion_bad blo bhi Tip (Bin _ kx x l r) = join'_bad kx x (filterGt blo l) (filterLt bhi r)
-hedgeUnion_bad _   _   t1  (Bin _ kx x Tip Tip) = insertR kx x t1 -- According to benchmarks, this special case increases
-                                                              -- performance up to 30%. It does not help in difference or intersection.
-hedgeUnion_bad blo bhi (Bin _ kx x l r) t2 = join'_bad kx x (hedgeUnion_bad blo bmi l (trim blo bmi t2))
-                                                   (hedgeUnion_bad bmi bhi r (trim bmi bhi t2))
-  where bmi = JustS kx
-
-join'_bad kx x Tip r  = insertMin kx x r
-join'_bad kx x l Tip  = insertMax kx x l
-join'_bad kx x l@(Bin sizeL ky y ly ry) r@(Bin sizeR kz z lz rz)
-  --LIQUID changed both < to > to inject bug
-  | delta*sizeL > sizeR  = balanceL kz z (join'_bad kx x l lz) rz
-  | delta*sizeR > sizeL  = balanceR ky y ly (join'_bad kx x ry r)
-  | otherwise            = bin kx x l r
-
-
-difference_bad :: Ord k => Map k a -> Map k b -> Map k a
-difference_bad Tip _   = Tip
-difference_bad t1 Tip  = t1
-difference_bad t1 t2   = hedgeDiff_bad NothingS NothingS t1 t2
-
-hedgeDiff_bad :: Ord a => MaybeS a -> MaybeS a -> Map a b -> Map a c -> Map a b
-hedgeDiff_bad _  _   Tip _                  = Tip
-hedgeDiff_bad blo bhi (Bin _ kx x l r) Tip  = join'_bad kx x (filterGt blo l) (filterLt bhi r)
-hedgeDiff_bad blo bhi t (Bin _ kx _ l r)    = merge_bad kx (hedgeDiff_bad blo bmi (trim_bad blo bmi t) l)
-                                                   (hedgeDiff_bad bmi bhi (trim_bad bmi bhi t) r)
-  where bmi = JustS kx
-
---LIQUID: having trouble injecting bug here
-merge_bad _   Tip r   = r
-merge_bad _   l Tip   = l
-merge_bad kcut l@(Bin sizeL kx x lx rx) r@(Bin sizeR ky y ly ry)
-  | delta*sizeL > sizeR = balanceL ky y (merge_bad kcut l ly) ry
-  | delta*sizeR > sizeL = balanceR kx x lx (merge_bad kcut rx r)
-  | otherwise           = glue kcut l r
-
-
-intersection_bad :: Ord k => Map k a -> Map k b -> Map k a
-intersection_bad Tip _ = Tip
-intersection_bad _ Tip = Tip
-intersection_bad t1 t2 = hedgeInt_bad NothingS NothingS t1 t2
-
-hedgeInt_bad :: Ord k => MaybeS k -> MaybeS k -> Map k a -> Map k b -> Map k a
-hedgeInt_bad _ _ _   Tip = Tip
-hedgeInt_bad _ _ Tip _   = Tip
-hedgeInt_bad blo bhi (Bin _ kx x l r) t2 = let l' = hedgeInt_bad blo bmi l (trim_bad blo bmi t2)
-                                               r' = hedgeInt_bad bmi bhi r (trim_bad bmi bhi t2)
-                                           in if kx `member` t2 then join' kx x l' r' else merge kx l' r'
-  where bmi = JustS kx
-
-trim_bad :: Ord k => MaybeS k -> MaybeS k -> Map k a -> Map k a
-trim_bad NothingS   NothingS   t = t
-trim_bad (JustS lk) NothingS   t = greater lk t 
-
-                                     --LIQUID: change <= to >=
-  where greater lo t@(Bin _ k _ _ r) | k >= lo      = greater lo r
-                                     | otherwise    = t
-        greater _  t'@Tip                           = t'
-
-trim_bad NothingS   (JustS hk) t = lesser hk t 
-
-                                      --LIQUID: change >= to <=
-  where lesser  hi t'@(Bin _ k _ l _) | k <= hi     = lesser  hi l
-                                      | otherwise   = t'
-        lesser  _  t'@Tip                           = t'
-trim_bad (JustS lk) (JustS hk) t = middle lk hk t  
-  where middle lo hi t'@(Bin _ k _ l r) | k <= lo   = middle lo hi r
-                                        | k >= hi   = middle lo hi l
-                                        | otherwise = t'
-        middle _ _ t'@Tip = t'  
+--liquidTests :: [(String, Test)]
+--liquidTests = [ ("insert",       T (insert :: K -> V -> M -> M))
+--              , ("delete",       T (delete :: K -> M -> M))
+--              , ("union",        T (union :: M -> M -> M))
+--              , ("difference",   T (difference :: M -> M -> M))
+--              , ("intersection", T (intersection :: M -> M -> M))
+--              ]
+--
+--
+--liquidTests_bad :: [(String, Test)]
+--liquidTests_bad = [ ("insert",       T (insert_bad :: K -> V -> M -> M))
+--                  , ("delete",       T (delete_bad :: K -> M -> M))
+--                  , ("union",        T (union_bad :: M -> M -> M))
+--                  , ("difference",   T (difference_bad :: M -> M -> M))
+--                  , ("intersection", T (intersection_bad :: M -> M -> M))
+--                  ]
+--
+--insert_bad = go
+--  where
+--    go :: Ord k => k -> a -> Map k a -> Map k a
+--    STRICT_1_OF_3(go)
+--    go kx x Tip = singleton kx x
+--    go kx x (Bin sz ky y l r) =
+--        case compare kx ky of
+--                  -- Bin ky y (go kx x l) r 
+--            --LIQUID: swapped balanceL and balanceR to inject bug
+--            LT -> balanceR ky y (go kx x l) r
+--            GT -> balanceL ky y l (go kx x r)
+--            EQ -> Bin sz kx x l r
+--
+--
+--delete_bad = go
+--  where
+--    go :: Ord k => k -> Map k a -> Map k a
+--    STRICT_1_OF_2(go)
+--    go _ Tip = Tip
+--    go k (Bin _ kx x l r) =
+--        case compare k kx of
+--            --LIQUID: swapped balanceL and balanceR to inject bug
+--            LT -> balanceL kx x (go k l) r
+--            GT -> balanceR kx x l (go k r)
+--            EQ -> glue kx l r
+--
+----LIQUID: having trouble injecting bugs here..
+--glue_bad :: k -> Map k a -> Map k a -> Map k a
+--glue_bad _    Tip r = r
+--glue_bad _    l Tip = l
+--glue_bad kcut l r
+--  | size l > size r = let (km, m, l') = deleteFindMax l in balanceR km m l' r
+--  | otherwise       = let (km, m, r') = deleteFindMin r in balanceL km m l r'
+--
+--
+--union_bad :: Ord k => Map k a -> Map k a -> Map k a
+--union_bad Tip t2  = t2
+--union_bad t1 Tip  = t1
+--union_bad t1 t2 = hedgeUnion_bad NothingS NothingS t1 t2
+--
+--hedgeUnion_bad :: Ord a => MaybeS a -> MaybeS a -> Map a b -> Map a b -> Map a b
+--hedgeUnion_bad _   _   t1  Tip = t1
+----LIQUID: injected bug in join'
+--hedgeUnion_bad blo bhi Tip (Bin _ kx x l r) = join'_bad kx x (filterGt blo l) (filterLt bhi r)
+--hedgeUnion_bad _   _   t1  (Bin _ kx x Tip Tip) = insertR kx x t1 -- According to benchmarks, this special case increases
+--                                                              -- performance up to 30%. It does not help in difference or intersection.
+--hedgeUnion_bad blo bhi (Bin _ kx x l r) t2 = join'_bad kx x (hedgeUnion_bad blo bmi l (trim blo bmi t2))
+--                                                   (hedgeUnion_bad bmi bhi r (trim bmi bhi t2))
+--  where bmi = JustS kx
+--
+--join'_bad kx x Tip r  = insertMin kx x r
+--join'_bad kx x l Tip  = insertMax kx x l
+--join'_bad kx x l@(Bin sizeL ky y ly ry) r@(Bin sizeR kz z lz rz)
+--  --LIQUID changed both < to > to inject bug
+--  | delta*sizeL > sizeR  = balanceL kz z (join'_bad kx x l lz) rz
+--  | delta*sizeR > sizeL  = balanceR ky y ly (join'_bad kx x ry r)
+--  | otherwise            = bin kx x l r
+--
+--
+--difference_bad :: Ord k => Map k a -> Map k b -> Map k a
+--difference_bad Tip _   = Tip
+--difference_bad t1 Tip  = t1
+--difference_bad t1 t2   = hedgeDiff_bad NothingS NothingS t1 t2
+--
+--hedgeDiff_bad :: Ord a => MaybeS a -> MaybeS a -> Map a b -> Map a c -> Map a b
+--hedgeDiff_bad _  _   Tip _                  = Tip
+--hedgeDiff_bad blo bhi (Bin _ kx x l r) Tip  = join'_bad kx x (filterGt blo l) (filterLt bhi r)
+--hedgeDiff_bad blo bhi t (Bin _ kx _ l r)    = merge_bad kx (hedgeDiff_bad blo bmi (trim_bad blo bmi t) l)
+--                                                   (hedgeDiff_bad bmi bhi (trim_bad bmi bhi t) r)
+--  where bmi = JustS kx
+--
+----LIQUID: having trouble injecting bug here
+--merge_bad _   Tip r   = r
+--merge_bad _   l Tip   = l
+--merge_bad kcut l@(Bin sizeL kx x lx rx) r@(Bin sizeR ky y ly ry)
+--  | delta*sizeL > sizeR = balanceL ky y (merge_bad kcut l ly) ry
+--  | delta*sizeR > sizeL = balanceR kx x lx (merge_bad kcut rx r)
+--  | otherwise           = glue kcut l r
+--
+--
+--intersection_bad :: Ord k => Map k a -> Map k b -> Map k a
+--intersection_bad Tip _ = Tip
+--intersection_bad _ Tip = Tip
+--intersection_bad t1 t2 = hedgeInt_bad NothingS NothingS t1 t2
+--
+--hedgeInt_bad :: Ord k => MaybeS k -> MaybeS k -> Map k a -> Map k b -> Map k a
+--hedgeInt_bad _ _ _   Tip = Tip
+--hedgeInt_bad _ _ Tip _   = Tip
+--hedgeInt_bad blo bhi (Bin _ kx x l r) t2 = let l' = hedgeInt_bad blo bmi l (trim_bad blo bmi t2)
+--                                               r' = hedgeInt_bad bmi bhi r (trim_bad bmi bhi t2)
+--                                           in if kx `member` t2 then join' kx x l' r' else merge kx l' r'
+--  where bmi = JustS kx
+--
+--trim_bad :: Ord k => MaybeS k -> MaybeS k -> Map k a -> Map k a
+--trim_bad NothingS   NothingS   t = t
+--trim_bad (JustS lk) NothingS   t = greater lk t 
+--
+--                                     --LIQUID: change <= to >=
+--  where greater lo t@(Bin _ k _ _ r) | k >= lo      = greater lo r
+--                                     | otherwise    = t
+--        greater _  t'@Tip                           = t'
+--
+--trim_bad NothingS   (JustS hk) t = lesser hk t 
+--
+--                                      --LIQUID: change >= to <=
+--  where lesser  hi t'@(Bin _ k _ l _) | k <= hi     = lesser  hi l
+--                                      | otherwise   = t'
+--        lesser  _  t'@Tip                           = t'
+--trim_bad (JustS lk) (JustS hk) t = middle lk hk t  
+--  where middle lo hi t'@(Bin _ k _ l r) | k <= lo   = middle lo hi r
+--                                        | k >= hi   = middle lo hi l
+--                                        | otherwise = t'
+--        middle _ _ t'@Tip = t'  
 
