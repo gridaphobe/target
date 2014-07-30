@@ -263,7 +263,6 @@ module Map (
             -- , filterLt
 
             -- LIQUID
-            , Unit
             , liquidTests
             , liquidTests_bad
             , Maybe, Char, Bool, Int, Either
@@ -3160,8 +3159,8 @@ foldlStrict f = go
 -- The values aren't interesting in terms of the properties we want to check,
 -- so treat the Map as a Set to reduce the search space
 type K = Char
-type V = Unit
-type M = Map Char Unit
+type V = ()
+type M = Map Char ()
 
 liquidTests :: [(String, Test)]
 liquidTests = [ ("insert",       T (insert :: K -> V -> M -> M))
