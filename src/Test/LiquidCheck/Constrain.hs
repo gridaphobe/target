@@ -169,6 +169,7 @@ instance (Num a, Integral a, Constrain a) => Constrain (Ratio a) where
 getCtors :: SpecType -> [GHC.DataCon]
 getCtors (RApp c _ _ _) = GHC.tyConDataCons $ rTyCon c
 getCtors (RAppTy t _ _) = getCtors t
+getCtors (RVar _ _)     = []
 getCtors t              = error $ "getCtors: " ++ showpp t
 
 instance (Constrain a, Constrain b) => Constrain (a -> b) where

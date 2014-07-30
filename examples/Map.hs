@@ -329,14 +329,6 @@ m1 \\ m2 = difference m1 m2
 -- LiquidCheck tests
 instance (Constrain k, Constrain a) => Constrain (Map k a)
 
--- UGH...
-data Unit = Unit deriving (Show, Generic)
-{-@ data Unit = Unit @-}
-instance Constrain Unit
-
-tests = testModule "examples/Map.hs"
-  [liquidCheck (alter_insert :: Char -> Unit -> Map Char Unit -> Map Char Unit) "Map.alter_insert" 9]
-
 {--------------------------------------------------------------------
   Size balanced trees.
 --------------------------------------------------------------------}
@@ -367,11 +359,6 @@ type Size     = Int
 
 {-@ invariant {v:Map k a | (mlen v) >= 0} @-}
 
-
-{-@ mlen :: m:Map k a -> {v:Nat | v = (mlen m)} @-}
-mlen :: Map k a -> Int
-mlen Tip = 0
-mlen (Bin s k v l r) = 1 + mlen l + mlen r
 
 {-@ type OMap k a = {v:Map <{\root v -> v < root}, {\root v -> v > root}> k a | (isBalanced v)} @-}
 
@@ -2373,7 +2360,7 @@ foldlFB = foldlWithKey
 -- > valid (fromAscList [(5,"a"), (3,"b"), (5,"b")]) == False
 
 {- LIQUIDTODO fromAscList :: (Eq k) => [(k,a)]<{v: (k, a) | fst(v) > fst(fld)}> -> OMap k a -}
-{-@ fromAscList :: (Eq k) => {v: [(k,a)] | false} -> OMap k a @-}
+{-@ fromAscList :: (Eq k) => [(k,a)]<{\h t -> fst h <= fst t}> -> OMap k a @-}
 fromAscList :: Eq k => [(k,a)] -> Map k a
 fromAscList xs
   = fromAscListWithKey (\_ x _ -> x) xs
@@ -2389,7 +2376,7 @@ fromAscList xs
 -- > valid (fromAscListWith (++) [(5,"a"), (3,"b"), (5,"b")]) == False
 
 {- LIQUIDTODO fromAscListWith :: (Eq k) => (a -> a -> a) -> [(k,a)]<{v: (k, a) | fst(v) > fst(fld)}> -> OMap k a -}
-{-@ fromAscListWith :: Eq k => (a -> a -> a) -> {v:[(k,a)] | false} -> OMap k a @-}
+{-@ fromAscListWith :: Eq k => (a -> a -> a) -> [(k,a)]<{\h t -> fst h <= fst t}> -> OMap k a @-}
 fromAscListWith :: Eq k => (a -> a -> a) -> [(k,a)] -> Map k a
 fromAscListWith f xs
   = fromAscListWithKey (\_ x y -> f x y) xs
@@ -2407,7 +2394,7 @@ fromAscListWith f xs
 -- > valid (fromAscListWithKey f [(5,"a"), (3,"b"), (5,"b"), (5,"b")]) == False
 
 {- LIQUIDTODO fromAscListWithKey :: (Eq k) => (k -> a -> a -> a) -> [(k,a)]<{v: (k, a) | fst(v) > fst(fld)}> -> OMap k a -}
-{-@ fromAscListWithKey :: (Eq k) => (k -> a -> a -> a) -> {v: [(k,a)] | false} -> OMap k a @-}
+{-@ fromAscListWithKey :: (Eq k) => (k -> a -> a -> a) -> [(k,a)]<{\h t -> fst h <= fst t}> -> OMap k a @-}
 fromAscListWithKey :: Eq k => (k -> a -> a -> a) -> [(k,a)] -> Map k a
 fromAscListWithKey f xs
   = fromDistinctAscList (combineEq f xs)
@@ -2436,7 +2423,7 @@ fromAscListWithKey f xs
 -- > valid (fromDistinctAscList [(3,"b"), (5,"a"), (5,"b")]) == False
 
 {- LIQUIDTODO fromDistinctAscList :: [(k,a)]<{v: (k, a) | fst(v) > fst(fld)}> -> OMap k a -}
-{-@ fromDistinctAscList :: {v: [(k, a)] | false} -> OMap k a @-}
+{-@ fromDistinctAscList :: [(k, a)]<{\h t -> fst h < fst t}> -> OMap k a @-}
 fromDistinctAscList :: [(k,a)] -> Map k a
 fromDistinctAscList xs
   = create const (length xs) xs
@@ -2518,13 +2505,13 @@ trim (JustS lk) (JustS hk) t = middle lk hk t
 #endif
 
 -- LIQUID QUALIFIER DEBUG SILLINESS
-{-@ zoo1 :: (Ord k) => lo:k -> OMap k a -> {v: OMap k a | ((isBin(v)) => (lo < key(v)))} @-}
-zoo1 :: Ord k => k -> Map k a -> Map k a
-zoo1 = error "TODO"
+{- zoo1 :: (Ord k) => lo:k -> OMap k a -> {v: OMap k a | ((isBin(v)) => (lo < key(v)))} @-}
+--zoo1 :: Ord k => k -> Map k a -> Map k a
+--zoo1 = error "TODO"
 
-{-@ zoo2 :: (Ord k) => lo:k -> OMap k a -> {v: OMap k a | ((isBin(v)) => (lo > key(v)))} @-}
-zoo2 :: Ord k => k -> Map k a -> Map k a
-zoo2 = error "TODO"
+{- zoo2 :: (Ord k) => lo:k -> OMap k a -> {v: OMap k a | ((isBin(v)) => (lo > key(v)))} @-}
+--zoo2 :: Ord k => k -> Map k a -> Map k a
+--zoo2 = error "TODO"
 
 
 -- Helper function for 'mergeWithKey'. The @'trimLookupLo' lk hk t@ performs both
@@ -2697,23 +2684,11 @@ splitLookup k t = k `seq`
 
 {-@ join' :: k:k -> a -> OMap {v:k | v < k} a -> OMap {v:k| v > k} a -> OMap k a @-}
 join' :: k -> a -> Map k a -> Map k a -> Map k a
-join' k x m1 m2 = join'T k x m1 m2 (mlen m1 + mlen m2)
---LIQUID join' kx x Tip r  = insertMin kx x r
---LIQUID join' kx x l Tip  = insertMax kx x l
---LIQUID join' kx x l@(Bin sizeL ky y ly ry) r@(Bin sizeR kz z lz rz)
---LIQUID   | delta*sizeL < sizeR  = balanceL kz z (join' kx x l lz) rz
---LIQUID   | delta*sizeR < sizeL  = balanceR ky y ly (join' kx x ry r)
---LIQUID   | otherwise            = bin kx x l r
-
-{-@ join'T :: k:k -> a -> a:OMap {v:k | v < k} a -> b:OMap {v:k| v > k} a -> SumMLen a b -> OMap k a @-}
-{-@ Decrease join'T 5 @-}
-{- LIQUID WITNESS -}
-join'T :: k -> a -> Map k a -> Map k a -> Int -> Map k a
-join'T kx x Tip r _ = insertMin kx x r
-join'T kx x l Tip _ = insertMax kx x l
-join'T kx x l@(Bin sizeL ky y ly ry) r@(Bin sizeR kz z lz rz) d
-  | delta*sizeL < sizeR  = balanceL kz z (join'T kx x l lz (d-(mlen rz)-1)) rz
-  | delta*sizeR < sizeL  = balanceR ky y ly (join'T kx x ry r (d-(mlen ly)-1))
+join' kx x Tip r  = insertMin kx x r
+join' kx x l Tip  = insertMax kx x l
+join' kx x l@(Bin sizeL ky y ly ry) r@(Bin sizeR kz z lz rz)
+  | delta*sizeL < sizeR  = balanceL kz z (join' kx x l lz) rz
+  | delta*sizeR < sizeL  = balanceR ky y ly (join' kx x ry r)
   | otherwise            = bin kx x l r
 
 -- insertMin and insertMax don't perform potentially expensive comparisons.
@@ -2735,23 +2710,11 @@ insertMin kx x t
 --------------------------------------------------------------------}
 {-@ merge :: kcut:k -> OMap {v:k | v < kcut} a -> OMap {v:k| v > kcut} a -> OMap k a @-}
 merge :: k -> Map k a -> Map k a -> Map k a
-merge k m1 m2 = mergeT k m1 m2 (mlen m1 + mlen m2)
---LIQUID merge _   Tip r   = r
---LIQUID merge _   l Tip   = l
---LIQUID merge kcut l@(Bin sizeL kx x lx rx) r@(Bin sizeR ky y ly ry)
---LIQUID   | delta*sizeL < sizeR = balanceL ky y (merge kcut l ly) ry
---LIQUID   | delta*sizeR < sizeL = balanceR kx x lx (merge kcut rx r)
---LIQUID   | otherwise           = glue kcut l r
-
-{-@ mergeT :: kcut:k -> a:OMap {v:k | v < kcut} a -> b:OMap {v:k| v > kcut} a -> SumMLen a b -> OMap k a @-}
-{-@ Decrease mergeT 4 @-}
-{- LIQUID WITNESS -}
-mergeT :: k -> Map k a -> Map k a -> Int -> Map k a
-mergeT _   Tip r _   = r
-mergeT _   l Tip _   = l
-mergeT kcut l@(Bin sizeL kx x lx rx) r@(Bin sizeR ky y ly ry) d
-  | delta*sizeL < sizeR = balanceL ky y (mergeT kcut l ly (d-(mlen ry)-1)) ry
-  | delta*sizeR < sizeL = balanceR kx x lx (mergeT kcut rx r (d-(mlen lx)-1))
+merge _   Tip r   = r
+merge _   l Tip   = l
+merge kcut l@(Bin sizeL kx x lx rx) r@(Bin sizeR ky y ly ry)
+  | delta*sizeL < sizeR = balanceL ky y (merge kcut l ly) ry
+  | delta*sizeR < sizeL = balanceR kx x lx (merge kcut rx r)
   | otherwise           = glue kcut l r
 
 {--------------------------------------------------------------------
