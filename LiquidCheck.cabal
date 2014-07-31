@@ -20,6 +20,7 @@ library
   ghc-prof-options:    -fprof-auto -caf-all
   exposed-modules:     Test.LiquidCheck,
                        Test.LiquidCheck.Constrain,
+                       Test.LiquidCheck.Constrain.Function,
                        Test.LiquidCheck.Driver,
                        Test.LiquidCheck.Eval,
                        Test.LiquidCheck.Expr,

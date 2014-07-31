@@ -30,18 +30,6 @@ import           Test.LiquidCheck.Gen
 import           Test.LiquidCheck.Types
 import           Test.LiquidCheck.Util
 
-type family Args a where
-  Args (a -> b -> c -> d -> e) = (a,b,c,d)
-  Args (a -> b -> c -> d) = (a,b,c)
-  Args (a -> b -> c) = (a,b)
-  Args (a -> b) = a
-
-type family Res a where
-  Res (a -> b -> c -> d -> e) = e
-  Res (a -> b -> c -> d) = d
-  Res (a -> b -> c) = c
-  Res (a -> b) = b
-
 type CanTest f = (Testable f, Show (Args f), Constrain (Res f))
 
 test :: CanTest f => f -> Int -> SpecType -> Gen Result

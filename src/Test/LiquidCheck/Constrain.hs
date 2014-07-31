@@ -3,14 +3,14 @@
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE KindSignatures       #-}
+{-# LANGUAGE LambdaCase           #-}
+{-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE ParallelListComp     #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE StandaloneDeriving   #-}
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ViewPatterns         #-}
 module Test.LiquidCheck.Constrain where
 
 import           Control.Applicative
@@ -162,78 +162,6 @@ instance (Num a, Integral a, Constrain a) => Constrain (Ratio a) where
                   return $ toA x % toA y
   toExpr x = EApp (dummyLoc "GHC.Real.:%") [toExpr (numerator x), toExpr (denominator x)]
 
-getCtors :: SpecType -> [GHC.DataCon]
-getCtors (RApp c _ _ _) = GHC.tyConDataCons $ rTyCon c
-getCtors (RAppTy t _ _) = getCtors t
-getCtors (RVar _ _)     = []
-getCtors t              = error $ "getCtors: " ++ showpp t
-
-instance (Constrain a, Constrain b) => Constrain (a -> b) where
-  getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)]
-  gen p d (stripQuals -> RFun _ ta to _)
-    = do forM_ (getCtors ta ++ getCtors to) $ \dc -> do
-           let c = tidySymbol $ symbol dc
-           t <- lookupCtor c
-           addConstructor (c, rTypeSort mempty t)
-         fresh [] (FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)])
-  stitch d (stripQuals -> RFun xa ta to _)
-    = do mref  <- io $ newIORef []
-         state' <- get
-         let state = state' { variables = [], choices = [], constraints = []
-                            , values = [], deps = [], constructors = [] }
-         return $ \a -> unsafePerformIO $ evalGen state $ do
-           let e = toExpr a
-           mv <- lookup e <$> io (readIORef mref)
-           case mv of
-             Just v  -> return v
-             Nothing -> do
-               cts <- gets freesyms
-               let env = map (second (`app` [])) cts
-               b <- evalType (M.fromList env) ta e
-               case b of
-                 False -> error "failed pre-condition check"
-                 True  -> do
-                   ctx <- gets smtContext
-                   io $ command ctx Push
-                   xe <- genExpr e
-                   let su = mkSubst [(xa, var xe)]
-                   xo <- gen (Proxy :: Proxy b) d (subst su to)
-                   vs <- gets variables
-                   mapM_ (\x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
-                   cs <- gets constraints
-                   mapM_ (\c -> io . command ctx $ Assert Nothing c) cs
-                   resp <- io $ command ctx CheckSat
-                   when (resp == Unsat) $ Ex.throw SmtFailedToProduceOutput
-                   let real = [symbol v | (v,t) <- vs, t `elem` [FInt, choicesort, boolsort]]
-                   Values model <- if null real then return $ Values []
-                                   else io $ command ctx (GetValue real)
-                   setValues (map snd model)
-                   o  <- stitch d to
-                   whenVerbose $ io $ printf "%s -> %s\n" (show a) (show o)
-                   io (modifyIORef mref ((e,o):))
-                   io $ command ctx Pop
-                   return o
-  toExpr  f = var ("FUNCTION" :: Symbol)
-
-genExpr :: Expr -> Gen Variable
-genExpr (EApp (val -> c) es)
-  = do xes <- mapM genExpr es
-       (xs, _, to) <- bkArrowDeep . stripQuals <$> lookupCtor c
-       let su  = mkSubst $ zip xs $ map (var . fst) xes
-           to' = subst su to
-       x <- fresh [] $ FObj $ symbol $ rTyCon $ rt_tycon to'
-       addConstraint $ ofReft x (toReft $ rt_reft to')
-       return x
-genExpr (ECon (I i))
-  = do x <- fresh [] FInt
-       addConstraint $ var x `eq` expr i
-       return x
-genExpr (ESym (SL s)) | T.length s == 1
-  -- This is a Char, so encode it as an Int
-  = do x <- fresh [] FInt
-       addConstraint $ var x `eq` expr (ord $ T.head s)
-       return x
-genExpr e = error $ "genExpr: " ++ show e
 
 choose :: Variable -> [Variable] -> Gen ()
 choose x cs

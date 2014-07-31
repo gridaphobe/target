@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE BangPatterns #-}
 module Test.LiquidCheck.Util where
@@ -30,6 +31,18 @@ io = liftIO
 
 myTrace :: Show a => String -> a -> a
 myTrace s x = trace (s ++ ": " ++ show x) x
+
+type family Args a where
+  Args (a -> b -> c -> d -> e) = (a,b,c,d)
+  Args (a -> b -> c -> d) = (a,b,c)
+  Args (a -> b -> c) = (a,b)
+  Args (a -> b) = a
+
+type family Res a where
+  Res (a -> b -> c -> d -> e) = e
+  Res (a -> b -> c -> d) = d
+  Res (a -> b -> c) = c
+  Res (a -> b) = b
 
 safeFromJust :: String -> Maybe a -> a
 safeFromJust msg Nothing  = error $ "safeFromJust: " ++ msg
