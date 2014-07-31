@@ -83,9 +83,13 @@ evalBrel Le = (<=)
 applyMeasure :: Measure SpecType DataCon -> Expr -> M.HashMap Symbol Expr -> Gen Expr
 applyMeasure m (EApp c xs) env = evalBody eq xs env
   where
-    ct = case symbolString $ val c of
+    ct = symbolString $ case val c of
       "GHC.Types.[]" -> "[]"
       "GHC.Types.:"  -> ":"
+      "GHC.Tuple.(,)" -> "(,)"
+      "GHC.Tuple.(,,)" -> "(,,)"
+      "GHC.Tuple.(,,,)" -> "(,,,)"
+      "GHC.Tuple.(,,,,)" -> "(,,,,)"
       c -> c
     eq = safeFromJust ("applyMeasure: " ++ ct)
        $ find ((==ct) . show . ctor) $ eqns m
