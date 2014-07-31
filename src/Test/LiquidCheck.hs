@@ -23,6 +23,7 @@ import Language.Haskell.Liquid.Types        (GhcInfo (..),
                                              GhcSpec (..), showpp)
 
 import Test.LiquidCheck.Constrain
+import Test.LiquidCheck.Constrain.Function  ()
 import Test.LiquidCheck.Gen
 import Test.LiquidCheck.Testable
 import Test.LiquidCheck.Types
