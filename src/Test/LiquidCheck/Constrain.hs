@@ -228,6 +228,11 @@ genExpr (ECon (I i))
   = do x <- fresh [] FInt
        addConstraint $ var x `eq` expr i
        return x
+genExpr (ESym (SL s)) | T.length s == 1
+  -- This is a Char, so encode it as an Int
+  = do x <- fresh [] FInt
+       addConstraint $ var x `eq` expr (ord $ T.head s)
+       return x
 genExpr e = error $ "genExpr: " ++ show e
 
 choose :: Variable -> [Variable] -> Gen ()
