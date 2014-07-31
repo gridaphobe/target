@@ -22,6 +22,7 @@ import qualified Data.Text                       as T
 import qualified GHC
 import           Language.Fixpoint.SmtLib2
 import           Language.Fixpoint.Types
+import           Language.Haskell.Liquid.GhcMisc (qualifiedNameSymbol)
 import           Language.Haskell.Liquid.RefType (rTypeSort)
 import           Language.Haskell.Liquid.Tidy    (tidySymbol)
 import           Language.Haskell.Liquid.Types   hiding (var)
@@ -43,9 +44,12 @@ getCtors (RFun _ i o _) = getCtors i ++ getCtors o
 getCtors (RVar _ _)     = []
 getCtors t              = error $ "getCtors: " ++ showpp t
 
+dataConSymbol_noUnique :: GHC.DataCon -> Symbol
+dataConSymbol_noUnique = qualifiedNameSymbol . GHC.getName
+
 genFun p d (stripQuals -> t)
   = do forM_ (getCtors t) $ \dc -> do
-         let c = tidySymbol $ symbol dc
+         let c = dataConSymbol_noUnique dc
          t <- lookupCtor c
          addConstructor (c, rTypeSort mempty t)
        fresh [] (getType p)
