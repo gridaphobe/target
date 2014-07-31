@@ -89,15 +89,11 @@ reproxyElem = reproxy
 --- Instances
 --------------------------------------------------------------------------------
 instance Constrain () where
-  getType _ = FObj "GHC.Types.Unit"
-  gen _ _ _ = fresh [] (FObj "GHC.Types.Unit")
+  getType _ = FObj "GHC.Tuple.()"
+  gen _ _ _ = fresh [] (FObj "GHC.Tuple.()")
   stitch _ _ = return ()
+  -- this is super fiddly, but seemingly required since GHC.exprType chokes on "GHC.Tuple.()"
   toExpr _   = app ("()" :: Symbol) []
--- instance Constrain () where
---   getType _ = "GHC.Types.()"
---   gen _ _ _ = fresh [] (FObj "GHC.Types.()")
---   stitch _  = return ()
---   toExpr _  = app (stringSymbol "()") []
 
 instance Constrain Int where
   getType _ = FObj "GHC.Types.Int"
@@ -174,8 +170,8 @@ getCtors t              = error $ "getCtors: " ++ showpp t
 
 instance (Constrain a, Constrain b) => Constrain (a -> b) where
   getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)]
-  gen p d (stripQuals -> RFun _ ta _ _)
-    = do forM_ (getCtors ta) $ \dc -> do
+  gen p d (stripQuals -> RFun _ ta to _)
+    = do forM_ (getCtors ta ++ getCtors to) $ \dc -> do
            let c = tidySymbol $ symbol dc
            t <- lookupCtor c
            addConstructor (c, rTypeSort mempty t)

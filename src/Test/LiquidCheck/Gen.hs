@@ -150,7 +150,7 @@ lookupCtor c
          Nothing -> do
            t <- io $ runGhc $ do
                   loadModule m
-                  ofType <$> GHC.exprType (show c)
+                  ofType <$> GHC.exprType (symbolString c)
            modify $ \s@(GS {..}) -> s { ctorEnv = (c,t) : ctorEnv }
            return t
 

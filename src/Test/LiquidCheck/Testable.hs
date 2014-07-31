@@ -133,7 +133,7 @@ instance ( Constrain a, Constrain b, Constrain c, Constrain d
     = [(xa,toExpr a), (xb,toExpr b), (xc,toExpr c)]
 
 instance ( Constrain a, Constrain b, Constrain c, Constrain d, Constrain e
-         , Args (a -> b -> c -> d) ~ (a,b,c,d)
+         , Args (a -> b -> c -> d -> e) ~ (a,b,c,d)
          , Res (a -> b -> c -> d -> e) ~ e)
   => Testable (a -> b -> c -> d -> e) where
   genArgs _ d (stripQuals -> (RFun xa ta (RFun xb tb (RFun xc tc (RFun xd td to _) _) _)_))
