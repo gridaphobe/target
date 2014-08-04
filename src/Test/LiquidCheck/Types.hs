@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -16,10 +16,12 @@ import           GHC
 import qualified Data.Text                     as T
 
 data LiquidException = SmtFailedToProduceOutput
+                     | PreconditionCheckFailed String
   deriving Typeable
 
 instance Show LiquidException where
   show SmtFailedToProduceOutput = "The SMT solver was unable to produce an output value."
+  show (PreconditionCheckFailed e) = "The pre-condition check for a generated function failed: " ++ e
 
 instance Ex.Exception LiquidException
 

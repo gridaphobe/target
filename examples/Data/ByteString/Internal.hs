@@ -1,11 +1,13 @@
 {-# LANGUAGE CPP, ForeignFunctionInterface, DeriveDataTypeable, MagicHash, UnboxedTuples #-}
 -- We cannot actually specify all the language pragmas, see ghc ticket #
 -- If we could, these are what they would be:
-{- LANGUAGE UnliftedFFITypes, MagicHash,
-            UnboxedTuples, DeriveDataTypeable -}
+{-# LANGUAGE UnliftedFFITypes, MagicHash,
+            UnboxedTuples, DeriveDataTypeable #-}
 {-# OPTIONS_HADDOCK hide #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-@ LIQUID "-isrc" @-}
+{-@ LIQUID "-i../../../src" @-}
+{-@ LIQUID "-i../../../include" @-}
+{-@ LIQUID "--c-files=../../../cbits/fpstring.c" @-}
 -- |
 -- Module      : Data.ByteString.Internal
 -- License     : BSD-style
@@ -23,8 +25,6 @@
 --
 module Data.ByteString.Internal (
 
-        liquidCanary,   -- LIQUID
-        ptrLen,         -- LIQUID GHOST for getting a pointer's length
         packWith,       -- LIQUID, because we hid the Read instance... FIX.
 
         -- * The @ByteString@ type and representation
@@ -97,8 +97,7 @@ import Data.Data                (Data)
 #else
 import Data.Generics            (Data)
 #endif
--- import GHC.Base                 (realWorld#, unsafeChr)
-import GHC.Base                 (unsafeChr) -- LIQUID: strange GHC parse error due to #
+import GHC.Base                 (realWorld#, unsafeChr)
 #if __GLASGOW_HASKELL__ >= 611
 import GHC.IO                   (IO(IO))
 #else
@@ -122,7 +121,7 @@ import Foreign.ForeignPtr       (mallocForeignPtrBytes)
 
 #ifdef __GLASGOW_HASKELL__
 import GHC.ForeignPtr           (ForeignPtr(ForeignPtr))
--- import GHC.Base                 (nullAddr#) LIQUID: parse issue with '#'
+import GHC.Base                 (nullAddr#)
 #else
 import Foreign.Ptr              (nullPtr)
 #endif
@@ -142,6 +141,7 @@ import Control.Monad.State
 import Control.Monad.ST
 import qualified Data.HashMap.Strict as M
 import Data.Proxy
+import Foreign.Marshal.Alloc   (finalizerFree)
 import Language.Fixpoint.Types (mkSubst, subst, Sort(..), Symbol(..))
 import Language.Haskell.Liquid.RefType (expandRApp)
 import Test.LiquidCheck
@@ -256,9 +256,9 @@ data ByteString = PS {-# UNPACK #-} !(ForeignPtr Word8) -- payload
 {-@ qualif PLenPos(v: Ptr a): 0 <= (plen v)                        @-}
 {-@ qualif LTPLen(v: int, p:Ptr a): v < (plen p)                   @-}
 
-{-@ ptrLen :: p:(PtrV a) -> {v:Nat | v = (plen p)} @-}  
-ptrLen :: Ptr a -> Int
-ptrLen = undefined
+{- ptrLen :: p:(PtrV a) -> {v:Nat | v = (plen p)} @-}  
+-- ptrLen :: Ptr a -> Int
+-- ptrLen = undefined
 
 
 -------------------------------------------------------------------------
@@ -304,7 +304,7 @@ packWith k str = unsafeCreate (length str) $ \p -> go p str
 {-@ nullForeignPtr :: {v: ForeignPtr Word8 | (fplen v) = 0} @-}
 nullForeignPtr :: ForeignPtr Word8
 #ifdef __GLASGOW_HASKELL__
-nullForeignPtr = undefined -- LIQUID: ForeignPtr nullAddr# undefined --TODO: should ForeignPtrContents be strict?
+nullForeignPtr = ForeignPtr nullAddr# undefined --TODO: should ForeignPtrContents be strict?
 #else
 nullForeignPtr = unsafePerformIO $ newForeignPtr_ nullPtr
 {-# NOINLINE nullForeignPtr #-}
@@ -542,7 +542,7 @@ isSpaceChar8 c =
 -- 'inlinePerformIO' block. On Hugs this is just @unsafePerformIO@.
 --
 {-# INLINE inlinePerformIO #-}
-{-@ inlinePerformIO :: IO a -> a @-}
+{-@ assume inlinePerformIO :: IO a -> a @-}
 inlinePerformIO :: IO a -> a
 #if defined(__GLASGOW_HASKELL__)
 inlinePerformIO (IO m) = case m realWorld# of (# _, r #) -> r
@@ -559,51 +559,37 @@ inlinePerformIO = unsafePerformIO
 -- LIQUID
 foreign import ccall unsafe "string.h strlen" c_strlen
     :: CString -> IO CSize
-
 {-@ c_strlen ::  s:CString -> IO {v: CSize | ((0 <= v) && (v = (plen s)))} @-}
--- c_strlen :: CString -> IO CSize
--- c_strlen = undefined
 
-foreign import ccall unsafe "static stdlib.h &free" c_free_finalizer
-    :: FunPtr (Ptr Word8 -> IO ())
-
--- c_free_finalizer :: FunPtr (Ptr Word8 -> IO ())
--- c_free_finalizer = undefined
+-- foreign import ccall unsafe "static stdlib.h &free" c_free_finalizer
+--     :: FunPtr (Ptr Word8 -> IO ())
+c_free_finalizer :: FunPtr (Ptr Word8 -> IO ())
+c_free_finalizer = finalizerFree
 
 foreign import ccall unsafe "string.h memchr" c_memchr
     :: Ptr Word8 -> CInt -> CSize -> IO (Ptr Word8)
-
-{-@ c_memchr :: p:(Ptr Word8) -> CInt -> n:{v:CSize| (0 <= v && v <= (plen p))} -> (IO {v:(Ptr Word8) | (SuffixPtr v n p)}) @-}
--- c_memchr :: Ptr Word8 -> CInt -> CSize -> IO (Ptr Word8)
--- c_memchr = error "LIQUIDFOREIGN"
+{-@ assume c_memchr :: p:(Ptr Word8) -> CInt -> n:{v:CSize| (0 <= v && v <= (plen p))} -> (IO {v:(Ptr Word8) | (SuffixPtr v n p)}) @-}
 
 
-{-@ memchr :: p:(Ptr Word8) -> Word8 -> n:{v:CSize| (0 <= v && v <= (plen p))} -> (IO {v:(Ptr Word8) | (SuffixPtr v n p)}) @-}
+{-@ assume memchr :: p:(Ptr Word8) -> Word8 -> n:{v:CSize| (0 <= v && v <= (plen p))} -> (IO {v:(Ptr Word8) | (SuffixPtr v n p)}) @-}
 memchr :: Ptr Word8 -> Word8 -> CSize -> IO (Ptr Word8)
 memchr p w s = c_memchr p (fromIntegral w) s
 
 foreign import ccall unsafe "string.h memcmp" memcmp
     :: Ptr Word8 -> Ptr Word8 -> CSize -> IO CInt
 
-{-@ memcmp :: p:(Ptr Word8) -> q:(Ptr Word8) -> {v:CSize | (v <= (plen p) && v <= (plen q)) } -> IO Foreign.C.Types.CInt @-}
--- memcmp :: Ptr Word8 -> Ptr Word8 -> CSize -> IO CInt
--- memcmp = error "LIQUIDFOREIGN"
+{-@ assume memcmp :: p:(Ptr Word8) -> q:(Ptr Word8) -> {v:CSize | (v <= (plen p) && v <= (plen q)) } -> IO Foreign.C.Types.CInt @-}
 
 foreign import ccall unsafe "string.h memcpy" c_memcpy
     :: Ptr Word8 -> Ptr Word8 -> CSize -> IO (Ptr Word8)
 
-{-@ memcpy :: dst:(PtrV Word8)
+{-@ assume memcpy :: dst:(PtrV Word8)
            -> src:(PtrV Word8) 
            -> size: {v:CSize| (v <= (plen src) && v <= (plen dst))} 
            -> IO () 
   @-}
 memcpy :: Ptr Word8 -> Ptr Word8 -> CSize -> IO ()
 memcpy p q s = c_memcpy p q s >> return ()
-
-
-{- liquidCanary :: x:Int -> {v: Int | v > x} @-}
-liquidCanary     :: Int -> Int
-liquidCanary x   = x - 1
 
 {-
 foreign import ccall unsafe "string.h memmove" c_memmove
@@ -616,7 +602,6 @@ memmove p q s = do c_memmove p q s
 
 foreign import ccall unsafe "string.h memset" c_memset
     :: Ptr Word8 -> CInt -> CSize -> IO (Ptr Word8)
--- c_memset = undefined
 
 memset :: Ptr Word8 -> Word8 -> CSize -> IO (Ptr Word8)
 memset p w s = c_memset p (fromIntegral w) s
@@ -629,37 +614,27 @@ memset p w s = c_memset p (fromIntegral w) s
 foreign import ccall unsafe "static fpstring.h fps_reverse" c_reverse
     :: Ptr Word8 -> Ptr Word8 -> CULong -> IO ()
 
-{-@ c_reverse :: dst:(PtrV Word8) -> src:(PtrV Word8) -> {v:CULong | ((OkPLen v src) && (OkPLen v dst)) } -> IO () @-}
--- c_reverse :: Ptr Word8 -> Ptr Word8 -> CULong -> IO ()
--- c_reverse = error "LIQUID FOREIGN"
+{-@ assume c_reverse :: dst:(PtrV Word8) -> src:(PtrV Word8) -> {v:CULong | ((OkPLen v src) && (OkPLen v dst)) } -> IO () @-}
 
 foreign import ccall unsafe "static fpstring.h fps_intersperse" c_intersperse
     :: Ptr Word8 -> Ptr Word8 -> CULong -> Word8 -> IO ()
-{-@ c_intersperse :: dst:(Ptr Word8) -> src:(Ptr Word8) -> {v: CULong | ((OkPLen v src) && ((v+v-1) <= (plen dst)))} -> Word8 -> IO () @-}
--- c_intersperse :: Ptr Word8 -> Ptr Word8 -> CULong -> Word8 -> IO ()
--- c_intersperse = error "LIQUID FOREIGN"
+{-@ assume c_intersperse :: dst:(Ptr Word8) -> src:(Ptr Word8) -> {v: CULong | ((OkPLen v src) && ((v+v-1) <= (plen dst)))} -> Word8 -> IO () @-}
 
 
 foreign import ccall unsafe "static fpstring.h fps_maximum" c_maximum
     :: Ptr Word8 -> CULong -> IO Word8
-{-@ c_maximum :: p:(Ptr Word8) -> {v:CULong | (OkPLen v p)} -> IO Word8 @-}
--- c_maximum :: Ptr Word8 -> CULong -> IO Word8
--- c_maximum = error "LIQUID FOREIGN"
+{-@ assume c_maximum :: p:(Ptr Word8) -> {v:CULong | (OkPLen v p)} -> IO Word8 @-}
 
 foreign import ccall unsafe "static fpstring.h fps_minimum" c_minimum
     :: Ptr Word8 -> CULong -> IO Word8
-{-@ c_minimum :: p:(Ptr Word8) -> {v:CULong | (OkPLen v p)} -> IO Word8 @-}
--- c_minimum :: Ptr Word8 -> CULong -> IO Word8
--- c_minimum = error "LIQUID FOREIGN"
+{-@ assume c_minimum :: p:(Ptr Word8) -> {v:CULong | (OkPLen v p)} -> IO Word8 @-}
 
 foreign import ccall unsafe "static fpstring.h fps_count" c_count
     :: Ptr Word8 -> CULong -> Word8 -> IO CULong
-{-@ c_count :: p:(Ptr Word8) 
+{-@ assume c_count :: p:(Ptr Word8) 
             -> n:{v:CULong | (OkPLen v p)}
             -> Word8 
             -> (IO {v:CULong | ((0 <= v) && (v <= n)) }) @-}
--- c_count :: Ptr Word8 -> CULong -> Word8 -> IO CULong
--- c_count = error "LIQUID FOREIGN"
 
 
 -- ---------------------------------------------------------------------

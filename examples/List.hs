@@ -3,7 +3,6 @@
 
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-@ LIQUID "-isrc" @-}
 module List where
 
 import GHC.Generics

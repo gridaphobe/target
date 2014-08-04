@@ -1,15 +1,14 @@
-{-# LANGUAGE AllowAmbiguousTypes  #-}
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE ViewPatterns         #-}
 module Test.LiquidCheck.Constrain.Function where
 
 import           Control.Applicative
-import           Control.Arrow                   (first,second)
+import           Control.Arrow                   (first, second)
 import qualified Control.Exception               as Ex
 import           Control.Monad
 import           Control.Monad.State
@@ -71,7 +70,8 @@ stitchFun _ d (bkArrowDeep . stripQuals -> (vs, tis, to))
              let env = map (second (`app` [])) cts
              bs <- zipWithM (\e t -> evalType (M.fromList env) t e) es tis
              case and bs of
-               False -> error "failed pre-condition check"
+               --FIXME: better error message
+               False -> Ex.throw $ PreconditionCheckFailed $ show $ zip es tis
                True  -> do
                  ctx <- gets smtContext
                  io $ command ctx Push

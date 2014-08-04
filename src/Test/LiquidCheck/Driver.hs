@@ -12,8 +12,8 @@ import qualified Data.HashMap.Strict             as M
 import qualified Data.HashSet                    as S
 import           Data.List                       hiding (sort)
 import           Data.Monoid
-import           Data.Text.Format
 import qualified Data.Text                       as T
+import           Data.Text.Format
 import qualified Data.Text.Lazy                  as LT
 import qualified Data.Vector                     as V
 import           System.FilePath
