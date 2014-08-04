@@ -19,6 +19,7 @@ import Data.Proxy
 import Test.LiquidCheck
 import Test.LiquidCheck.Gen (GenState(..))
 import Test.LiquidCheck.Util
+import Language.Fixpoint.Types (Sort(..))
 import Language.Haskell.Liquid.PredType
 import Language.Haskell.Liquid.Types (RType(..))
 import BasicTypes (TupleSort(..))
@@ -94,20 +95,17 @@ freshen (Lam v e) = Lam v' (subst (Var v') v e)
 fresh :: Int -> Set Int -> Int
 fresh v vs = 1 + Set.findMax (Set.insert v vs)
 
-tests = testModule "examples/Expr.hs"
-          [ liquidCheck inv "Expr.inv" 3
-          , liquidCheck freshen "Expr.freshen" 3
-          , liquidCheck fresh "Expr.fresh" 3
-          , liquidCheck subst "Expr.subst" 3
-          ]
-
---main = tests
-
 instance (Ord a, Constrain a) => Constrain (Set a) where
-  getType _ = "Data.Set.Base.Set"
+  getType _ = FObj "Data.Set.Base.Set"
   gen p d (RApp c ts ps r)
     = do tyi <- gets tyconInfo
          let listRTyCon  = tyi HM.! listTyCon
          gen (Proxy :: Proxy [a]) d (RApp listRTyCon ts [] mempty)
   stitch  d t = stitch d t >>= \(xs :: [a]) -> return $ Set.fromList xs
   toExpr  s = app setSym [toExpr x | x <- Set.toList s]
+
+liquidTests :: [(String, Test)]
+liquidTests = [ ("inv",     T inv)
+              , ("freshen", T freshen)
+              , ("fresh",   T fresh)
+              , ("subst",   T subst)]

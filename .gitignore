@@ -7,3 +7,7 @@ dist*/
 .liquid
 *.dot
 /_results/
+/examples/Expr.*
+/examples/Map.*
+/examples/Data/ByteString/Internal.*
+/examples/Data/ByteString/Unsafe.*
