@@ -1,7 +1,5 @@
 {-# OPTIONS_GHC -cpp -fglasgow-exts #-}
-{-@ LIQUID "-iexamples" @-}
-{-@ LIQUID "-g-Lcbits" @-}
-{-@ LIQUID "-g-lfpstring" @-}
+{-@ LIQUID "-i../../../examples" @-}
 -- |
 -- Module      : Data.ByteString.Unsafe
 -- License     : BSD-style

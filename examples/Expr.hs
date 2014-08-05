@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-@ LIQUID "--idirs=../src" @-}
 module Expr where
 
 import Data.Set (Set, (\\))

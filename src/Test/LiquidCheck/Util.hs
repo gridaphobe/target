@@ -15,6 +15,7 @@ import           GHC.IO.Handle
 import           System.IO
 
 import qualified DynFlags as GHC
+import qualified GhcMonad as GHC
 import qualified GHC
 import qualified GHC.Paths
 import qualified HscTypes as GHC
@@ -90,13 +91,14 @@ runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
              let df' = df { GHC.ghcMode   = GHC.CompManager
                           , GHC.ghcLink   = GHC.NoLink --GHC.LinkInMemory
                           , GHC.hscTarget = GHC.HscNothing --GHC.HscInterpreted
-                          , GHC.optLevel  = 0 --2
+                          -- , GHC.optLevel  = 0 --2
                           , GHC.log_action = \_ _ _ _ _ -> return ()
                           } `GHC.gopt_set` GHC.Opt_ImplicitImportQualified
                             `GHC.xopt_set` GHC.Opt_MagicHash
              GHC.setSessionDynFlags df'
              x
 
+loadModule :: FilePath -> GHC.Ghc GHC.ModSummary
 loadModule f = do target <- GHC.guessTarget f Nothing
                   --lcheck <- GHC.guessTarget "src/Test/LiquidCheck.hs" Nothing
                   GHC.setTargets [target] -- [target,lcheck]
