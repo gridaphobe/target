@@ -20,7 +20,7 @@ before_install:
  - chmod a+x "$HOME/.cabal/bin/z3"
 
 install:
- - cabal-1.20 install --only-dependencies --enable-tests
+ - cabal-1.20 install --only-dependencies --enable-benchmarks --enable-tests
 
 # Here starts the actual work to be performed for the package under test; any command which exits with a non-zero exit code causes the build to fail.
 script:
