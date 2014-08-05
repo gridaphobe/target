@@ -149,6 +149,7 @@ import Test.LiquidCheck.Constrain
 import Test.LiquidCheck.Expr hiding (eq)
 import Test.LiquidCheck.Gen
 import Test.LiquidCheck.Util
+import Unsafe.Coerce
 
 -- CFILES stuff is Hugs only
 {-# CFILES cbits/fpstring.c #-}
@@ -669,7 +670,7 @@ instance Constrain ByteString where
        ws <- stitch (d-1) t
        let (PS fp _ _) = pack ws
        return $ PS fp o l
-  toExpr b = app ("Data.ByteString.fromList" :: Symbol) [toExpr $ (unpack b :: [Word8])]
+  toExpr (PS p o l) = app ("Data.ByteString.Internal.PS" :: Symbol) [toExpr (unsafeCoerce p :: Int), toExpr o, toExpr l]
 
 pack str = unsafeCreate (length str) $ \(Ptr p) -> stToIO (go p 0# str)
     where

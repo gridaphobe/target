@@ -179,9 +179,10 @@ putStrNow s = putStr s >> hFlush stdout
 runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
              df <- GHC.getSessionDynFlags
              let df' = df { GHC.ghcMode   = GHC.CompManager
-                          , GHC.ghcLink   = GHC.LinkInMemory
-                          , GHC.hscTarget = GHC.HscInterpreted
+                          , GHC.ghcLink   = GHC.NoLink
+                          , GHC.hscTarget = GHC.HscNothing
                           , GHC.optLevel  = 2
+                          , GHC.importPaths = ["examples", "src"]
                           -- , GHC.verbosity = 3
                           -- , GHC.includePaths  = ["src"]
                           } `GHC.gopt_set` GHC.Opt_ImplicitImportQualified

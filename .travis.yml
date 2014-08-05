@@ -1,7 +1,4 @@
 # NB: don't set `language: haskell` here
-env:
-  - TESTS="ByteString"
-  - TESTS="!ByteString"
 
 notifications:
   email:
@@ -31,7 +28,9 @@ script:
  - cabal-1.20 build
  - cabal-1.20 copy
  - cabal-1.20 register
- - ./dist/build/test/test -p "$TESTS"
+ # this is really dumb but the tests won't pass when run all at once on linux..
+ - ./dist/build/test/test -p '!ByteString'
+ - ./dist/build/test/test -p 'ByteString'
  - cabal-1.20 check
  - cabal-1.20 sdist   # tests that a source-distribution can be generated
 
