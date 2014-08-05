@@ -58,7 +58,8 @@ import Prelude hiding (filter)
 import Data.Maybe   (listToMaybe,isJust,fromMaybe)
 import qualified Data.List as L (deleteBy,find,splitAt,filter,nub)
 import Data.List ( (\\) )
-import qualified Data.Map  as M (Map,insert,delete,empty)
+-- import qualified Data.Map  as M (Map,insert,delete,empty)
+import qualified Map  as M (Map,insert,delete,empty)
 
 import qualified Data.Set
 import GHC.Generics
@@ -147,7 +148,7 @@ data StackSet i l a sid sd =
        StackSet { lcurrent  :: (Screen <p> i l a sid sd)
                 , lvisible  :: [(Screen <p> i l a sid sd)]
                 , lhidden   :: [<(Workspace i l a)<p>>]
-                , lfloating :: M.Map a RationalRect
+                , lfloating :: (OMap a RationalRect)
                 }
   @-}
 
@@ -494,7 +495,7 @@ withStack dflt f = maybe dflt f . stack . workspace . current
 
 {-@ measure mStackElts :: (Maybe (Stack a)) -> (Data.Set.Set a)
     mStackElts (Just x) = (stackElts x)
-    mStackElts (Nothing) = {v | (? (Set_emp v))}
+    mStackElts (Nothing) = {v | (Set_emp v)}
   @-}
 
 {-@ invariant {v: (Maybe (Stack a)) | ((((stackElts (fromJust v)) = (mStackElts v)) <=> (isJust v) )  && ((Set_emp (mStackElts v)) <=> (isNothing v)))} @-}
@@ -503,7 +504,7 @@ withStack dflt f = maybe dflt f . stack . workspace . current
     isNothing (Just x)  = false
   @-}
 
-{-@ modify :: {v:Maybe (UStack a) | (? (isNothing v))}
+{-@ modify :: {v:Maybe (UStack a) | (isNothing v)}
            -> (y:(UStack a) -> ({v: Maybe (UStack a) | (Set_sub (mStackElts v)  (stackElts y))}) )
            -> StackSet i l a s sd
            -> StackSet i l a s sd @-}
@@ -1027,9 +1028,10 @@ filterScreen f (x:xs) | f x       = x : filterScreen f xs
 
 {-@ predicate NoDuplicates SS =
       (
-      (Disjoint3  (workspacesElts (lhidden SS))
+      (Disjoint4  (workspacesElts (lhidden SS))
                   (screenElts     (lcurrent SS))
                   (screensElts    (lvisible SS))
+                  (mapKeys        (lfloating SS))
        )
        &&
        (ScreensNoDups (lvisible SS))
@@ -1070,12 +1072,28 @@ filterScreen f (x:xs) | f x       = x : filterScreen f xs
        )
   @-}
 
+{-@ predicate Disjoint4 W X Y Z =
+       (
+         (Set_emp (Set_cap W X))
+       &&
+         (Set_emp (Set_cap W Y))
+       &&
+         (Set_emp (Set_cap W Z))
+       &&
+         (Set_emp (Set_cap X Y))
+       &&
+         (Set_emp (Set_cap X Z))
+       &&
+         (Set_emp (Set_cap Y Z))
+       )
+  @-}
+
 {-@ measure screenScreens :: (Screen i l a sid sd) ->  (Data.Set.Set sid)
     screenScreens(Screen w x y) = (Set_sng x)
   @-}
 
 {-@ measure screensScreens :: ([Screen i l a sid sd]) ->  (Data.Set.Set sid)
-    screensScreens([]) = {v|(?(Set_emp v))}
+    screensScreens([]) = {v| (Set_emp v)}
     screensScreens(x:xs) = (Set_cup (screenScreens x) (screensScreens xs))
   @-}
 
@@ -1084,12 +1102,12 @@ filterScreen f (x:xs) | f x       = x : filterScreen f xs
   @-}
 
 {-@ measure screensTags :: ([Screen i l a sid sd]) ->  (Data.Set.Set i)
-    screensTags([]) = {v|(?(Set_emp v))}
+    screensTags([]) = {v| (Set_emp v)}
     screensTags(x:xs) = (Set_cup (screenTags x) (screensTags xs))
   @-}
 
 {-@ measure workspacesTags :: ([Workspace i l a]) ->  (Data.Set.Set i)
-    workspacesTags([]) = {v|(?(Set_emp v))}
+    workspacesTags([]) = {v| (Set_emp v)}
     workspacesTags(x:xs) = (Set_cup (Set_sng(ltag x)) (workspacesTags xs))
   @-}
 
@@ -1102,22 +1120,22 @@ filterScreen f (x:xs) | f x       = x : filterScreen f xs
   @-}
 
 {-@ measure screensElts :: [(Screen i l a sid sd)] -> (Data.Set.Set a)
-    screensElts([])   = {v| (? (Set_emp v))}
+    screensElts([])   = {v| (Set_emp v)}
     screensElts(x:xs) = (Set_cup (screenElts x) (screensElts xs))
   @-}
 
 {-@ measure workspacesElts :: [(Workspace i l a)] -> (Data.Set.Set a)
-    workspacesElts([])   = {v| (? (Set_emp v))}
+    workspacesElts([])   = {v| (Set_emp v)}
     workspacesElts(x:xs) = (Set_cup (workspaceElts x) (workspacesElts xs))
   @-}
 
 {-@ measure workspacesDups :: [(Workspace i l a)] -> (Data.Set.Set a)
-    workspacesDups([])   = {v | (? (Set_emp v)) }
+    workspacesDups([])   = {v | (Set_emp v)}
     workspacesDups(x:xs) = (Set_cup (Set_cap (workspaceElts x) (workspacesElts xs)) (workspacesDups xs))
   @-}
 
 {-@ measure screensDups :: [(Screen i l a sid sd)] -> (Data.Set.Set a)
-    screensDups([])   = {v | (? (Set_emp v))}
+    screensDups([])   = {v | (Set_emp v)}
     screensDups(x:xs) = (Set_cup (Set_cap (screenElts x) (screensElts xs)) (screensDups xs))
   @-}
 
@@ -1125,7 +1143,7 @@ filterScreen f (x:xs) | f x       = x : filterScreen f xs
 {-@ predicate WorkspacesNoDups XS = (Set_emp (workspacesDups XS)) @-}
 
 {-@ measure workspaceElts :: (Workspace i l a) -> (Data.Set.Set a)
-    workspaceElts (Workspace i l s) = {v | (if (isJust s) then (v = (stackElts (fromJust s))) else (? (Set_emp v)))}
+    workspaceElts (Workspace i l s) = {v | (if (isJust s) then (v = (stackElts (fromJust s))) else (Set_emp v))}
   @-}
 
 {-@ predicate StackSetCurrentElt N S =
@@ -1147,8 +1165,8 @@ filterScreen f (x:xs) | f x       = x : filterScreen f xs
 
 {-@
   measure listDup :: [a] -> (Data.Set.Set a)
-  listDup([])   = {v | (? Set_emp (v))}
-  listDup(x:xs) = {v | v = ((Set_mem x (listElts xs))?(Set_cup (Set_sng x) (listDup xs)):(listDup xs)) }
+  listDup([])   = {v | (Set_emp v)}
+  listDup(x:xs) = {v | v = if (Set_mem x (listElts xs)) then (Set_cup (Set_sng x) (listDup xs)) else (listDup xs)}
   @-}
 
 {-@ predicate SubElts X Y =

@@ -1,6 +1,6 @@
 {-# OPTIONS -fglasgow-exts -w #-}
-{-@ LIQUID "-iexamples" @-}
-{-@ LIQUID "-isrc" @-}
+{-@ LIQUID "-i../../examples" @-}
+{-@ LIQUID "-i../../src" @-}
 {-# LANGUAGE OverloadedStrings #-}
 module XMonad.Properties where
 
@@ -12,14 +12,14 @@ import qualified XMonad.StackSet as S (filter)
 
 import Debug.Trace
 import Data.Word
-import Graphics.X11.Xlib.Types (Rectangle(..),Position,Dimension)
+--LIQUID import Graphics.X11.Xlib.Types (Rectangle(..),Position,Dimension)
 import Data.Ratio
 import Data.Maybe
 import System.Environment
 import Control.Exception    (assert)
 -- import qualified Control.Exception.Extensible as C
 import Control.Monad
-import Test.QuickCheck hiding (promote)
+import Test.QuickCheck hiding (promote, NonNegative, NonZero, Positive)
 import System.IO.Unsafe
 import System.IO
 import System.Random hiding (next)
@@ -28,7 +28,8 @@ import Data.List            (nub,sort,sortBy,group,sort,intersperse,genericLengt
 import qualified Data.List as L
 import Data.Char            (ord)
 import Data.Map             (keys,elems)
-import qualified Data.Map as M
+-- import qualified Data.Map as M
+import qualified Map as M
 
 import Control.Monad.State
 import qualified Data.HashMap.Strict as HM
@@ -37,6 +38,7 @@ import Data.Proxy
 import Test.LiquidCheck
 import Test.LiquidCheck.Gen (GenState(..))
 import Test.LiquidCheck.Util
+import Language.Fixpoint.Types (Sort(..))
 import Language.Haskell.Liquid.PredType
 import Language.Haskell.Liquid.Types (RType(..))
 import BasicTypes (TupleSort(..))
@@ -51,7 +53,7 @@ import qualified Test.SmallCheck.Series as SC
 {-@ type True = {v:Bool | (prop v)} @-}
 
 {-@ type TT = {v: T | (NoDuplicates v)} @-}
-{-@ type TT_LC = {v: StackSet () () Char () () | (NoDuplicates v)} @-}
+{-@ type TT_LC = {v: StackSet () () Char () () | (NoDuplicates v) && (mlen (lfloating v) = 0) } @-}
 type T_LC = StackSet () () Char () ()
 
 instance (Ord a, Constrain i, Constrain l, Constrain a, Constrain s, Constrain sd)
@@ -66,6 +68,8 @@ instance Constrain a => Constrain (Stack a)
 
 instance Constrain RationalRect
 
+instance (Ord k, SC.Serial m k, SC.Serial m a) => SC.Serial m (M.Map k a)
+
 instance (Ord a, SC.Serial m i, SC.Serial m l, SC.Serial m a, SC.Serial m s, SC.Serial m sd)
   => SC.Serial m (StackSet i l a s sd)
 
@@ -78,24 +82,24 @@ instance SC.Serial m a => SC.Serial m (Stack a)
 
 instance (Monad m) => SC.Serial m RationalRect
 
-instance (Ord k, SC.Serial m k, SC.Serial m v) => SC.Serial m (M.Map k v) where
-  series  = fmap M.fromList SC.series
+-- instance (Ord k, SC.Serial m k, SC.Serial m v) => SC.Serial m (M.Map k v) where
+--   series  = fmap M.fromList SC.series
 
 --FIXME: this belongs in Constrain.hs
-instance (Ord k, Constrain k, Constrain v) => Constrain (M.Map k v) where
-  getType _ = "Data.Map.Base.Map"
-  gen p d (RApp c ts ps r)
-    = do tyi <- gets tyconInfo
-         let listRTyCon  = tyi HM.! listTyCon
-         let tupleRTyCon = tyi HM.! tupleTyCon BoxedTuple 2
-         gen (Proxy :: Proxy [(k,v)]) d (RApp listRTyCon [RApp tupleRTyCon ts ps mempty] [] mempty)
-  stitch  d = stitch d >>= \(kvs :: [(k,v)]) -> return $ M.fromList kvs
-  toExpr  m = toExpr $ M.toList m
+-- instance (Ord k, Constrain k, Constrain v) => Constrain (M.Map k v) where
+--   getType _ = FObj "Data.Map.Base.Map"
+--   gen p d (RApp c ts ps r)
+--     = do tyi <- gets tyconInfo
+--          let listRTyCon  = tyi HM.! listTyCon
+--          let tupleRTyCon = tyi HM.! tupleTyCon BoxedTuple 2
+--          gen (Proxy :: Proxy [(k,v)]) d (RApp listRTyCon [RApp tupleRTyCon ts ps mempty] [] mempty)
+--   stitch d t = stitch d t >>= \(kvs :: [(k,v)]) -> return $ M.fromList kvs
+--   toExpr  m = toExpr $ M.toList m
 
 instance (Num a, Constrain a) => Constrain (NonNegative a) where
   getType p = getType (Proxy :: Proxy a)
   gen p d t = gen (Proxy :: Proxy a) d t
-  stitch  d = stitch d >>= \(x::a) -> return $ NonNegative $ x + fromIntegral d
+  stitch d t = stitch d t >>= \(x::a) -> return $ NonNegative $ x + fromIntegral d
   toExpr (NonNegative x) = toExpr x
 
 
@@ -198,9 +202,10 @@ invariant (s :: T) = and
 noDuplicates s = let ws = windows s
                  in nub ws == ws
 windows s = concat [ focus t : up t ++ down t
-                     | w <- workspace (current s) : map workspace (visible s) ++ hidden s
-                     , t <- maybeToList (stack w)] :: [Char]
-
+                   | w <- workspace (current s) : map workspace (visible s) ++ hidden s
+                   , t <- maybeToList (stack w)] ++ float s
+  where 
+    float s = M.keys (floating s)
 
 --  validScreens = monotonic . sort . M. . (W.current s : W.visible : W$ s
 
@@ -1196,14 +1201,14 @@ debug = False
 --                    return (fromIntegral n)
 --     -- coarbitrary = undefined
 
-instance Arbitrary Rectangle where
-    arbitrary = do
-        sx <- arbitrary
-        sy <- arbitrary
-        sw <- arbitrary
-        sh <- arbitrary
-        return $ Rectangle sx sy sw sh
-    -- coarbitrary = undefined
+-- instance Arbitrary Rectangle where
+--     arbitrary = do
+--         sx <- arbitrary
+--         sy <- arbitrary
+--         sw <- arbitrary
+--         sh <- arbitrary
+--         return $ Rectangle sx sy sw sh
+--     -- coarbitrary = undefined
 
 instance Arbitrary Rational where
     arbitrary = do
@@ -1232,25 +1237,25 @@ instance (Eq a, Arbitrary a) => Arbitrary (NonEmptyNubList a) where
   arbitrary   = NonEmptyNubList `fmap` ((liftM nub arbitrary) `suchThat` (not . null))
 --   coarbitrary = undefined
 
--- type Positive a = NonZero (NonNegative a)
+type Positive a = NonZero (NonNegative a)
 
 newtype NonZero a = NonZero a
  deriving ( Eq, Ord, Num, Integral, Real, Enum, Show, Read )
 
--- instance (Num a, Ord a, Arbitrary a) => Arbitrary (NonZero a) where
---   arbitrary = fmap NonZero $ arbitrary `suchThat` (/= 0)
---   coarbitrary = undefined
+instance (Num a, Ord a, Arbitrary a) => Arbitrary (NonZero a) where
+  arbitrary = fmap NonZero $ arbitrary `suchThat` (/= 0)
+  -- coarbitrary = undefined
 
--- newtype NonNegative a = NonNegative a
---  deriving ( Eq, Ord, Num, Integral, Real, Enum, Show, Read )
+newtype NonNegative a = NonNegative a
+ deriving ( Eq, Ord, Num, Integral, Real, Enum, Show, Read )
 
--- instance (Num a, Ord a, Arbitrary a) => Arbitrary (NonNegative a) where
---   arbitrary =
---     frequency
---       [ (5, (NonNegative . abs) `fmap` arbitrary)
---       , (1, return 0)
---       ]
---   -- coarbitrary = undefined
+instance (Num a, Ord a, Arbitrary a) => Arbitrary (NonNegative a) where
+  arbitrary =
+    frequency
+      [ (5, (NonNegative . abs) `fmap` arbitrary)
+      , (1, return 0)
+      ]
+  -- coarbitrary = undefined
 
 
 newtype EmptyStackSet = EmptyStackSet T deriving Show

@@ -58,21 +58,22 @@ benchmark bench
   build-depends:       base,
                        aeson,
                        -- for XMonad
-                       X11,
+                       -- X11,
                        containers,
                        random,
                        tagged,
                        ghc,
                        unordered-containers,
-                       mtl >= 2.1.2,
+                       mtl,
                        -- for Data.Map
                        deepseq,
                        --
-                       criterion < 0.8,
-                       hastache < 0.6,
-                       statistics < 0.11,
+                       criterion,
+                       hastache,
+                       statistics,
                        LiquidCheck,
                        liquidhaskell >= 0.2,
+                       liquid-fixpoint,
                        QuickCheck >= 2.6,
                        smallcheck >= 1.1
 

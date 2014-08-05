@@ -359,7 +359,7 @@ type Size     = Int
 {-@ invariant {v:Map k a | (mlen v) >= 0} @-}
 
 
-{-@ type OMap k a = {v:Map <{\root v -> v < root}, {\root v -> v > root}> k a | (isBalanced v)} @-}
+{-@ type OMap kk aa = {v:Map <{\root v -> v < root}, {\root v -> v > root}> kk aa | (isBalanced v)} @-}
 
 {-@ measure isJustS :: forall a. MaybeS a -> Prop
     isJustS (JustS x)  = true
@@ -2990,27 +2990,27 @@ instance (Ord k, Ord v) => Ord (Map k v) where
 {--------------------------------------------------------------------
   Read
 --------------------------------------------------------------------}
--- LIQUID instance (Ord k, Read k, Read e) => Read (Map k e) where
--- LIQUID #ifdef __GLASGOW_HASKELL__
--- LIQUID   readPrec = parens $ prec 10 $ do
--- LIQUID     Ident "fromList" <- lexP
--- LIQUID     xs <- readPrec
--- LIQUID     return (fromList xs)
--- LIQUID 
--- LIQUID   readListPrec = readListPrecDefault
--- LIQUID #else
--- LIQUID   readsPrec p = readParen (p > 10) $ \ r -> do
--- LIQUID     ("fromList",s) <- lex r
--- LIQUID     (xs,t) <- reads s
--- LIQUID     return (fromList xs,t)
--- LIQUID #endif
+instance (Ord k, Read k, Read e) => Read (Map k e) where
+#ifdef __GLASGOW_HASKELL__
+  readPrec = parens $ Text.Read.prec 10 $ do
+    Ident "fromList" <- lexP
+    xs <- readPrec
+    return (fromList xs)
+
+  readListPrec = readListPrecDefault
+#else
+  readsPrec p = readParen (p > 10) $ \ r -> do
+    ("fromList",s) <- lex r
+    (xs,t) <- reads s
+    return (fromList xs,t)
+#endif
 
 {--------------------------------------------------------------------
   Show
 --------------------------------------------------------------------}
--- LIQUID instance (Show k, Show a) => Show (Map k a) where
--- LIQUID   showsPrec d m  = showParen (d > 10) $
--- LIQUID     showString "fromList " . shows (toList m)
+-- instance (Show k, Show a) => Show (Map k a) where
+--   showsPrec d m  = showParen (d > 10) $
+--     showString "fromList " . shows (toList m)
 
 -- -- | /O(n)/. Show the tree that implements the map. The tree is shown
 -- -- in a compressed, hanging format. See 'showTreeWith'.
