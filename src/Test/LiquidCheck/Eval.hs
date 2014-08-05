@@ -13,7 +13,7 @@ import           GHC
 import           Language.Fixpoint.SmtLib2
 import           Language.Fixpoint.Types         hiding (R)
 import           Language.Haskell.Liquid.Measure
-import           Language.Haskell.Liquid.RefType (expandRApp)
+import           Language.Haskell.Liquid.RefType (addTyConInfo)
 import           Language.Haskell.Liquid.Types   hiding (var)
 
 -- import           Test.LiquidCheck.Constrain
@@ -29,7 +29,7 @@ evalType m t e@(EApp c xs)
        --       <$> gets ctorEnv
        dcp <- lookupCtor (val c)
        tyi <- gets tyconInfo
-       vts <- freshen $ applyPreds (expandRApp M.empty tyi t) dcp
+       vts <- freshen $ applyPreds (addTyConInfo M.empty tyi t) dcp
        liftM2 (&&) (evalReft m (toReft $ rt_reft t) e) (evalTypes m vts xs)
 evalType m t e
   = evalReft m (toReft $ rt_reft t) e

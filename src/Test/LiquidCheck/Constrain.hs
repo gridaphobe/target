@@ -215,7 +215,7 @@ make2 c (pa,pb) t s d
   = do dcp <- lookupCtor c -- fromJust . lookup c <$> gets ctorEnv
        tyi <- gets tyconInfo
        emb <- gets embEnv
-       let [t1,t2] = applyPreds (expandRApp emb tyi t) dcp
+       let [t1,t2] = applyPreds (addTyConInfo emb tyi t) dcp
        x1 <- gen pa (d-1) (snd t1)
        let su = mkSubst [(fst t1, var x1)]
        x2 <- gen pb (d-1) (subst su $ snd t2)
@@ -227,7 +227,7 @@ make3 c (pa,pb,pc) t s d
   = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
        tyi <- gets tyconInfo
        emb <- gets embEnv
-       let [t1,t2,t3] = applyPreds (expandRApp emb tyi t) dcp
+       let [t1,t2,t3] = applyPreds (addTyConInfo emb tyi t) dcp
        x1 <- gen pa (d-1) (snd t1)
        let su = mkSubst [(fst t1, var x1)]
        x2 <- gen pb (d-1) (subst su $ snd t2)
@@ -239,7 +239,7 @@ make4 c (p1,p2,p3,p4) t s d
   = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
        tyi <- gets tyconInfo
        emb <- gets embEnv
-       let [t1,t2,t3,t4] = applyPreds (expandRApp emb tyi t) dcp
+       let [t1,t2,t3,t4] = applyPreds (addTyConInfo emb tyi t) dcp
        x1 <- gen p1 (d-1) (snd t1)
        let su = mkSubst [(fst t1, var x1)]
        x2 <- gen p2 (d-1) (subst su $ snd t2)
@@ -253,7 +253,7 @@ make5 c (p1,p2,p3,p4,p5) t s d
   = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
        tyi <- gets tyconInfo
        emb <- gets embEnv
-       let [t1,t2,t3,t4,t5] = applyPreds (expandRApp emb tyi t) dcp
+       let [t1,t2,t3,t4,t5] = applyPreds (addTyConInfo emb tyi t) dcp
        x1 <- gen p1 (d-1) (snd t1)
        let su = mkSubst [(fst t1, var x1)]
        x2 <- gen p2 (d-1) (subst su $ snd t2)
@@ -413,7 +413,7 @@ ggenAlt (p :: Proxy (C1 c f a)) x d t
      dcp <- lookupCtor (symbol $ mod++"."++cn)
      tyi <- gets tyconInfo
      emb <- gets embEnv
-     let ts = applyPreds (expandRApp emb tyi t) dcp
+     let ts = applyPreds (addTyConInfo emb tyi t) dcp
      xs  <- ggenArgs (reproxyGElem p) d ts
      make' (symbol $ mod++"."++cn) x xs
 

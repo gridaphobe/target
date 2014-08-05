@@ -59,19 +59,19 @@ applyPreds sp' dc = zip xs (map tx ts)
     -- args  = reverse tyArgs
     su    = [(tv, toRSort t, t) | tv <- as | t <- rt_args sp]
     sup   = [(p, r) | p <- ps | r <- rt_pargs sp]
-    tx    = (\t -> replacePreds "applyPreds" t sup) . everywhere (mkT $ monosToPoly sup) . subsTyVars_meet su
+    tx    = (\t -> replacePreds "applyPreds" t sup) . everywhere (mkT $ propPsToProp sup) . subsTyVars_meet su
 
 -- deriving instance (Show a, Show b, Show c) => Show (Ref a b c)
 
 -- onRefs f t@(RVar _ _) = t
 -- onRefs f t = t { rt_pargs = f <$> rt_pargs t }
 
-monosToPoly su r = foldr monoToPoly r su
+propPsToProp su r = foldr propPToProp r su
 
-monoToPoly (p, r) (RMono _ (U _ (Pr [up]) _))
+propPToProp (p, r) (RPropP _ (U _ (Pr [up]) _))
   | pname p == pname up
   = r
-monoToPoly _ m = m
+propPToProp _ m = m
 
 
 stripQuals = snd . bkClass . fourth4 . bkUniv

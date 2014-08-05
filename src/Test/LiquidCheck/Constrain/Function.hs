@@ -37,7 +37,7 @@ import           Test.LiquidCheck.Util
 
 
 getCtors :: SpecType -> [GHC.DataCon]
-getCtors (RApp c _ _ _) = GHC.tyConDataCons $ rTyCon c
+getCtors (RApp c _ _ _) = GHC.tyConDataCons $ rtc_tc c
 getCtors (RAppTy t _ _) = getCtors t
 getCtors (RFun _ i o _) = getCtors i ++ getCtors o
 getCtors (RVar _ _)     = []
@@ -100,7 +100,7 @@ genExpr (EApp (val -> c) es)
        (xs, _, to) <- bkArrowDeep . stripQuals <$> lookupCtor c
        let su  = mkSubst $ zip xs $ map (var . fst) xes
            to' = subst su to
-       x <- fresh [] $ FObj $ symbol $ rTyCon $ rt_tycon to'
+       x <- fresh [] $ FObj $ symbol $ rtc_tc $ rt_tycon to'
        addConstraint $ ofReft x (toReft $ rt_reft to')
        return x
 genExpr (ECon (I i))

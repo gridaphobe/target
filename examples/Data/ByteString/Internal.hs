@@ -143,7 +143,7 @@ import qualified Data.HashMap.Strict as M
 import Data.Proxy
 import Foreign.Marshal.Alloc   (finalizerFree)
 import Language.Fixpoint.Types (mkSubst, subst, Sort(..), Symbol(..))
-import Language.Haskell.Liquid.RefType (expandRApp)
+import Language.Haskell.Liquid.RefType (addTyConInfo)
 import Test.LiquidCheck
 import Test.LiquidCheck.Constrain
 import Test.LiquidCheck.Expr hiding (eq)
@@ -656,7 +656,7 @@ instance Constrain ByteString where
     do dcp <- lookupCtor "Data.ByteString.Internal.PS"
        tyi <- gets tyconInfo
        emb <- gets embEnv
-       let [tp,to,tl] = applyPreds (expandRApp emb tyi t) dcp
+       let [tp,to,tl] = applyPreds (addTyConInfo emb tyi t) dcp
        let su = mkSubst [("fplen", var $ ("len" :: Symbol))]
        p <- gen (Proxy :: Proxy [Word8]) (d-1) $ subst su (snd tp)
        let su = mkSubst [("fplen", var $ ("len" :: Symbol)), (fst tp, var p)]
