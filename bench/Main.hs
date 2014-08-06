@@ -8,6 +8,7 @@ import System.Timeout
 
 import Map (Map, liquidTests)
 import JSON
+import Expr
 import List -- (insert, prop_insert_sc)
 import RBTree -- (RBTree, add, prop_add_sc)
 import XMonad.Properties
@@ -66,5 +67,13 @@ main = defaultMain [
          | n <- [2..7]
          ]
        | (name, T f) <- Map.liquidTests
+       ],
+     bgroup "Expr" 
+       [ bgroup name
+         [ bgroup (show n)
+           [ bench "LiquidCheck" $ myTimeout $ testModule "bench/Expr.hs" [liquidCheck f ("Expr."++name) n] ]
+         | n <- [2..4]
+         ]
+       | (name, T f) <- Expr.liquidTests
        ]
     ]
