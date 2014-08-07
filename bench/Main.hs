@@ -4,7 +4,8 @@ import Test.LiquidCheck
 -- import Test.SmallCheck
 
 import Criterion.Main
-import System.Timeout
+import Control.Concurrent.Timeout
+import Data.Timeout
 
 import Map (Map, liquidTests)
 import JSON
@@ -13,7 +14,8 @@ import List -- (insert, prop_insert_sc)
 import RBTree -- (RBTree, add, prop_add_sc)
 import XMonad.Properties
 
-myTimeout = timeout (20 * 60 * 1000000) -- twenty minutes
+myTimeout :: IO a -> IO (Maybe a)
+myTimeout = timeout (20 # Minute)
 
 main = defaultMain [
      bgroup "List.insert" $

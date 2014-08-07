@@ -7,6 +7,7 @@
 module Main where
 
 import           Control.Applicative
+import           Control.Concurrent.Timeout
 import           Control.Monad
 import           Data.Char
 import           Data.List
@@ -15,12 +16,12 @@ import           Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Data.Time.Clock.POSIX
+import           Data.Timeout ((#), TimeoutUnit(Minute))
 import           System.Directory
 import           System.Environment
 import           System.FilePath
 import           System.IO
 import           System.Process
-import           System.Timeout
 import           Text.Printf
 
 import qualified DynFlags as GHC
@@ -164,7 +165,7 @@ checkMany path mod fun ty = go 2
                    putStrNow (printf "%d " n)
                    timed $ timeout timeLimit test
 
-timeLimit = 5 * 60 * 1000000
+timeLimit = 5 # Minute
 
 getTime :: IO Double
 getTime = realToFrac `fmap` getPOSIXTime
