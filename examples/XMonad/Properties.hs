@@ -438,9 +438,9 @@ prop_index_length (x :: T) =
 {-@ prop_focus_left_master_lc :: Nat -> TT_LC -> True @-}
 prop_focus_left_master_lc (n :: Int) (x::T_LC) =
     index (foldr (const focusUp) x [1..n]) == index x
-prop_focus_left_master_sc (n :: Int) (x::T_LC) = noDuplicates x SC.==>
+prop_focus_left_master_sc (n :: Int) (x::T_LC) = noDuplicates x && n >= 0 SC.==>
     index (foldr (const focusUp) x [1..n]) == index x
-prop_focus_left_master_qc (n :: Int) (x::T_LC) = noDuplicates x QC.==>
+prop_focus_left_master_qc (n :: Int) (x::T_LC) = noDuplicates x && n >= 0 QC.==>
     index (foldr (const focusUp) x [1..n]) == index x
 
 prop_focus_left_master (n :: NonNegative Int) (x::T) =

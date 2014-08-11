@@ -28,13 +28,13 @@ import qualified XMonad.Properties          as XMonad
 data Outcome = TimeOut
              | Complete !Int
              | GaveUp !Int
-             deriving Show
+             deriving (Read, Show)
 
 data TestResult
   = TestResult { liquid :: ![(Int,Double,Outcome)]
                , small  :: ![(Int,Double,Outcome)]
                , quick  :: !(Double,Outcome)
-               } deriving Show
+               } deriving (Read, Show)
 
 main :: IO ()
 main = do

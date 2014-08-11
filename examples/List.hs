@@ -76,10 +76,13 @@ instance Constrain a => Constrain (List a)
 --- QuickCheck
 --------------------------------------------------------------------------------
 instance QC.Arbitrary a => QC.Arbitrary (List a) where
-  arbitrary = QC.frequency
-    [ (1, return Nil)
-    , (4, liftM2 Cons QC.arbitrary QC.arbitrary)
-    ]
+  arbitrary = QC.sized gen
+    where
+      gen n
+        | n <= 0    = return Nil
+        | otherwise = do x  <- QC.arbitrary
+                         xs <- gen (n-1)
+                         return $ Cons x xs
 
 llen Nil         = 0
 llen (Cons x xs) = 1 + llen xs

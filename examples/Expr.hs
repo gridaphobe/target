@@ -33,12 +33,12 @@ import           Test.LiquidCheck.Gen             (GenState (..))
 import           Test.LiquidCheck.Util
 import           TysWiredIn                       (listTyCon, tupleTyCon)
 
-data Expr = Var Int
-          | Lam Int Expr
+data Expr = Var Char
+          | Lam Char Expr
           | App Expr Expr
           deriving (Generic, Show)
 
-{-@ measure freeVars :: Expr -> (Set Int)
+{-@ measure freeVars :: Expr -> (Set Char)
     freeVars (Var v)   = (Set_sng v)
     freeVars (Lam v e) = (Set_dif (freeVars e) (Set_sng v))
     freeVars (App x y) = (Set_cup (freeVars x) (freeVars y))
@@ -50,8 +50,8 @@ data Expr = Var Int
     isLam (App x y) = false
   @-}
 
-{-@ data Expr <p :: Int -> Prop> = Var (x1 :: Nat)
-              | Lam (x2 :: Nat<p>) (x3 :: Expr<{\i -> true}>)
+{-@ data Expr = Var (x1 :: Char)
+              | Lam (x2 :: Char) (x3 :: Expr)
               | App (x4 :: Expr) (x5 :: Expr)
   @-}
 
@@ -74,14 +74,14 @@ inv e = freeVars e == Set.empty
 
 closed = inv
 
-{-@ subst :: e1:Closed -> n:Nat -> e2:Closed
+{-@ subst :: e1:Closed -> n:Char -> e2:Closed
           -> {v:Closed | (if (Set_mem n (freeVars e2))
                           then (freeVars v) = (Set_cup (Set_dif (freeVars e2)
                                                                 (Set_sng n))
                                                        (freeVars e1))
                           else (freeVars v) = (freeVars e2))}
   @-}
-subst :: Expr -> Int -> Expr -> Expr
+subst :: Expr -> Char -> Expr -> Expr
 subst e1 v e2@(Var v')
   = if v == v' then e1 else e2
 subst e1 v e2@(Lam v' e')
@@ -101,9 +101,9 @@ freshen (Lam v e) = Lam v' (subst (Var v') v e)
   where
     v' = fresh v (freeVars e)
 
-{-@ fresh :: n:Nat -> ns:Set Nat -> {v:Nat | not (v == n || (Set_mem v ns))} @-}
-fresh :: Int -> Set Int -> Int
-fresh v vs = 1 + Set.findMax (Set.insert v vs)
+{-@ fresh :: n:Char -> ns:Set Char -> {v:Char | not (v == n || (Set_mem v ns))} @-}
+fresh :: Char -> Set Char -> Char
+fresh v vs = succ $ Set.findMax (Set.insert v vs)
 
 instance (Ord a, Constrain a) => Constrain (Set a) where
   getType _ = FObj "Data.Set.Base.Set"
@@ -125,7 +125,7 @@ liquidTests = [ ("inv",     T inv)
 --------------------------------------------------------------------------------
 instance Monad m => SC.Serial m Expr
 
-prop_subst_sc e1 n e2 = closed e1 && n >= 0 && closed e2 SC.==>
+prop_subst_sc e1 n e2 = closed e1 && closed e2 SC.==>
                         if Set.member n fv_e2
                         then fv_e == Set.union (Set.delete n fv_e2) fv_e1
                         else fv_e == fv_e2
@@ -139,11 +139,23 @@ prop_subst_sc e1 n e2 = closed e1 && n >= 0 && closed e2 SC.==>
 --- QuickCheck
 --------------------------------------------------------------------------------
 instance QC.Arbitrary Expr where
-  arbitrary = QC.frequency [(1, Var <$> QC.arbitrary)
-                           ,(3, Lam <$> QC.arbitrary <*> QC.arbitrary)
-                           ,(3, App <$> QC.arbitrary <*> QC.arbitrary)]
+  arbitrary = QC.sized gen
+    where
+      gen n
+        | n <= 0    = Var <$> QC.arbitrary
+        | otherwise = QC.oneof [mkLam, mkApp]
+        where
+          mkLam = do x  <- QC.arbitrary
+                     n' <- QC.choose (0, n-1)
+                     e  <- gen n'
+                     return $ Lam x e
+          mkApp = do nx <- QC.choose (0, n `div` 2)
+                     ny <- QC.choose (0, n `div` 2)
+                     x  <- gen nx
+                     y  <- gen ny
+                     return $ App x y
 
-prop_subst_qc e1 n e2 = closed e1 && n >= 0 && closed e2 QC.==>
+prop_subst_qc e1 n e2 = closed e1 && closed e2 QC.==>
                         if Set.member n fv_e2
                         then fv_e == Set.union (Set.delete n fv_e2) fv_e1
                         else fv_e == fv_e2
