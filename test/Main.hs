@@ -15,7 +15,7 @@ import           Test.LiquidCheck
 import qualified Data.ByteString.Internal as ByteString
 import qualified Expr
 import qualified HOFs
-import qualified Map
+import qualified MapTest                  as Map
 import           List                (List)
 import qualified List
 import qualified RBTree

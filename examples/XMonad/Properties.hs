@@ -30,6 +30,7 @@ import Data.Char            (ord)
 import Data.Map             (keys,elems)
 -- import qualified Data.Map as M
 import qualified Map as M
+import MapBench ()
 
 import Control.Monad.State
 import qualified Data.HashMap.Strict as HM
@@ -67,8 +68,6 @@ instance (Constrain i, Constrain l, Constrain a) => Constrain (Workspace i l a)
 instance Constrain a => Constrain (Stack a)
 
 instance Constrain RationalRect
-
-instance (Ord k, SC.Serial m k, SC.Serial m a) => SC.Serial m (M.Map k a)
 
 instance (Ord a, SC.Serial m i, SC.Serial m l, SC.Serial m a, SC.Serial m s, SC.Serial m sd)
   => SC.Serial m (StackSet i l a s sd)

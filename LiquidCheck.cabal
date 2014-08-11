@@ -70,9 +70,10 @@ benchmark bench
                        -- for Data.Map
                        deepseq,
                        --
-                       criterion,
-                       hastache,
-                       statistics,
+                       --criterion,
+                       --hastache,
+                       --statistics,
+                       time,
                        LiquidCheck,
                        liquidhaskell >= 0.2,
                        liquid-fixpoint,
