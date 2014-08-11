@@ -1,19 +1,19 @@
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
 
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 module List where
 
-import GHC.Generics
-import Test.LiquidCheck
-import qualified Test.QuickCheck as QC
--- import qualified Test.SmallCheck as SC
--- import qualified Test.SmallCheck.Series as SC
-import Control.Monad
+import           Control.Monad
+import           GHC.Generics
+import           Test.LiquidCheck
+import qualified Test.QuickCheck        as QC
+import qualified Test.SmallCheck        as SC
+import qualified Test.SmallCheck.Series as SC
 
-import Debug.Trace
-import Data.Proxy
+import           Data.Proxy
+import           Debug.Trace
 
 --------------------------------------------------------------------------------
 --- Code
@@ -109,14 +109,14 @@ aall p (Cons x xs)
 --------------------------------------------------------------------------------
 --- SmallCheck
 --------------------------------------------------------------------------------
--- instance SC.Serial m a => SC.Serial m (List a)
+instance SC.Serial m a => SC.Serial m (List a)
 
--- prop_mytake_sorted_sc n xs = sorted xs && n >= 0 && aall (>=0) xs
---   SC.==> sorted zs && mmin (llen zs) n (llen xs)
---   where
---     zs = mytake n xs
+prop_mytake_sorted_sc n xs = sorted xs && n >= 0 && aall (>=0) xs
+  SC.==> sorted zs && mmin (llen zs) n (llen xs)
+  where
+    zs = mytake n xs
 
--- prop_insert_sc x ys = sorted ys SC.==> sorted (insert x ys)
+prop_insert_sc x ys = sorted ys SC.==> sorted (insert x ys)
 
 -- insert :: Int -> [Int] -> [Int]
 -- insert x [] = [x]

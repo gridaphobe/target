@@ -2,14 +2,14 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module MapBench where
 
-import Map
+import           Map
 
-import Control.Applicative
-import qualified Data.List as L
+import           Control.Applicative
+import qualified Data.List              as L
 
-import Test.LiquidCheck
-import qualified Test.QuickCheck as QC
-import qualified Test.SmallCheck as SC
+import           Test.LiquidCheck
+import qualified Test.QuickCheck        as QC
+import qualified Test.SmallCheck        as SC
 import qualified Test.SmallCheck.Series as SC
 
 {--------------------------------------------------------------------
@@ -87,7 +87,7 @@ prop_delete_sc x y = valid y SC.==> valid z && keys z == (keys y L.\\ [x])
 instance (Enum k,QC.Arbitrary a) => QC.Arbitrary (Map k a) where
   arbitrary = QC.sized (arbtree 0 maxkey)
     where maxkey = 10^5
-          -- modified from actual definition to generate "truly arbitrary" trees
+          -- NOTE: modified from actual definition to generate "truly arbitrary" trees
           arbtree :: (Enum k, QC.Arbitrary a) => Int -> Int -> Int -> QC.Gen (Map k a)
           arbtree lo hi n = do t <- gentree lo hi n
                                if balanced t then return t else arbtree lo hi n

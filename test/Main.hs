@@ -1,6 +1,6 @@
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE ConstraintKinds  #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell  #-}
 module Main where
 
 import           Control.Exception
@@ -15,9 +15,9 @@ import           Test.LiquidCheck
 import qualified Data.ByteString.Internal as ByteString
 import qualified Expr
 import qualified HOFs
-import qualified MapTest                  as Map
-import           List                (List)
+import           List                     (List)
 import qualified List
+import qualified MapTest                  as Map
 import qualified RBTree
 
 

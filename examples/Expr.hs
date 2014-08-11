@@ -1,30 +1,37 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-@ LIQUID "--idirs=../src" @-}
 module Expr where
 
-import Data.Set (Set, (\\))
-import qualified Data.Set as Set
-import GHC.Generics
+import           Data.Set                         (Set, (\\))
+import qualified Data.Set                         as Set
+import           GHC.Generics
 
-import Test.LiquidCheck
-import Test.LiquidCheck.Eval (setSym)
-import Test.LiquidCheck.Expr (app)
+import           Test.LiquidCheck
+import           Test.LiquidCheck.Eval            (setSym)
+import           Test.LiquidCheck.Expr            (app)
 
-import Control.Monad.State
-import qualified Data.Map as M
-import qualified Data.HashMap.Strict as HM
-import Data.Monoid
-import Data.Proxy
-import Test.LiquidCheck
-import Test.LiquidCheck.Gen (GenState(..))
-import Test.LiquidCheck.Util
-import Language.Fixpoint.Types (Sort(..))
-import Language.Haskell.Liquid.PredType
-import Language.Haskell.Liquid.Types (RType(..))
-import BasicTypes (TupleSort(..))
-import TysWiredIn (listTyCon, tupleTyCon)
+import qualified Test.QuickCheck                  as QC
+import qualified Test.SmallCheck                  as SC
+import qualified Test.SmallCheck.Series           as SC
+
+import           BasicTypes                       (TupleSort (..))
+import           Control.Applicative
+import           Control.Monad.State
+import qualified Data.HashMap.Strict              as HM
+import qualified Data.Map                         as M
+import           Data.Monoid
+import           Data.Proxy
+import           Language.Fixpoint.Types          (Sort (..))
+import           Language.Haskell.Liquid.PredType
+import           Language.Haskell.Liquid.Types    (RType (..))
+import           Test.LiquidCheck
+import           Test.LiquidCheck.Gen             (GenState (..))
+import           Test.LiquidCheck.Util
+import           TysWiredIn                       (listTyCon, tupleTyCon)
 
 data Expr = Var Int
           | Lam Int Expr
@@ -64,6 +71,8 @@ freeVars (App x y) = freeVars x `Set.union` freeVars y
 
 {-@ inv :: Closed -> Valid @-}
 inv e = freeVars e == Set.empty
+
+closed = inv
 
 {-@ subst :: e1:Closed -> n:Nat -> e2:Closed
           -> {v:Closed | (if (Set_mem n (freeVars e2))
@@ -110,3 +119,37 @@ liquidTests = [ ("inv",     T inv)
               , ("freshen", T freshen)
               , ("fresh",   T fresh)
               , ("subst",   T subst)]
+
+--------------------------------------------------------------------------------
+--- SmallCheck
+--------------------------------------------------------------------------------
+instance Monad m => SC.Serial m Expr
+
+prop_subst_sc e1 n e2 = closed e1 && n >= 0 && closed e2 SC.==>
+                        if Set.member n fv_e2
+                        then fv_e == Set.union (Set.delete n fv_e2) fv_e1
+                        else fv_e == fv_e2
+  where
+    e     = subst e1 n e2
+    fv_e  = freeVars e
+    fv_e1 = freeVars e1
+    fv_e2 = freeVars e2
+
+--------------------------------------------------------------------------------
+--- QuickCheck
+--------------------------------------------------------------------------------
+instance QC.Arbitrary Expr where
+  arbitrary = QC.frequency [(1, Var <$> QC.arbitrary)
+                           ,(3, Lam <$> QC.arbitrary <*> QC.arbitrary)
+                           ,(3, App <$> QC.arbitrary <*> QC.arbitrary)]
+
+prop_subst_qc e1 n e2 = closed e1 && n >= 0 && closed e2 QC.==>
+                        if Set.member n fv_e2
+                        then fv_e == Set.union (Set.delete n fv_e2) fv_e1
+                        else fv_e == fv_e2
+  where
+    e     = subst e1 n e2
+    fv_e  = freeVars e
+    fv_e1 = freeVars e1
+    fv_e2 = freeVars e2
+

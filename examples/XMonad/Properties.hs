@@ -1,51 +1,60 @@
 {-# OPTIONS -fglasgow-exts -w #-}
 {-@ LIQUID "-i../../examples" @-}
 {-@ LIQUID "-i../../src" @-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverlappingInstances  #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 module XMonad.Properties where
 
-import XMonad.StackSet hiding (filter)
+import           XMonad.StackSet                  hiding (filter)
 -- import XMonad.Layout
 -- import XMonad.Core hiding (workspaces,trace)
 -- import XMonad.Operations  ( applyResizeIncHint, applyMaxSizeHint )
-import qualified XMonad.StackSet as S (filter)
+import qualified XMonad.StackSet                  as S (filter)
 
-import Debug.Trace
-import Data.Word
+import           Data.Word
+import           Debug.Trace
 --LIQUID import Graphics.X11.Xlib.Types (Rectangle(..),Position,Dimension)
-import Data.Ratio
-import Data.Maybe
-import System.Environment
-import Control.Exception    (assert)
+import           Control.Applicative
+import           Control.Exception                (assert)
+import           Data.Maybe
+import           Data.Ratio
+import           System.Environment
 -- import qualified Control.Exception.Extensible as C
-import Control.Monad
-import Test.QuickCheck hiding (promote, NonNegative, NonZero, Positive)
-import System.IO.Unsafe
-import System.IO
-import System.Random hiding (next)
-import Text.Printf
-import Data.List            (nub,sort,sortBy,group,sort,intersperse,genericLength)
-import qualified Data.List as L
-import Data.Char            (ord)
-import Data.Map             (keys,elems)
+import           Control.Monad
+import           Data.Char                        (ord)
+import           Data.List                        (genericLength, group,
+                                                   intersperse, nub, sort, sort,
+                                                   sortBy)
+import qualified Data.List                        as L
+import           Data.Map                         (elems, keys)
+import           System.IO
+import           System.IO.Unsafe
+import           System.Random                    hiding (next)
+import           Test.QuickCheck                  hiding (NonNegative, NonZero,
+                                                   Positive, promote)
+import           Text.Printf
 -- import qualified Data.Map as M
-import qualified Map as M
-import MapBench ()
+import qualified Map                              as M
+import           MapBench                         ()
 
-import Control.Monad.State
-import qualified Data.HashMap.Strict as HM
-import Data.Monoid
-import Data.Proxy
-import Test.LiquidCheck
-import Test.LiquidCheck.Gen (GenState(..))
-import Test.LiquidCheck.Util
-import Language.Fixpoint.Types (Sort(..))
-import Language.Haskell.Liquid.PredType
-import Language.Haskell.Liquid.Types (RType(..))
-import BasicTypes (TupleSort(..))
-import TysWiredIn (listTyCon, tupleTyCon)
-import qualified Test.SmallCheck as SC
-import qualified Test.SmallCheck.Series as SC
+import           BasicTypes                       (TupleSort (..))
+import           Control.Monad.State
+import qualified Data.HashMap.Strict              as HM
+import           Data.Monoid
+import           Data.Proxy
+import           Language.Fixpoint.Types          (Sort (..))
+import           Language.Haskell.Liquid.PredType
+import           Language.Haskell.Liquid.Types    (RType (..))
+import           Test.LiquidCheck
+import           Test.LiquidCheck.Gen             (GenState (..))
+import           Test.LiquidCheck.Util
+import qualified Test.QuickCheck                  as QC
+import qualified Test.SmallCheck                  as SC
+import qualified Test.SmallCheck.Series           as SC
+import           TysWiredIn                       (listTyCon, tupleTyCon)
 -- FIXME: this measure makes sure that True and False are in the environment...
 {-@ measure prop :: Bool -> Prop
     prop (True)  = true
@@ -131,6 +140,38 @@ instance (Integral i, Integral s, Eq a, Arbitrary a, Arbitrary l, Arbitrary sd)
 
         return $ fromList (fromIntegral n, sds,fs,ls,lay)
 
+-- LIQUID benchmarking instances
+instance Arbitrary T_LC where
+  arbitrary = do
+    c <- arbitrary
+    v <- arbitrary
+    h <- arbitrary
+    f <- arbitrary
+    return $ StackSet c v h f
+
+instance Arbitrary (Screen () () Char () ()) where
+  arbitrary = do
+    w <- arbitrary
+    s <- arbitrary
+    d <- arbitrary
+    return $ Screen w s d
+
+instance Arbitrary (Workspace () () Char) where
+  arbitrary = do
+    t <- arbitrary
+    l <- arbitrary
+    s <- arbitrary
+    return $ Workspace t l s
+
+instance Arbitrary (Stack Char) where
+  arbitrary = do
+    f <- arbitrary
+    u <- arbitrary
+    d <- arbitrary
+    return $ Stack f u d
+
+instance Arbitrary RationalRect where
+  arbitrary = RationalRect <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
 
 -- | fromList. Build a new StackSet from a list of list of elements,
 -- keeping track of the currently focused workspace, and the total
@@ -203,7 +244,7 @@ noDuplicates s = let ws = windows s
 windows s = concat [ focus t : up t ++ down t
                    | w <- workspace (current s) : map workspace (visible s) ++ hidden s
                    , t <- maybeToList (stack w)] ++ float s
-  where 
+  where
     float s = M.keys (floating s)
 
 --  validScreens = monotonic . sort . M. . (W.current s : W.visible : W$ s
@@ -398,6 +439,8 @@ prop_index_length (x :: T) =
 prop_focus_left_master_lc (n :: Int) (x::T_LC) =
     index (foldr (const focusUp) x [1..n]) == index x
 prop_focus_left_master_sc (n :: Int) (x::T_LC) = noDuplicates x SC.==>
+    index (foldr (const focusUp) x [1..n]) == index x
+prop_focus_left_master_qc (n :: Int) (x::T_LC) = noDuplicates x QC.==>
     index (foldr (const focusUp) x [1..n]) == index x
 
 prop_focus_left_master (n :: NonNegative Int) (x::T) =
@@ -733,7 +776,7 @@ prop_rename1 (x::T) o n = o `tagMember` x && not (n `tagMember` x) ==>
     let y = renameTag o n x
             in n `tagMember` y
 
--- | 
+-- |
 -- Ensure that a given set of workspace tags is present by renaming
 -- existing workspaces and\/or creating new hidden workspaces as
 -- necessary.
@@ -1209,13 +1252,13 @@ debug = False
 --         return $ Rectangle sx sy sw sh
 --     -- coarbitrary = undefined
 
-instance Arbitrary Rational where
-    arbitrary = do
-        n <- arbitrary
-        d' <- arbitrary
-        let d =  if d' == 0 then 1 else d'
-        return (n % d)
-    -- coarbitrary = undefined
+-- instance Arbitrary Rational where
+--     arbitrary = do
+--         n <- arbitrary
+--         d' <- arbitrary
+--         let d =  if d' == 0 then 1 else d'
+--         return (n % d)
+--     -- coarbitrary = undefined
 
 ------------------------------------------------------------------------
 -- QC 2
