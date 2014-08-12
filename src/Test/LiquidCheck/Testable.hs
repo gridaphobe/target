@@ -40,8 +40,8 @@ test f d t
        vals <- allSat $ map symbol xs
        let (xs, tis, to) = bkArrowDeep $ stripQuals t
        try (process d f vals cts (zip xs tis) to) >>= \case
-         Left  (e :: SomeException) -> return $ Failed $ show e
-         Right r                    -> return r
+         Left  (e :: LiquidException) -> return $ Failed $ show e
+         Right r                      -> return r
 
 process :: CanTest f
         => Int -> f -> [[Value]] -> [(Symbol,Symbol)] -> [(Symbol,SpecType)] -> SpecType
