@@ -1,5 +1,5 @@
-{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE PatternGuards #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -54,15 +54,15 @@ module XMonad.StackSet (
 
 {-@ LIQUID "--totality" @-}
 
-import Prelude hiding (filter)
-import Data.Maybe   (listToMaybe,isJust,fromMaybe)
-import qualified Data.List as L (deleteBy,find,splitAt,filter,nub)
-import Data.List ( (\\) )
+import           Data.List    ((\\))
+import qualified Data.List    as L (deleteBy, filter, find, nub, splitAt)
+import           Data.Maybe   (fromMaybe, isJust, listToMaybe)
+import           Prelude      hiding (filter)
 -- import qualified Data.Map  as M (Map,insert,delete,empty)
-import qualified Map  as M (Map,insert,delete,empty)
+import qualified Map          as M (Map, delete, empty, insert)
 
 import qualified Data.Set
-import GHC.Generics
+import           GHC.Generics
 -- $intro
 --
 -- The 'StackSet' data type encodes a window manager abstraction. The
@@ -164,8 +164,8 @@ data StackSet i l a sid sd =
             -> {v : (Screen i l a sid sd) | (v = (lcurrent x)) } @-}
 
 -- | Visible workspaces, and their Xinerama screens.
-data Screen i l a sid sd = Screen { workspace :: !(Workspace i l a)
-                                  , screen :: !sid
+data Screen i l a sid sd = Screen { workspace    :: !(Workspace i l a)
+                                  , screen       :: !sid
                                   , screenDetail :: !sd }
     deriving (Show, Read, Eq, Generic)
 {-@ data Screen i l a sid sd <p :: Workspace i l a -> Prop>
@@ -220,9 +220,9 @@ data RationalRect = RationalRect Rational Rational Rational Rational
 -- structures, it is the differentiation of a [a], and integrating it
 -- back has a natural implementation used in 'index'.
 --
-data Stack a = Stack { focus  :: !a        -- focused thing in this set
-                     , up     :: [a]       -- clowns to the left
-                     , down   :: [a] }     -- jokers to the right
+data Stack a = Stack { focus :: !a        -- focused thing in this set
+                     , up    :: [a]       -- clowns to the left
+                     , down  :: [a] }     -- jokers to the right
     deriving (Show, Read, Eq, Generic)
 
 {-@
@@ -949,10 +949,10 @@ focusMaster = modify' $ \c -> case c of
 
 
 
-{-@ assume Prelude.tail :: x:UList a -> {v:UList a | ((listElts x) = (Set_cup (Set_sng (head x)) (listElts v)) && (not (Set_mem (head x) (listElts v))))} @-}
+{- assume Prelude.tail :: x:UList a -> {v:UList a | ((listElts x) = (Set_cup (Set_sng (head x)) (listElts v)) && (not (Set_mem (head x) (listElts v))))} @-}
 
 
-{-@ assume Prelude.head :: x:UList a -> {v:a | ((listElts x) = (Set_cup (Set_sng v) (listElts (tail x))) && (not (Set_mem v (listElts (tail x)))))} @-}
+{- assume Prelude.head :: x:UList a -> {v:a | ((listElts x) = (Set_cup (Set_sng v) (listElts (tail x))) && (not (Set_mem v (listElts (tail x)))))} @-}
 --
 -- ---------------------------------------------------------------------
 -- $composite
@@ -990,7 +990,7 @@ liquidAssume :: (a -> Bool) -> a -> a
 liquidAssume p x | p x       = x
                  | otherwise = error "liquidAssume fails"
 
-{-@ assume (Prelude.++) :: xs:(UList a)
+{- assume (Prelude.++) :: xs:(UList a)
                 -> ys:{v: UList a | (ListDisjoint v xs)}
                 -> {v: UList a | (UnionElts v xs ys)}
   @-}

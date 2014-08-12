@@ -1,4 +1,5 @@
 {-# OPTIONS -fglasgow-exts -w #-}
+{-@ LIQUID "-i../../bench" @-}
 {-@ LIQUID "-i../../examples" @-}
 {-@ LIQUID "-i../../src" @-}
 {-# LANGUAGE FlexibleInstances     #-}

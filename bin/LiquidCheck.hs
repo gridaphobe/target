@@ -1,9 +1,8 @@
-{-# LANGUAGE MagicHash #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE MagicHash           #-}
+{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE TupleSections       #-}
 module Main where
 
 import           Control.Applicative
@@ -13,10 +12,10 @@ import           Data.Char
 import           Data.List
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
+import qualified Data.Text                  as T
+import qualified Data.Text.IO               as T
 import           Data.Time.Clock.POSIX
-import           Data.Timeout ((#), TimeoutUnit(Minute))
+import           Data.Timeout               (TimeoutUnit (Minute), ( # ))
 import           System.Directory
 import           System.Environment
 import           System.FilePath
@@ -24,16 +23,17 @@ import           System.IO
 import           System.Process
 import           Text.Printf
 
-import qualified DynFlags as GHC
+import qualified DynFlags                   as GHC
 import qualified GHC
-import qualified GhcMonad as GHC
 import qualified GHC.Exts
 import qualified GHC.Paths
-import qualified HscTypes as GHC
-import qualified Outputable as GHC
-import qualified Type as GHC
-import qualified TypeRep as GHC
+import qualified GhcMonad                   as GHC
+import qualified HscTypes                   as GHC
+import qualified Outputable                 as GHC
+import qualified Type                       as GHC
+import qualified TypeRep                    as GHC
 
+import           Language.Fixpoint.Misc     (stripParens)
 import           Test.LiquidCheck
 
 findFuns :: T.Text -> [T.Text]
@@ -57,33 +57,18 @@ main = do
   f:time:monos <- getArgs
   hs  <- T.readFile f
   tpl <- T.readFile "bin/CheckFun.template.hs"
-  --let m  = findModule hs
-  --    fs = findFuns hs
   (m,fs) <- findModuleFuns f (pairs monos)
   createDirectoryIfMissing True "_results"
-  forM_ fs $ \(fun,t) -> do
-    let contents = subst tpl [ ("$module$", m), ("$file$", T.pack f), ("$fun$", m<>"."<>fun), ("$type$", t), ("$timeout$", T.pack time)]
-        path     = mkPath f fun
-    T.writeFile path contents
-    system $ printf "rm -f \"%s\"" $ dropExtension path
-    system $ printf "rm -f \"_results/%s.tix\"" $ dropExtension $ takeFileName path
-    system $ printf "ghc --make -fhpc -O2 \"%s\" -i%s:examples:src" path (takeDirectory path)
-    system $ printf "timeout -k30s 15m \"%s\"" $ dropExtension path
-    system $ printf "mv \"%s.tix\" _results/" $ dropExtension $ takeFileName path
-  -- print m
-  -- print fs
-  --forM_ fs $ \(T.unpack -> fun, T.unpack -> ty) -> do
-  --  putStrNow (fun ++ ": ")
-  --  rs <- checkMany f (T.unpack m) fun ty
-  --  putStrLn "done"
-  --  forM_ rs $ \(d,t,r) -> printf "%d\t%.2f\t%s\n" d t (show r)
-  --  putStrLn ""
-  -- tests :: [IO Result] <- runGhc $ do
-  --   loadModule f
-  --   forM fs $ \fun -> do
-  --     hv <- GHC.compileExpr $ mkLiquidCheck f m fun
-  --     return $ GHC.Exts.unsafeCoerce# hv
-  -- mapM_ print =<< sequence tests
+  let funs     = T.intercalate "\n       ," $
+                  map (\(f,t) ->
+                        "(T (" <> f <> " :: " <> t <> "), \"" <> stripParens f <> "\")")
+                  fs
+      contents = subst tpl [ ("$module$", m), ("$file$", T.pack f)
+                           , ("$timeout$", T.pack time)
+                           , ("$funs$", funs)
+                           ]
+      path     = (reverse . drop 3 . reverse $ f) ++ "Coverage.hs"
+  T.writeFile path contents
 
 pairs :: [String] -> [(String,String)]
 pairs [] = []
@@ -92,22 +77,25 @@ pairs (x:y:zs) = (x,y) : pairs zs
 findModuleFuns :: FilePath -> [(String,String)] -> IO (T.Text, [(T.Text,T.Text)])
 findModuleFuns file monos = runGhc $ do
   m     <- loadModule file
+  let modName = T.pack $ GHC.moduleNameString $ GHC.ms_mod_name m
   names <- GHC.modInfoExports . fromJust <$> GHC.getModuleInfo (GHC.ms_mod m)
   hs    <- GHC.liftIO (T.readFile file)
-  let specs = [spec | s <- T.lines hs
-                    , "{-@" `T.isPrefixOf` s
-                    , let ws = T.words s
-                    , length ws > 1
-                    , let spec = ws !! 1
-                    ]
+  let specs = [ stripParens spec
+              | s <- T.lines hs
+              , "{-@" `T.isPrefixOf` s
+              , let ws = T.words s
+              , length ws > 1
+              , let spec = ws !! 1
+              ]
   df  <- GHC.getSessionDynFlags
   let funs = [ f | f <- T.pack . showInModule df GHC.neverQualify <$> names, f `elem` specs]
   int <- GHC.exprType "1 :: Int"
   monos' <- forM monos $ \(v,t) -> (v,) <$> GHC.exprType ("undefined :: " ++ t)
   funTys <- forM funs $ \f -> do
-    t    <- monomorphic df int monos' <$> GHC.exprType (T.unpack f)
-    return (f, T.pack $ concat $ lines $ showInModule df (\_ _ -> GHC.NameQual $ GHC.ms_mod_name m, const False) t)
-  return (T.pack $ GHC.moduleNameString $ GHC.ms_mod_name m, funTys)
+    let f' = ("(" <> modName <> "." <> f <> ")")
+    t    <- monomorphic df int monos' <$> GHC.exprType (T.unpack f')
+    return (f', T.pack $ concat $ lines $ showInModule df (\_ _ -> GHC.NameQual $ GHC.ms_mod_name m, const False) t)
+  return (modName, funTys)
 
 showInModule df m = GHC.showSDocForUser df m . GHC.ppr
 
@@ -182,7 +170,7 @@ runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
              let df' = df { GHC.ghcMode   = GHC.CompManager
                           , GHC.ghcLink   = GHC.NoLink
                           , GHC.hscTarget = GHC.HscNothing
-                          , GHC.optLevel  = 2
+                          -- , GHC.optLevel  = 2
                           , GHC.importPaths = ["examples", "src"]
                           -- , GHC.verbosity = 3
                           -- , GHC.includePaths  = ["src"]

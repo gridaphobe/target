@@ -76,10 +76,10 @@ mapDifferenceTests = do
   return $ TestResult l s q
 
 xmonadFocusLeftTests = do
-  l <- checkLiquid XMonad.prop_focus_left_master_lc "XMonad.prop_focus_left_master_lc"
+  l <- checkLiquid XMonad.prop_focus_left_master_lc "XMonad.Properties.prop_focus_left_master_lc"
                                                     "examples/XMonad/Properties.hs"
-  s <- checkSmall  XMonad.prop_focus_left_master_sc "XMonad.prop_focus_left_master"
-  q <- checkQuick  XMonad.prop_focus_left_master_qc "XMonad.prop_focus_left_master"
+  s <- checkSmall  XMonad.prop_focus_left_master_sc "XMonad.Properties.prop_focus_left_master"
+  q <- checkQuick  XMonad.prop_focus_left_master_qc "XMonad.Properties.prop_focus_left_master"
   return $ TestResult l s q
 
 

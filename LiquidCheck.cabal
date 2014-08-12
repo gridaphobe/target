@@ -115,6 +115,7 @@ executable liquid-check
   main-is:        LiquidCheck.hs
   build-depends:  base,
                   LiquidCheck,
+                  liquid-fixpoint,
                   data-timeout >= 0.3,
                   ghc,
                   ghc-paths,

@@ -5,9 +5,10 @@ import qualified $module$
 
 import Control.Applicative
 import Control.Monad
+import Control.Concurrent.Timeout
 import Data.Time.Clock.POSIX
+import Data.Timeout
 import System.IO
-import System.Timeout
 import Text.Printf
 
 import Language.Haskell.Liquid.Types (GhcSpec)
@@ -18,31 +19,30 @@ import Test.LiquidCheck.Util
 main :: IO ()
 main = do
   spec <- getSpec "$file$"
-  putStrLn ("$fun$" ++ ": ")
-  withFile "_results/$fun$.tsv" WriteMode $ \h -> do
-    hPutStrLn h "Depth\tTime(s)\tResult"
-    checkMany spec h
+  withFile "_results/$module$.tsv" WriteMode $ \h -> do
+    hPutStrLn h "Function\tDepth\tTime(s)\tResult"
+    mapM_ (checkMany spec h) funs
   putStrLn "done"
   putStrLn ""
 
-checkMany :: GhcSpec -> Handle -> IO [(Int, Double, Outcome)]
-checkMany spec h = go 2
+-- checkMany :: GhcSpec -> Handle -> IO [(Int, Double, Outcome)]
+checkMany spec h (T f,sp) = go 2
   where
     go 10     = return []
     go n      = checkAt n >>= \case
-                  (d,Nothing) -> do let s = printf "%d\t%.2f\t%s" n d (show TimedOut)
+                  (d,Nothing) -> do let s = printf "%d\t%.2f\t%s" n d (show TimeOut)
                                     putStrLn s >> hFlush stdout
                                     hPutStrLn h s >> hFlush h
-                                    return [(n,d,TimedOut)]
+                                    return [(n,d,TimeOut)]
                   --NOTE: ignore counter-examples for the sake of exploring coverage
                   --(d,Just (Failed s)) -> return [(n,d,Completed (Failed s))]
-                  (d,Just r)  -> do let s = printf "%d\t%.2f\t%s" n d (show (Completed r))
+                  (d,Just r)  -> do let s = printf "%d\t%.2f\t%s" n d (show (Complete r))
                                     putStrLn s >> hFlush stdout
                                     hPutStrLn h s >> hFlush h
-                                    ((n,d,Completed r):) <$> go (n+1)
-    checkAt n = timed $ timeout time $ runGen spec "$file$" $ testFun ($fun$ :: $type$) "$fun$" n
+                                    ((n,d,Complete r):) <$> go (n+1)
+    checkAt n = timed $ timeout time $ runGen spec "$file$" $ testFun f sp n
 
-time = $timeout$ * 60 * 1000000
+time = $timeout$ # Minute
 
 getTime :: IO Double
 getTime = realToFrac `fmap` getPOSIXTime
@@ -54,6 +54,8 @@ timed x = do start <- getTime
 
 putStrNow s = putStr s >> hFlush stdout
 
-data Outcome = Completed Result
-             | TimedOut
+data Outcome = Complete Result
+             | TimeOut
              deriving (Show)
+
+funs = [$funs$]
