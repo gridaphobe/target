@@ -20,9 +20,12 @@ import           System.IO
 import           Text.Printf
 
 import qualified Expr
+import qualified ExprBench                  as Expr
 import qualified List
+import qualified ListBench                  as List
 import qualified MapBench                   as Map
 import qualified RBTree
+import qualified RBTreeBench                as RBTree
 import qualified XMonad.Properties          as XMonad
 
 data Outcome = TimeOut
@@ -84,7 +87,7 @@ xmonadFocusLeftTests = do
 
 
 myTimeout :: IO a -> IO (Maybe a)
-myTimeout = timeout (1 # Minute)
+myTimeout = timeout (5 # Minute)
 
 getTime :: IO Double
 getTime = realToFrac `fmap` getPOSIXTime

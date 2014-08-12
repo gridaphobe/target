@@ -19,6 +19,7 @@ import           List                     (List)
 import qualified List
 import qualified MapTest                  as Map
 import qualified RBTree
+import qualified RBTreeTest               as RBTree
 
 
 main = defaultMain tests
@@ -31,9 +32,8 @@ pos = testGroup "Pos" $
   [ mkSuccess (List.insert :: Int -> List Int -> List Int)
       "List.insert" "test/List.hs" 3
   , mkSuccess (List.mymap) "List.mymap" "test/List.hs" 3
-  , mkSuccess HOFs.foo "HOFs.foo" "examples/HOFs.hs" 3
-  , mkSuccess HOFs.list_foo "HOFs.list_foo" "examples/HOFs.hs" 3
   ]
+  ++ [ mkSuccess f name "test/HOFs.hs" 6 | (name, T f) <- HOFs.liquidTests]
   ++ [ mkSuccess f ("RBTree."++name) "test/RBTree.hs" 6 | (name, T f) <- RBTree.liquidTests]
   ++ [ mkSuccess f ("Map."++name) "test/Map.hs" 5 | (name, T f) <- Map.liquidTests]
   --FIXME: need a better solution for checking equality that respects custom Eq instances
@@ -43,9 +43,8 @@ pos = testGroup "Pos" $
 neg = testGroup "Neg" $
   [ mkFailure (List.insert_bad :: Int -> List Int -> List Int)
       "List.insert" "test/List.hs" 3
-  , mkFailure HOFs.foo_bad "HOFs.foo" "examples/HOFs.hs" 3
-  , mkFailure HOFs.list_foo_bad "HOFs.list_foo" "examples/HOFs.hs" 3
   ]
+  ++ [ mkFailure f name "test/HOFs.hs" 6 | (name, T f) <- HOFs.liquidTests_bad]
   ++ [ mkFailure f ("RBTree."++name) "test/RBTree.hs" 6 | (name, T f) <- RBTree.liquidTests_bad]
   ++ [ mkFailure f ("Map."++name) "test/Map.hs" 5 | (name, T f) <- Map.liquidTests_bad]
 

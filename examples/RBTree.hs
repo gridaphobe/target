@@ -13,9 +13,6 @@ import           Debug.Trace
 
 import           GHC.Generics
 import           Test.LiquidCheck
-import qualified Test.QuickCheck                 as QC
-import qualified Test.SmallCheck                 as SC
-import qualified Test.SmallCheck.Series          as SC
 
 import           Language.Haskell.Liquid.Prelude
 
@@ -28,14 +25,15 @@ data Color = B -- ^ Black
            | R -- ^ Red
            deriving (Eq,Show,Generic)
 
+instance Constrain Color
+instance Constrain a => Constrain (RBTree a)
+
 ---------------------------------------------------------------------------
 -- | Add an element -------------------------------------------------------
 ---------------------------------------------------------------------------
 
 {-@ add :: (Ord a) => a -> RBT a -> RBT a @-}
 add x s = makeBlack (ins x s)
-
-add_bad x s = ins x s
 
 {-@ ins :: (Ord a) => a -> t:RBT a -> {v: ARBTN a {(bh t)} | ((IsB t) => (isRB v))} @-}
 ins kx Leaf             = Node R kx Leaf Leaf
@@ -70,30 +68,6 @@ del x (Node _ y a b) = case compare x y of
            Node B _ _ _ -> rbalS y a (del x b)
            _            -> Node R y a (del x b)
 
-remove_bad x t = makeBlack (del_bad x t)
-del_bad x Leaf           = Leaf
-del_bad x (Node _ y a b) = case compare x y of
-   EQ -> append_bad y a b
-   LT -> case a of
-           Leaf         -> Node R y Leaf b
-           Node B _ _ _ -> lbalS y (del_bad x a) b
-           _            -> let t = Node R y (del_bad x a) b in t
-   GT -> case b of
-           Leaf         -> Node R y a Leaf
-           Node B _ _ _ -> rbalS y a (del_bad x b)
-           _            -> Node R y a (del_bad x b)
-
-append_bad :: a -> RBTree a -> RBTree a -> RBTree a
-append_bad _ Leaf r                               = r
-append_bad _ l Leaf                               = l
-append_bad piv (Node R lx ll lr) (Node R rx rl rr)  = case append_bad piv lr rl of
-                                                    --Node R x lr' rl' -> Node R x (Node R lx ll lr') (Node R rx rl' rr)
-                                                    lrl              -> Node R lx ll (Node R rx lrl rr)
-append_bad piv (Node B lx ll lr) (Node B rx rl rr)  = case append_bad piv lr rl of
-                                                    --Node R x lr' rl' -> Node R x (Node B lx ll lr') (Node B rx rl' rr)
-                                                    lrl              -> lbalS lx ll (Node B rx lrl rr)
-append_bad piv l@(Node B _ _ _) (Node R rx rl rr)   = Node R rx (append_bad piv l rl) rr
-append_bad piv l@(Node R lx ll lr) r@(Node B _ _ _) = Node R lx ll (append_bad piv lr r)
 
 {-@ append                                  :: y:a -> l:RBT {v:a | v < y} -> r:RBTN {v:a | y < v} {(bh l)} -> (ARBT2 a l r) @-}
 append :: a -> RBTree a -> RBTree a -> RBTree a
@@ -171,17 +145,10 @@ makeBlack (Node _ x l r) = Node B x l r
 -- | Ordered Red-Black Trees
 
 {-@ type ORBT a = RBTree <{\root v -> v < root }, {\root v -> v > root}> a @-}
-ord Leaf = True
-ord (Node c x l r) = ord l && ord r && all (<x) l && all (>x) r
-  where all p Leaf = True
-        all p (Node _ x l r)
-          | p x && all p l && all p r = True
-          | otherwise               = False
 
 -- | Red-Black Trees
 
 {-@ type RBT a    = {v: (ORBT a) | ((isRB v) && (isBH v)) } @-}
-isRBT t = ord t && isRB t && isBH t
 {-@ type RBTN a N = {v: (RBT a) | (bh v) = N }              @-}
 
 {-@ type ORBTL a X = RBT {v:a | v < X} @-}
@@ -191,15 +158,6 @@ isRBT t = ord t && isRB t && isBH t
     isRB (Leaf)         = true
     isRB (Node c x l r) = ((isRB l) && (isRB r) && (c == R => ((IsB l) && (IsB r))))
   @-}
-isRB (Leaf)         = True
-isRB (Node c x l r) = ((isRB l) && (isRB r) && (c == B || ((isB l) && (isB r))))
-
-isB Leaf = True
-isB (Node B _ _ _) = True
-isB _ = False
-
-
-
 
 -- | Almost Red-Black Trees
 
@@ -236,15 +194,10 @@ isB _ = False
     isBH (Node c x l r) = ((isBH l) && (isBH r) && (bh l) = (bh r))
   @-}
 
-isBH (Leaf)         = True
-isBH (Node c x l r) = ((isBH l) && (isBH r) && (bh l) == (bh r))
-
 {-@ measure bh        :: RBTree a -> Int
     bh (Leaf)         = 0
     bh (Node c x l r) = (bh l) + (if (c == R) then 0 else 1)
   @-}
-bh (Leaf)         = 0
-bh (Node c x l r) = (bh l) + (if (c == R) then 0 else 1)
 
 -- | Binary Search Ordering
 
@@ -272,53 +225,9 @@ bh (Node c x l r) = (bh l) + (if (c == R) then 0 else 1)
 
 {-@ invariant {v: RBTree a | (Invs v)}                      @-}
 
-{-@ inv            :: RBTree a -> {v:RBTree a | (Invs v)}   @-}
-inv Leaf           = Leaf
-inv (Node c x l r) = Node c x (inv l) (inv r)
+{- inv            :: RBTree a -> {v:RBTree a | (Invs v)}   @-}
+--inv Leaf           = Leaf
+--inv (Node c x l r) = Node c x (inv l) (inv r)
 
 
---------------------------------------------------------------------------------
--- Testing ---------------------------------------------------------------------
---------------------------------------------------------------------------------
 
-instance Constrain Color
-instance Constrain a => Constrain (RBTree a)
-
-prop_add_lc :: Int -> RBTree Int -> RBTree Int
-prop_add_lc = add
-
-instance Monad m => SC.Serial m Color
-instance (Monad m, SC.Serial m a) => SC.Serial m (RBTree a)
-
-prop_add_sc :: Monad m => Int -> RBTree Int -> SC.Property m
-prop_add_sc x t = isRBT t SC.==> isRBT (add x t)
-
-instance QC.Arbitrary Color where
-  arbitrary = QC.oneof [return R, return B]
-
-instance QC.Arbitrary a => QC.Arbitrary (RBTree a) where
-  arbitrary = QC.sized gen
-    where
-      gen n
-        | n <= 0    = return Leaf
-        | otherwise = do c <- QC.arbitrary
-                         x <- QC.arbitrary
-                         l <- gen (n `div` 2)
-                         r <- gen (n `div` 2)
-                         return $ Node c x l r
-
-prop_add_qc :: Int -> RBTree Int -> QC.Property
-prop_add_qc x t = isRBT t QC.==> isRBT (add x t)
-
-type E = Char
-type T = RBTree E
-
-liquidTests :: [(String, Test)]
-liquidTests = [ ("add",    T (add :: E -> T -> T))
-              , ("remove", T (remove :: E -> T -> T))
-              ]
-
-liquidTests_bad :: [(String, Test)]
-liquidTests_bad = [ ("add",    T (add_bad :: E -> T -> T))
-                  , ("remove", T (remove_bad :: E -> T -> T))
-                  ]

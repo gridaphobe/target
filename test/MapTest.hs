@@ -2,12 +2,12 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module MapTest where
 
-import Map
+import           Map
 
-import Control.Applicative
-import qualified Data.List as L
+import           Control.Applicative
+import qualified Data.List           as L
 
-import Test.LiquidCheck
+import           Test.LiquidCheck
 
 --------------------------------------------------------------------
 -- LiquidCheck
@@ -49,7 +49,7 @@ insert_bad = go
     go kx x Tip = singleton kx x
     go kx x (Bin sz ky y l r) =
         case compare kx ky of
-                  -- Bin ky y (go kx x l) r 
+                  -- Bin ky y (go kx x l) r
             --LIQUID: swapped balanceL and balanceR to inject bug
             LT -> balanceR ky y (go kx x l) r
             GT -> balanceL ky y l (go kx x r)
@@ -136,22 +136,22 @@ hedgeInt_bad blo bhi (Bin _ kx x l r) t2 = let l' = hedgeInt_bad blo bmi l (trim
 
 trim_bad :: Ord k => MaybeS k -> MaybeS k -> Map k a -> Map k a
 trim_bad NothingS   NothingS   t = t
-trim_bad (JustS lk) NothingS   t = greater lk t 
+trim_bad (JustS lk) NothingS   t = greater lk t
 
                                      --LIQUID: change <= to >=
   where greater lo t@(Bin _ k _ _ r) | k >= lo      = greater lo r
                                      | otherwise    = t
         greater _  t'@Tip                           = t'
 
-trim_bad NothingS   (JustS hk) t = lesser hk t 
+trim_bad NothingS   (JustS hk) t = lesser hk t
 
                                       --LIQUID: change >= to <=
   where lesser  hi t'@(Bin _ k _ l _) | k <= hi     = lesser  hi l
                                       | otherwise   = t'
         lesser  _  t'@Tip                           = t'
-trim_bad (JustS lk) (JustS hk) t = middle lk hk t  
+trim_bad (JustS lk) (JustS hk) t = middle lk hk t
   where middle lo hi t'@(Bin _ k _ l r) | k <= lo   = middle lo hi r
                                         | k >= hi   = middle lo hi l
                                         | otherwise = t'
-        middle _ _ t'@Tip = t'  
+        middle _ _ t'@Tip = t'
 
