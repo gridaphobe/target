@@ -86,7 +86,7 @@ stitchFun _ d (bkArrowDeep . stripQuals -> (vs, tis, to))
                  when (resp == Unsat) $ Ex.throw SmtFailedToProduceOutput
                  let real = [symbol v | (v,t) <- vs, t `elem` [FInt, choicesort, boolsort]]
                  Values model <- if null real then return $ Values []
-                                 else io $ command ctx (GetValue real)
+                                 else ensureValues $ io $ command ctx (GetValue real)
                  setValues (map snd model)
                  o  <- stitch d to
                  whenVerbose $ io $ printf "%s -> %s\n" (show es) (show o)

@@ -100,7 +100,7 @@ allSat roots = {-# SCC "allSat" #-} setup >>= io . go
            Values model <- {-# SCC "allSat.go.GetValue" #-}
              if null real
              then return $ Values []
-             else command ctx (GetValue real)
+             else ensureValues $ command ctx (GetValue real)
            -- print model
            let cs = V.toList $ refute roots (M.fromList model) deps vs
            -- i <- gets seed

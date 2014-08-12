@@ -10,5 +10,5 @@ map-coverage:
 	rm -f *.tix
 	rm -rf _results
 	mkdir -p _results
-	cabal exec ghc -- --make -fhpc -iexamples:src -O2 bench/MapCoverage.hs -hide-package unbounded-delays
-	cabal exec ./bench/MapCoverage 2>&1 | tee _results/MapCoverage.log
+	cabal exec ghc -- --make -fforce-recomp -threaded -fhpc -iexamples:src -O2 bench/MapCoverage.hs -hide-package unbounded-delays
+	cabal exec ./bench/MapCoverage -- +RTS -N2 -RTS 2>&1 | tee _results/MapCoverage.log

@@ -152,5 +152,6 @@ funs = [(T ((Map.!) :: Map.Map Map.Char () -> Map.Char -> ()), "Map.!")
        ,(T ((Map.fromDistinctAscList) :: [(Map.Char, ())] -> Map.Map Map.Char ()), "Map.fromDistinctAscList")
        ,(T ((Map.split) :: Map.Char-> Map.Map Map.Char ()-> (Map.Map Map.Char (), Map.Map Map.Char ())), "Map.split")
        ,(T ((Map.splitLookup) :: Map.Char-> Map.Map Map.Char ()-> (Map.Map Map.Char (), Map.Maybe (), Map.Map Map.Char ())), "Map.splitLookup")
-       ,(T ((Map.deleteFindMin) :: Map.Map Map.Char () -> (Map.Char, (), Map.Map Map.Char ())), "Map.deleteFindMin")
-       ,(T ((Map.deleteFindMax) :: Map.Map Map.Char () -> (Map.Char, (), Map.Map Map.Char ())), "Map.deleteFindMax")]
+       --,(T ((Map.deleteFindMin) :: Map.Map Map.Char () -> (Map.Char, (), Map.Map Map.Char ())), "Map.deleteFindMin")
+       --,(T ((Map.deleteFindMax) :: Map.Map Map.Char () -> (Map.Char, (), Map.Map Map.Char ())), "Map.deleteFindMax")
+       ]
