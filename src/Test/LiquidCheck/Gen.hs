@@ -17,6 +17,7 @@ import qualified Data.HashSet                     as S
 import           Data.List
 import           Data.Monoid
 import qualified Data.Text.Lazy                   as T
+import           System.Process                   (terminateProcess)
 
 import           Language.Fixpoint.Config         (SMTSolver (..))
 import           Language.Fixpoint.Names          ()
@@ -40,12 +41,16 @@ newtype Gen a = Gen (StateT GenState IO a)
   deriving (Functor, Applicative, Monad, MonadIO, MonadState GenState)
 
 runGen :: GhcSpec -> FilePath -> Gen a -> IO a
-runGen e f (Gen x) = bracket (makeContext Z3) cleanupContext
-                             (evalStateT x . initGS f e)
-  -- = do ctx <- makeContext Z3
-  --      a <- evalStateT act (initGS e ctx)
-  --      cleanupContext ctx
-  --      return a
+runGen e f (Gen x)
+  = do ctx <- makeContext Z3
+       (do a <- evalStateT x (initGS f e ctx)
+           cleanupContext ctx
+           return a)
+        -- if we receive an async exception, Z3 may not exit cleanly so just
+        -- kill it
+        `onException` (killContext ctx)
+  where
+    killContext ctx = terminateProcess (pId ctx) >> cleanupContext ctx
 
 evalGen :: GenState -> Gen a -> IO a
 evalGen s (Gen x) = evalStateT x s
