@@ -34,19 +34,19 @@ pos = testGroup "Pos" $
   , mkSuccess (List.mymap) "List.mymap" "test/List.hs" 3
   ]
   ++ [ mkSuccess f name "test/HOFs.hs" 3 | (name, T f) <- HOFs.liquidTests]
-  ++ [ mkSuccess f ("RBTree."++name) "test/RBTree.hs" 6 | (name, T f) <- RBTree.liquidTests]
-  ++ [ mkSuccess f ("Map."++name) "test/Map.hs" 5 | (name, T f) <- Map.liquidTests]
+  ++ [ mkSuccess f ("RBTree."++name) "test/RBTree.hs" 5 | (name, T f) <- RBTree.liquidTests]
+  ++ [ mkSuccess f ("Map."++name) "test/Map.hs" 4 | (name, T f) <- Map.liquidTests]
   --FIXME: need a better solution for checking equality that respects custom Eq instances
   -- ++ [ mkSuccess f ("Data.ByteString.Internal."++name) "test/Data/ByteString/Internal.hs" 4 | (name, T f) <- ByteString.liquidTests]
-  ++ [ mkSuccess f ("Expr."++name) "test/Expr.hs" 3 | (name, T f) <- Expr.liquidTests]
+  ++ [ mkSuccess f ("Expr."++name) "test/Expr.hs" 2 | (name, T f) <- Expr.liquidTests]
 
 neg = testGroup "Neg" $
   [ mkFailure (List.insert_bad :: Int -> List Int -> List Int)
       "List.insert" "test/List.hs" 3
   ]
   ++ [ mkFailure f name "test/HOFs.hs" 3 | (name, T f) <- HOFs.liquidTests_bad]
-  ++ [ mkFailure f ("RBTree."++name) "test/RBTree.hs" 6 | (name, T f) <- RBTree.liquidTests_bad]
-  ++ [ mkFailure f ("Map."++name) "test/Map.hs" 5 | (name, T f) <- Map.liquidTests_bad]
+  ++ [ mkFailure f ("RBTree."++name) "test/RBTree.hs" 5 | (name, T f) <- RBTree.liquidTests_bad]
+  ++ [ mkFailure f ("Map."++name) "test/Map.hs" 4 | (name, T f) <- Map.liquidTests_bad]
 
 mkSuccess :: CanTest f => f -> String -> String -> Int -> TestTree
 mkSuccess f n fp d
