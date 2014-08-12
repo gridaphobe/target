@@ -4,7 +4,7 @@
 module Test.LiquidCheck.Util where
 
 import           Control.Applicative
-import           Control.Exception
+import           Control.Monad.Catch
 import           Control.Monad.IO.Class
 import           Data.List
 import           Data.Maybe

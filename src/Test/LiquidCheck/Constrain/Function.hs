@@ -9,8 +9,8 @@ module Test.LiquidCheck.Constrain.Function where
 
 import           Control.Applicative
 import           Control.Arrow                   (first, second)
-import qualified Control.Exception               as Ex
 import           Control.Monad
+import qualified Control.Monad.Catch             as Ex
 import           Control.Monad.State
 import           Data.Char
 import qualified Data.HashMap.Strict             as M
@@ -71,7 +71,7 @@ stitchFun _ d (bkArrowDeep . stripQuals -> (vs, tis, to))
              bs <- zipWithM (\e t -> evalType (M.fromList env) t e) es tis
              case and bs of
                --FIXME: better error message
-               False -> Ex.throw $ PreconditionCheckFailed $ show $ zip es tis
+               False -> Ex.throwM $ PreconditionCheckFailed $ show $ zip es tis
                True  -> do
                  ctx <- gets smtContext
                  io $ command ctx Push
@@ -83,7 +83,7 @@ stitchFun _ d (bkArrowDeep . stripQuals -> (vs, tis, to))
                  cs <- gets constraints
                  mapM_ (\c -> io . command ctx $ Assert Nothing c) cs
                  resp <- io $ command ctx CheckSat
-                 when (resp == Unsat) $ Ex.throw SmtFailedToProduceOutput
+                 when (resp == Unsat) $ Ex.throwM SmtFailedToProduceOutput
                  let real = [symbol v | (v,t) <- vs, t `elem` [FInt, choicesort, boolsort]]
                  Values model <- if null real then return $ Values []
                                  else ensureValues $ io $ command ctx (GetValue real)

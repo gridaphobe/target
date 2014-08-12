@@ -6,8 +6,8 @@ module Test.LiquidCheck.Gen where
 
 import           Control.Applicative
 import           Control.Arrow
-import           Control.Exception
 import           Control.Monad
+import           Control.Monad.Catch
 import           Control.Monad.State
 import           Data.Default
 import           Data.Generics                    (Data, Typeable, everywhere,
@@ -38,7 +38,8 @@ instance Symbolic T.Text where
   symbol = symbol . T.toStrict
 
 newtype Gen a = Gen (StateT GenState IO a)
-  deriving (Functor, Applicative, Monad, MonadIO, MonadState GenState)
+  deriving (Functor, Applicative, Monad, MonadIO
+           ,MonadState GenState, MonadCatch, MonadThrow)
 
 runGen :: GhcSpec -> FilePath -> Gen a -> IO a
 runGen e f (Gen x)

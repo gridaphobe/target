@@ -15,7 +15,7 @@ module Test.LiquidCheck.Constrain where
 
 import           Control.Applicative
 import           Control.Arrow                    (second)
-import qualified Control.Exception                as Ex
+import qualified Control.Monad.Catch              as Ex
 import           Control.Monad.State
 import           Data.Char
 import qualified Data.HashMap.Strict              as M

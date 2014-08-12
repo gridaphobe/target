@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 module Test.LiquidCheck.Types where
 
-import qualified Control.Exception             as Ex
+import qualified Control.Monad.Catch           as Ex
 import           Data.Typeable
 
 import           Language.Fixpoint.SmtLib2
@@ -18,7 +18,7 @@ import qualified Data.Text                     as T
 data LiquidException = SmtFailedToProduceOutput
                      | ExpectedValues Response
                      | PreconditionCheckFailed String
-  deriving Typeable
+                     deriving Typeable
 
 instance Show LiquidException where
   show SmtFailedToProduceOutput = "The SMT solver was unable to produce an output value."
@@ -31,7 +31,7 @@ ensureValues x = do
   a <- x
   case a of
     Values _ -> return a
-    r        -> Ex.throw $ ExpectedValues r
+    r        -> Ex.throwM $ ExpectedValues r
 
 type Constraint = [Pred]
 type Variable   = ( Symbol -- the name

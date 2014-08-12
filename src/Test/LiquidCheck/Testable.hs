@@ -11,8 +11,9 @@ module Test.LiquidCheck.Testable where
 
 import           Control.Applicative
 import           Control.Arrow                 (second)
-import           Control.Exception             (SomeException, evaluate, try)
+import           Control.Exception             (evaluate)
 import           Control.Monad
+import           Control.Monad.Catch
 import           Control.Monad.State
 import qualified Data.HashMap.Strict           as M
 import           Data.Proxy
@@ -38,7 +39,9 @@ test f d t
        cts <- gets freesyms
        vals <- allSat $ map symbol xs
        let (xs, tis, to) = bkArrowDeep $ stripQuals t
-       process d f vals cts (zip xs tis) to
+       try (process d f vals cts (zip xs tis) to) >>= \case
+         Left  (e :: SomeException) -> return $ Failed $ show e
+         Right r                    -> return r
 
 process :: CanTest f
         => Int -> f -> [[Value]] -> [(Symbol,Symbol)] -> [(Symbol,SpecType)] -> SpecType
