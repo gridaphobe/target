@@ -1,12 +1,12 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes    #-}
 {-@ LIQUID "--totality" @-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP           #-}
 #if __GLASGOW_HASKELL__
 -- LIQUID {- LANGUAGE DeriveDataTypeable, StandaloneDeriving -}
 #endif
 #if !defined(TESTING) && __GLASGOW_HASKELL__ >= 703
-{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE Trustworthy   #-}
 #endif
 -----------------------------------------------------------------------------
 -- |
@@ -263,41 +263,42 @@ module Map (
             -- , filterLt
 
             -- LIQUID
-            , Maybe, Char, Bool, Int, Either, MaybeS(..), delta, balanceL, 
-              balanceR, filterGt, filterLt, insertR, trim, insertMin, 
+            , Maybe, Char, Bool, Int, Either, MaybeS(..), delta, balanceL,
+              balanceR, filterGt, filterLt, insertR, trim, insertMin,
               insertMax, bin, glue, join', merge
             ) where
 
-import Prelude hiding (lookup,map,filter,foldr,foldl,null)
+import           Prelude              hiding (filter, foldl, foldr, lookup, map,
+                                       null)
 -- LIQUID import qualified Data.Set.Base as Set
 -- LIQUID import Data.StrictPair
-import Data.Monoid (Monoid(..))
+import           Data.Monoid          (Monoid (..))
 -- LIQUID import Control.Applicative (Applicative(..), (<$>))
-import Data.Traversable (Traversable(traverse))
-import qualified Data.Foldable as Foldable
+import qualified Data.Foldable        as Foldable
+import           Data.Traversable     (Traversable (traverse))
 -- import Data.Typeable
-import Control.DeepSeq (NFData(rnf))
+import           Control.DeepSeq      (NFData (rnf))
 
 #if __GLASGOW_HASKELL__
-import GHC.Exts ( build )
-import Text.Read
-import Data.Data
+import           Data.Data
+import           GHC.Exts             (build)
+import           Text.Read
 
-import GHC.Generics
-import Test.LiquidCheck
-import Test.LiquidCheck.Gen (Gen)
-import Data.Set (Set)
+import           Data.Set             (Set)
+import           GHC.Generics
+import           Test.LiquidCheck
+import           Test.LiquidCheck.Gen (Gen)
 #endif
 
 -- Use macros to define strictness of functions.
 -- STRICT_x_OF_y denotes an y-ary function strict in the x-th parameter.
 -- We do not use BangPatterns, because they are not in any standard and we
 -- want the compilers to be compiled by as many compilers as possible.
-#define STRICT_1_OF_2(fn) fn arg _ | arg `seq` False = undefined
-#define STRICT_1_OF_3(fn) fn arg _ _ | arg `seq` False = undefined
-#define STRICT_2_OF_3(fn) fn _ arg _ | arg `seq` False = undefined
-#define STRICT_1_OF_4(fn) fn arg _ _ _ | arg `seq` False = undefined
-#define STRICT_2_OF_4(fn) fn _ arg _ _ | arg `seq` False = undefined
+--LIQUID #define STRICT_1_OF_2(fn) fn arg _ | arg `seq` False = undefined
+--LIQUID #define STRICT_1_OF_3(fn) fn arg _ _ | arg `seq` False = undefined
+--LIQUID #define STRICT_2_OF_3(fn) fn _ arg _ | arg `seq` False = undefined
+--LIQUID #define STRICT_1_OF_4(fn) fn arg _ _ _ | arg `seq` False = undefined
+--LIQUID #define STRICT_2_OF_4(fn) fn _ arg _ _ | arg `seq` False = undefined
 
 {--------------------------------------------------------------------
   Operators
@@ -342,9 +343,9 @@ type Size     = Int
 
 {-@ data Map [mlen] k a <l :: root:k -> k -> Prop, r :: root:k -> k -> Prop>
          = Bin (ssz   :: Nat)
-               (key   :: k) 
+               (key   :: k)
                (value :: a)
-               (left  :: Map <l, r> (k <l key>) a) 
+               (left  :: Map <l, r> (k <l key>) a)
                (right :: {v:Map <l, r> (k <r key>) a | ssz = 1 + (mlen left) + (mlen v)})
          | Tip
   @-}
@@ -366,8 +367,8 @@ type Size     = Int
     isJustS (NothingS) = false
 @-}
 
-{-@ measure fromJustS :: forall a. MaybeS a -> a 
-    fromJustS (JustS x) = x 
+{-@ measure fromJustS :: forall a. MaybeS a -> a
+    fromJustS (JustS x) = x
   @-}
 
 {-@ measure isBin :: Map k a -> Prop
@@ -470,7 +471,6 @@ size (Bin sz _ _ _ _) = sz
 lookup :: Ord k => k -> Map k a -> Maybe a
 lookup = go
   where
-    STRICT_1_OF_2(go)
     go _ Tip = Nothing
     go k (Bin _ kx x l r) = case compare k kx of
       LT -> go k l
@@ -491,7 +491,6 @@ lookup = go
 member :: Ord k => k -> Map k a -> Bool
 member = go
   where
-    STRICT_1_OF_2(go)
     go _ Tip = False
     go k (Bin _ kx _ l r) = case compare k kx of
       LT -> go k l
@@ -524,7 +523,6 @@ notMember k m = not $ member k m
 find :: Ord k => k -> Map k a -> a
 find = go
   where
-    STRICT_1_OF_2(go)
     go _ Tip = error "Map.!: given key is not an element in the map"
     go k (Bin _ kx x l r) = case compare k kx of
       LT -> go k l
@@ -547,7 +545,6 @@ find = go
 findWithDefault :: Ord k => a -> k -> Map k a -> a
 findWithDefault = go
   where
-    STRICT_2_OF_3(go)
     go def _ Tip = def
     go def k (Bin _ kx x l r) = case compare k kx of
       LT -> go def k l
@@ -568,12 +565,10 @@ findWithDefault = go
 lookupLT :: Ord k => k -> Map k v -> Maybe (k, v)
 lookupLT = goNothing
   where
-    STRICT_1_OF_2(goNothing)
     goNothing _ Tip = Nothing
     goNothing k (Bin _ kx x l r) | k <= kx = goNothing k l
                                  | otherwise = goJust k kx x r
 
-    STRICT_1_OF_4(goJust)
     goJust _ kx' x' Tip = Just (kx', x')
     goJust k kx' x' (Bin _ kx x l r) | k <= kx = goJust k kx' x' l
                                      | otherwise = goJust k kx x r
@@ -592,12 +587,10 @@ lookupLT = goNothing
 lookupGT :: Ord k => k -> Map k v -> Maybe (k, v)
 lookupGT = goNothing
   where
-    STRICT_1_OF_2(goNothing)
     goNothing _ Tip = Nothing
     goNothing k (Bin _ kx x l r) | k < kx = goJust k kx x l
                                  | otherwise = goNothing k r
 
-    STRICT_1_OF_4(goJust)
     goJust _ kx' x' Tip = Just (kx', x')
     goJust k kx' x' (Bin _ kx x l r) | k < kx = goJust k kx x l
                                      | otherwise = goJust k kx' x' r
@@ -617,13 +610,11 @@ lookupGT = goNothing
 lookupLE :: Ord k => k -> Map k v -> Maybe (k, v)
 lookupLE = goNothing
   where
-    STRICT_1_OF_2(goNothing)
     goNothing _ Tip = Nothing
     goNothing k (Bin _ kx x l r) = case compare k kx of LT -> goNothing k l
                                                         EQ -> Just (kx, x)
                                                         GT -> goJust k kx x r
 
-    STRICT_1_OF_4(goJust)
     goJust _ kx' x' Tip = Just (kx', x')
     goJust k kx' x' (Bin _ kx x l r) = case compare k kx of LT -> goJust k kx' x' l
                                                             EQ -> Just (kx, x)
@@ -644,13 +635,11 @@ lookupLE = goNothing
 lookupGE :: Ord k => k -> Map k v -> Maybe (k, v)
 lookupGE = goNothing
   where
-    STRICT_1_OF_2(goNothing)
     goNothing _ Tip = Nothing
     goNothing k (Bin _ kx x l r) = case compare k kx of LT -> goJust k kx x l
                                                         EQ -> Just (kx, x)
                                                         GT -> goNothing k r
 
-    STRICT_1_OF_4(goJust)
     goJust _ kx' x' Tip = Just (kx', x')
     goJust k kx' x' (Bin _ kx x l r) = case compare k kx of LT -> goJust k kx x l
                                                             EQ -> Just (kx, x)
@@ -696,7 +685,7 @@ singleton k x = Bin 1 k x Tip Tip
 -- > insert 5 'x' empty                         == singleton 5 'x'
 
 -- See Note: Type of local 'go' function
-{-@ insert :: (Ord k) => k:k -> a -> x:OMap k a 
+{-@ insert :: (Ord k) => k:k -> a -> x:OMap k a
            -> {v:OMap k a | (mapKeys v) = (Set_cup (Set_sng k) (mapKeys x))}
   @-}
 insert :: Ord k => k -> a -> Map k a -> Map k a
@@ -704,22 +693,20 @@ insert = insert_go
 --LIQUID insert = go
 --LIQUID   where
 --LIQUID     go :: Ord k => k -> a -> Map k a -> Map k a
---LIQUID     STRICT_1_OF_3(go)
 --LIQUID     go kx x Tip = singleton kx x
 --LIQUID     go kx x (Bin sz ky y l r) =
 --LIQUID         case compare kx ky of
---LIQUID                   -- Bin ky y (go kx x l) r 
+--LIQUID                   -- Bin ky y (go kx x l) r
 --LIQUID             LT -> balanceL ky y (go kx x l) r
 --LIQUID             GT -> balanceR ky y l (go kx x r)
 --LIQUID             EQ -> Bin sz kx x l r
 
 {-@ insert_go :: (Ord k) => k -> a -> OMap k a -> OMap k a @-}
 insert_go :: Ord k => k -> a -> Map k a -> Map k a
-STRICT_1_OF_3(insert_go)
 insert_go kx x Tip = singleton kx x
 insert_go kx x (Bin sz ky y l r) =
     case compare kx ky of
-              -- Bin ky y (insert_go kx x l) r 
+              -- Bin ky y (insert_go kx x l) r
         LT -> balanceL ky y (insert_go kx x l) r
         GT -> balanceR ky y l (insert_go kx x r)
         EQ -> Bin sz kx x l r
@@ -738,7 +725,6 @@ insertR = insertR_go
 --LIQUID insertR = go
 --LIQUID   where
 --LIQUID     go :: Ord k => k -> a -> Map k a -> Map k a
---LIQUID     STRICT_1_OF_3(go)
 --LIQUID     go kx x Tip = singleton kx x
 --LIQUID     go kx x t@(Bin _ ky y l r) =
 --LIQUID         case compare kx ky of
@@ -747,7 +733,6 @@ insertR = insertR_go
 --LIQUID             EQ -> t
 
 insertR_go :: Ord k => k -> a -> Map k a -> Map k a
-STRICT_1_OF_3(insertR_go)
 insertR_go kx x Tip = singleton kx x
 insertR_go kx x t@(Bin _ ky y l r) =
     case compare kx ky of
@@ -799,7 +784,6 @@ insertWithKey = insertWithKey_go
 --LIQUID insertWithKey = go
 --LIQUID   where
 --LIQUID     go :: Ord k => (k -> a -> a -> a) -> k -> a -> Map k a -> Map k a
---LIQUID     STRICT_2_OF_4(go)
 --LIQUID     go _ kx x Tip = singleton kx x
 --LIQUID     go f kx x (Bin sy ky y l r) =
 --LIQUID         case compare kx ky of
@@ -809,7 +793,6 @@ insertWithKey = insertWithKey_go
 
 {-@ insertWithKey_go :: (Ord k) => (k -> a -> a -> a) -> k -> a -> OMap k a -> OMap k a @-}
 insertWithKey_go :: Ord k => (k -> a -> a -> a) -> k -> a -> Map k a -> Map k a
-STRICT_2_OF_4(insertWithKey_go)
 insertWithKey_go _ kx x Tip = singleton kx x
 insertWithKey_go f kx x (Bin sy ky y l r) =
     case compare kx ky of
@@ -846,7 +829,6 @@ insertLookupWithKey = insertLookupWithKey_go
 --LIQUID insertLookupWithKey = go
 --LIQUID   where
 --LIQUID     go :: Ord k => (k -> a -> a -> a) -> k -> a -> Map k a -> (Maybe a, Map k a)
---LIQUID     STRICT_2_OF_4(go)
 --LIQUID     go _ kx x Tip = (Nothing, singleton kx x)
 --LIQUID     go f kx x (Bin sy ky y l r) =
 --LIQUID         case compare kx ky of
@@ -858,7 +840,6 @@ insertLookupWithKey = insertLookupWithKey_go
 
 {-@ insertLookupWithKey_go :: Ord k => (k -> a -> a -> a) -> k -> a -> OMap k a -> (Maybe a, OMap k a) @-}
 insertLookupWithKey_go :: Ord k => (k -> a -> a -> a) -> k -> a -> Map k a -> (Maybe a, Map k a)
-STRICT_2_OF_4(insertLookupWithKey_go)
 insertLookupWithKey_go _ kx x Tip = (Nothing, singleton kx x)
 insertLookupWithKey_go f kx x (Bin sy ky y l r) =
     case compare kx ky of
@@ -884,14 +865,13 @@ insertLookupWithKey_go f kx x (Bin sy ky y l r) =
 -- > delete 5 empty                         == empty
 
 -- See Note: Type of local 'go' function
-{-@ delete :: (Ord k) => k:k -> x:OMap k a 
+{-@ delete :: (Ord k) => k:k -> x:OMap k a
            -> {v:OMap k a | (mapKeys v) = (Set_dif (mapKeys x) (Set_sng k))} @-}
 delete :: Ord k => k -> Map k a -> Map k a
 delete = delete_go
 --LIQUID delete = go
 --LIQUID   where
 --LIQUID     go :: Ord k => k -> Map k a -> Map k a
---LIQUID     STRICT_1_OF_2(go)
 --LIQUID     go _ Tip = Tip
 --LIQUID     go k (Bin _ kx x l r) =
 --LIQUID         case compare k kx of
@@ -901,7 +881,6 @@ delete = delete_go
 
 {-@ delete_go :: (Ord k) => k -> OMap k a -> OMap k a @-}
 delete_go :: Ord k => k -> Map k a -> Map k a
-STRICT_1_OF_2(delete_go)
 delete_go _ Tip = Tip
 delete_go k (Bin _ kx x l r) =
     case compare k kx of
@@ -984,7 +963,6 @@ updateWithKey = updateWithKey_go
 --LIQUID updateWithKey = go
 --LIQUID   where
 --LIQUID     go :: Ord k => (k -> a -> Maybe a) -> k -> Map k a -> Map k a
---LIQUID     STRICT_2_OF_3(go)
 --LIQUID     go _ _ Tip = Tip
 --LIQUID     go f k(Bin sx kx x l r) =
 --LIQUID         case compare k kx of
@@ -995,7 +973,6 @@ updateWithKey = updateWithKey_go
 --LIQUID                    Nothing -> glue kx l r
 {-@ updateWithKey_go :: (Ord k) => (k -> a -> Maybe a) -> k -> OMap k a -> OMap k a @-}
 updateWithKey_go :: Ord k => (k -> a -> Maybe a) -> k -> Map k a -> Map k a
-STRICT_2_OF_3(updateWithKey_go)
 updateWithKey_go _ _ Tip = Tip
 updateWithKey_go f k(Bin sx kx x l r) =
     case compare k kx of
@@ -1028,7 +1005,6 @@ updateLookupWithKey = updateLookupWithKey_go
 --LIQUID updateLookupWithKey = go
 --LIQUID  where
 --LIQUID    go :: Ord k => (k -> a -> Maybe a) -> k -> Map k a -> (Maybe a,Map k a)
---LIQUID    STRICT_2_OF_3(go)
 --LIQUID    go _ _ Tip = (Nothing,Tip)
 --LIQUID    go f k (Bin sx kx x l r) =
 --LIQUID           case compare k kx of
@@ -1040,7 +1016,6 @@ updateLookupWithKey = updateLookupWithKey_go
 
 {-@ updateLookupWithKey_go :: (Ord k) => (k -> a -> Maybe a) -> k -> OMap k a -> (Maybe a, OMap k a) @-}
 updateLookupWithKey_go :: Ord k => (k -> a -> Maybe a) -> k -> Map k a -> (Maybe a,Map k a)
-STRICT_2_OF_3(updateLookupWithKey_go)
 updateLookupWithKey_go _ _ Tip = (Nothing,Tip)
 updateLookupWithKey_go f k (Bin sx kx x l r) =
        case compare k kx of
@@ -1076,7 +1051,6 @@ alter = alter_go
 --LIQUID alter = go
 --LIQUID  where
 --LIQUID    go :: Ord k => (Maybe a -> Maybe a) -> k -> Map k a -> Map k a
---LIQUID    STRICT_2_OF_3(go)
 --LIQUID    go f k Tip = case f Nothing of
 --LIQUID               Nothing -> Tip
 --LIQUID               Just x  -> singleton k x
@@ -1089,7 +1063,6 @@ alter = alter_go
 --LIQUID                       Nothing -> glue kx l r
 
 alter_go :: Ord k => (Maybe a -> Maybe a) -> k -> Map k a -> Map k a
-STRICT_2_OF_3(alter_go)
 alter_go f k Tip = case f Nothing of
            Nothing -> Tip
            Just x  -> singleton k x
@@ -1127,8 +1100,6 @@ findIndex = findIndex_go 0
 --LIQUID findIndex = go 0
 --LIQUID   where
 --LIQUID     go :: Ord k => Int -> k -> Map k a -> Int
---LIQUID     STRICT_1_OF_3(go)
---LIQUID     STRICT_2_OF_3(go)
 --LIQUID     go _   _ Tip  = error "Map.findIndex: element is not in the map"
 --LIQUID     go idx k (Bin _ kx _ l r) = case compare k kx of
 --LIQUID       LT -> go idx k l
@@ -1138,8 +1109,6 @@ findIndex = findIndex_go 0
 {-@ findIndex_go :: (Ord k) => Int -> k -> OMap k a -> GHC.Types.Int @-}
 {-@ Decrease findIndex_go 4 @-}
 findIndex_go :: Ord k => Int -> k -> Map k a -> Int
-STRICT_1_OF_3(findIndex_go)
-STRICT_2_OF_3(findIndex_go)
 findIndex_go _   _ Tip  = error "Map.findIndex: element is not in the map"
 findIndex_go idx k (Bin _ kx _ l r) = case compare k kx of
   LT -> findIndex_go idx k l
@@ -1164,8 +1133,6 @@ lookupIndex = lookupIndex_go 0
 --LIQUID lookupIndex = go 0
 --LIQUID   where
 --LIQUID     go :: Ord k => Int -> k -> Map k a -> Maybe Int
---LIQUID     STRICT_1_OF_3(go)
---LIQUID     STRICT_2_OF_3(go)
 --LIQUID     go _   _ Tip  = Nothing
 --LIQUID     go idx k (Bin _ kx _ l r) = case compare k kx of
 --LIQUID       LT -> go idx k l
@@ -1175,8 +1142,6 @@ lookupIndex = lookupIndex_go 0
 {-@ lookupIndex_go :: (Ord k) => Int -> k -> OMap k a -> Maybe GHC.Types.Int @-}
 {-@ Decrease lookupIndex_go 4 @-}
 lookupIndex_go :: Ord k => Int -> k -> Map k a -> Maybe Int
-STRICT_1_OF_3(lookupIndex_go)
-STRICT_2_OF_3(lookupIndex_go)
 lookupIndex_go _   _ Tip  = Nothing
 lookupIndex_go idx k (Bin _ kx _ l r) = case compare k kx of
   LT -> lookupIndex_go idx k l
@@ -1197,7 +1162,6 @@ lookupIndex_go idx k (Bin _ kx _ l r) = case compare k kx of
 {-@ elemAt :: GHC.Types.Int -> OMap k a -> (k, a) @-}
 {-@ Decrease elemAt 2 @-}
 elemAt :: Int -> Map k a -> (k,a)
-STRICT_1_OF_2(elemAt)
 elemAt _ Tip = error "Map.elemAt: index out of range"
 elemAt i (Bin _ kx x l r)
   = case compare i sizeL of
@@ -1441,8 +1405,8 @@ unionsWith f ts
 -- Hedge-union is more efficient on (bigset \``union`\` smallset).
 --
 -- > union (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == fromList [(3, "b"), (5, "a"), (7, "C")]
- 
-{-@ union :: (Ord k) => x:OMap k a -> y:OMap k a 
+
+{-@ union :: (Ord k) => x:OMap k a -> y:OMap k a
           -> {v:OMap k a | (mapKeys v) = (Set_cup (mapKeys x) (mapKeys y))}
   @-}
 union :: Ord k => Map k a -> Map k a -> Map k a
@@ -1454,10 +1418,10 @@ union t1 t2 = hedgeUnion NothingS NothingS t1 t2
 #endif
 
 -- left-biased hedge union
-{-@ hedgeUnion :: (Ord k) => lo: MaybeS k 
-                          -> hi: MaybeS {v: k | (IfDefLt lo v) }               
-                          -> OMap {v: k | (KeyBetween lo hi v) } a 
-                          -> {v: OMap k a | (RootBetween lo hi v) }                       
+{-@ hedgeUnion :: (Ord k) => lo: MaybeS k
+                          -> hi: MaybeS {v: k | (IfDefLt lo v) }
+                          -> OMap {v: k | (KeyBetween lo hi v) } a
+                          -> {v: OMap k a | (RootBetween lo hi v) }
                           ->  OMap {v: k | (KeyBetween lo hi v)} a @-}
 hedgeUnion :: Ord a => MaybeS a -> MaybeS a -> Map a b -> Map a b -> Map a b
 hedgeUnion _   _   t1  Tip = t1
@@ -1509,7 +1473,7 @@ unionWithKey f t1 t2 = mergeWithKey (\k x1 x2 -> Just $ f k x1 x2) (\ _ _ x -> x
 --
 -- > difference (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == singleton 3 "b"
 
-{-@ difference :: (Ord k) => x:OMap k a -> y:OMap k b 
+{-@ difference :: (Ord k) => x:OMap k a -> y:OMap k b
                -> {v:OMap k a | (mapKeys v) = (Set_dif (mapKeys x) (mapKeys y))}
   @-}
 difference :: Ord k => Map k a -> Map k b -> Map k a
@@ -1520,10 +1484,10 @@ difference t1 t2   = hedgeDiff NothingS NothingS t1 t2
 {-# INLINABLE difference #-}
 #endif
 
-{-@ hedgeDiff  :: (Ord k) => lo: MaybeS k  
-                          -> hi: MaybeS {v: k | (IfDefLt lo v) }               
-                          -> {v: OMap k a | (RootBetween lo hi v) }                       
-                          -> OMap {v: k | (KeyBetween lo hi v) } b 
+{-@ hedgeDiff  :: (Ord k) => lo: MaybeS k
+                          -> hi: MaybeS {v: k | (IfDefLt lo v) }
+                          -> {v: OMap k a | (RootBetween lo hi v) }
+                          -> OMap {v: k | (KeyBetween lo hi v) } b
                           -> OMap {v: k | (KeyBetween lo hi v) } a @-}
 {-@ Decrease hedgeDiff 5 @-}
 hedgeDiff :: Ord a => MaybeS a -> MaybeS a -> Map a b -> Map a c -> Map a b
@@ -1582,7 +1546,7 @@ differenceWithKey f t1 t2 = mergeWithKey f (\_ _ x -> x) (\ _ _ _ -> Tip) t1 t2
 --
 -- > intersection (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == singleton 5 "a"
 
-{-@ intersection :: (Ord k) => x:OMap k a -> y:OMap k b 
+{-@ intersection :: (Ord k) => x:OMap k a -> y:OMap k b
                  -> {v:OMap k a | (mapKeys v) = (Set_cap (mapKeys x) (mapKeys y))}
   @-}
 intersection :: Ord k => Map k a -> Map k b -> Map k a
@@ -1593,10 +1557,10 @@ intersection t1 t2 = hedgeInt NothingS NothingS t1 t2
 {-# INLINABLE intersection #-}
 #endif
 
-{-@ hedgeInt   :: (Ord k) => lo: MaybeS k 
-                          -> hi: MaybeS {v: k | (IfDefLt lo v) }               
-                          -> OMap {v: k | (KeyBetween lo hi v) } a 
-                          -> {v: OMap k b | (RootBetween lo hi v) }                       
+{-@ hedgeInt   :: (Ord k) => lo: MaybeS k
+                          -> hi: MaybeS {v: k | (IfDefLt lo v) }
+                          -> OMap {v: k | (KeyBetween lo hi v) } a
+                          -> {v: OMap k b | (RootBetween lo hi v) }
                           ->  OMap {v: k | (KeyBetween lo hi v)} a @-}
 
 hedgeInt :: Ord k => MaybeS k -> MaybeS k -> Map k a -> Map k b -> Map k a
@@ -1678,8 +1642,8 @@ intersectionWithKey f t1 t2 = mergeWithKey (\k x1 x2 -> Just $ f k x1 x2) (\ _ _
 -- @only2@ are 'id' and @'const' 'empty'@, but for example @'map' f@ or
 -- @'filterWithKey' f@ could be used for any @f@.
 
-{-@ mergeWithKey :: (Ord k) => (k -> a -> b -> Maybe c) 
-                          -> (lo:MaybeS k -> hi: MaybeS k -> OMap {v: k | (KeyBetween lo hi v) } a -> OMap {v: k | (KeyBetween lo hi v) } c) 
+{-@ mergeWithKey :: (Ord k) => (k -> a -> b -> Maybe c)
+                          -> (lo:MaybeS k -> hi: MaybeS k -> OMap {v: k | (KeyBetween lo hi v) } a -> OMap {v: k | (KeyBetween lo hi v) } c)
                           -> (lo:MaybeS k -> hi: MaybeS k -> OMap {v: k | (KeyBetween lo hi v) } b -> OMap {v: k | (KeyBetween lo hi v) } c)
                           -> OMap k a -> OMap k b -> OMap k c @-}
 mergeWithKey :: Ord k => (k -> a -> b -> Maybe c) -> (MaybeS k -> MaybeS k -> Map k a -> Map k c) -> (MaybeS k -> MaybeS k -> Map k b -> Map k c)
@@ -1690,26 +1654,26 @@ mergeWithKey f g1 g2 = go
     go t1 Tip = g1 NothingS NothingS t1
     go t1 t2  = hedgeMerge f g1 g2 NothingS NothingS t1 t2
 
-{-@ hedgeMerge :: (Ord k) => (k -> a -> b -> Maybe c) 
+{-@ hedgeMerge :: (Ord k) => (k -> a -> b -> Maybe c)
                           -> (lo:MaybeS k -> hi: MaybeS k -> OMap {v: k | (KeyBetween lo hi v) } a -> OMap {v: k | (KeyBetween lo hi v) } c)
                           -> (lo:MaybeS k -> hi: MaybeS k -> OMap {v: k | (KeyBetween lo hi v) } b -> OMap {v: k | (KeyBetween lo hi v) } c)
-                          -> lo: MaybeS k 
-                          -> hi: MaybeS {v: k | (IfDefLt lo v) }               
-                          -> OMap {v: k | (KeyBetween lo hi v) } a 
-                          -> {v: OMap k b | (RootBetween lo hi v) }                       
+                          -> lo: MaybeS k
+                          -> hi: MaybeS {v: k | (IfDefLt lo v) }
+                          -> OMap {v: k | (KeyBetween lo hi v) } a
+                          -> {v: OMap k b | (RootBetween lo hi v) }
                           ->  OMap {v: k | (KeyBetween lo hi v)} c @-}
 
-hedgeMerge :: Ord k => (k -> a -> b -> Maybe c) 
-                    -> (MaybeS k -> MaybeS k -> Map k a -> Map k c) 
+hedgeMerge :: Ord k => (k -> a -> b -> Maybe c)
+                    -> (MaybeS k -> MaybeS k -> Map k a -> Map k c)
                     -> (MaybeS k -> MaybeS k -> Map k b -> Map k c)
-                    -> MaybeS k -> MaybeS k 
+                    -> MaybeS k -> MaybeS k
                     -> Map k a -> Map k b -> Map k c
-hedgeMerge f g1 g2 blo bhi   t1  Tip 
+hedgeMerge f g1 g2 blo bhi   t1  Tip
   = g1 blo bhi t1
-hedgeMerge f g1 g2 blo bhi Tip (Bin _ kx x l r) 
+hedgeMerge f g1 g2 blo bhi Tip (Bin _ kx x l r)
   = g2 blo bhi $ join' kx x (filterGt blo l) (filterLt bhi r)
-hedgeMerge f g1 g2 blo bhi (Bin _ kx x l r) t2  
-  = let bmi = JustS kx 
+hedgeMerge f g1 g2 blo bhi (Bin _ kx x l r) t2
+  = let bmi = JustS kx
         l' = hedgeMerge f g1 g2 blo bmi l (trim blo bmi t2)
         (found, trim_t2) = trimLookupLo kx bhi t2
         r' = hedgeMerge f g1 g2 bmi bhi r trim_t2
@@ -2092,7 +2056,6 @@ foldr f z = go z
 foldr' :: (a -> b -> b) -> b -> Map k a -> b
 foldr' f z = go z
   where
-    STRICT_1_OF_2(go)
     go z' Tip             = z'
     go z' (Bin _ _ x l r) = go (f x (go z' r)) l
 {-# INLINE foldr' #-}
@@ -2121,7 +2084,6 @@ foldl f z = go z
 foldl' :: (a -> b -> a) -> a -> Map k b -> a
 foldl' f z = go z
   where
-    STRICT_1_OF_2(go)
     go z' Tip             = z'
     go z' (Bin _ _ x l r) = go (f (go z' l) x) r
 {-# INLINE foldl' #-}
@@ -2151,7 +2113,6 @@ foldrWithKey f z = go z
 foldrWithKey' :: (k -> a -> b -> b) -> b -> Map k a -> b
 foldrWithKey' f z = go z
   where
-    STRICT_1_OF_2(go)
     go z' Tip              = z'
     go z' (Bin _ kx x l r) = go (f kx x (go z' r)) l
 {-# INLINE foldrWithKey' #-}
@@ -2181,7 +2142,6 @@ foldlWithKey f z = go z
 foldlWithKey' :: (a -> k -> b -> a) -> a -> Map k b -> a
 foldlWithKey' f z = go z
   where
-    STRICT_1_OF_2(go)
     go z' Tip              = z'
     go z' (Bin _ kx x l r) = go (f (go z' l) kx x) r
 {-# INLINE foldlWithKey' #-}
@@ -2487,33 +2447,33 @@ instance Constrain a => Constrain (MaybeS a)
   empty or the key of the root is between @blo@ and @bhi@.
 --------------------------------------------------------------------}
 -- LIQUID: EXPANDED CASE-EXPRS for lesser, greater, middle to avoid DEFAULT hassle
-{-@ trim :: (Ord k) => lo:MaybeS k 
-                    -> hi:MaybeS k 
-                    -> OMap k a 
-                    -> {v: OMap k a | (RootBetween lo hi v) }                       
+{-@ trim :: (Ord k) => lo:MaybeS k
+                    -> hi:MaybeS k
+                    -> OMap k a
+                    -> {v: OMap k a | (RootBetween lo hi v) }
                     @-}
-                    
+
 
 trim :: Ord k => MaybeS k -> MaybeS k -> Map k a -> Map k a
 
 
 trim NothingS   NothingS   t = t
-trim (JustS lk) NothingS   t = greater lk t 
+trim (JustS lk) NothingS   t = greater lk t
 
   where greater lo t@(Bin _ k _ _ r) | k <= lo      = greater lo r
                                      | otherwise    = t
         greater _  t'@Tip                           = t'
 
-trim NothingS   (JustS hk) t = lesser hk t 
+trim NothingS   (JustS hk) t = lesser hk t
 
   where lesser  hi t'@(Bin _ k _ l _) | k >= hi     = lesser  hi l
                                       | otherwise   = t'
         lesser  _  t'@Tip                           = t'
-trim (JustS lk) (JustS hk) t = middle lk hk t  
+trim (JustS lk) (JustS hk) t = middle lk hk t
   where middle lo hi t'@(Bin _ k _ l r) | k <= lo   = middle lo hi r
                                         | k >= hi   = middle lo hi l
                                         | otherwise = t'
-        middle _ _ t'@Tip = t'  
+        middle _ _ t'@Tip = t'
 #if __GLASGOW_HASKELL__ >= 700
 {-# INLINABLE trim #-}
 #endif
@@ -2546,15 +2506,15 @@ trim (JustS lk) (JustS hk) t = middle lk hk t
 -- LIQUID                                                                  EQ -> (Just x, {-`strictPair`-} lesser hi r)
 -- LIQUID                                                                  GT -> middle lo hi r
 -- LIQUID         middle _ _ Tip = (Nothing, Tip)
--- LIQUID 
+-- LIQUID
 -- LIQUID         lesser :: Ord k => k -> Map k a -> Map k a
 -- LIQUID         lesser hi (Bin _ k _ l _) | k >= hi = lesser hi l
 -- LIQUID         lesser _ t' = t'
 
-{-@ trimLookupLo :: (Ord k) 
-                 => lo:k 
-                 -> bhi:{v: MaybeS k | (isJustS(v) => (lo < fromJustS(v)))} 
-                 -> OMap k a 
+{-@ trimLookupLo :: (Ord k)
+                 => lo:k
+                 -> bhi:{v: MaybeS k | (isJustS(v) => (lo < fromJustS(v)))}
+                 -> OMap k a
                  -> (Maybe a, {v: OMap k a | ((isBin(v) => (lo < key(v))) && ((isBin(v) && isJustS(bhi)) => (fromJustS(bhi) > key(v)))) }) @-}
 
 trimLookupLo :: Ord k => k -> MaybeS k -> Map k a -> (Maybe a, Map k a)
@@ -2571,7 +2531,7 @@ trimLookupLo lk (JustS hk) t = middle lk hk t
                                                                  EQ -> (Just x, {-`strictPair`-} lesser lo hi (case r of {r'@(Bin _ _ _ _ _) -> r' ; r'@Tip -> r'}))
                                                                  GT -> middle lo hi r
         middle _ _ Tip = (Nothing, Tip)
- 
+
         lesser :: Ord k => k -> k -> Map k a -> Map k a
         lesser lo hi t'@(Bin _ k _ l _) | k >= hi   = lesser lo hi l
                                         | otherwise = t'
@@ -2971,10 +2931,10 @@ instance (Ord k, Ord v) => Ord (Map k v) where
 
 -- LIQUID instance Functor (Map k) where
 -- LIQUID   fmap f m  = map f m
--- LIQUID 
+-- LIQUID
 -- LIQUID instance Traversable (Map k) where
 -- LIQUID   traverse f = traverseWithKey (\_ -> f)
--- LIQUID 
+-- LIQUID
 -- LIQUID instance Foldable.Foldable (Map k) where
 -- LIQUID   fold Tip = mempty
 -- LIQUID   fold (Bin _ _ v l r) = Foldable.fold l `mappend` v `mappend` Foldable.fold r
@@ -2982,7 +2942,7 @@ instance (Ord k, Ord v) => Ord (Map k v) where
 -- LIQUID   foldl = foldl
 -- LIQUID   foldMap _ Tip = mempty
 -- LIQUID   foldMap f (Bin _ _ v l r) = Foldable.foldMap f l `mappend` f v `mappend` Foldable.foldMap f r
--- LIQUID 
+-- LIQUID
 -- LIQUID instance (NFData k, NFData a) => NFData (Map k a) where
 -- LIQUID     rnf Tip = ()
 -- LIQUID     rnf (Bin _ kx x l r) = rnf kx `seq` rnf x `seq` rnf l `seq` rnf r
@@ -3019,13 +2979,13 @@ instance (Ord k, Read k, Read e) => Read (Map k e) where
 --   = showTreeWith showElem True False m
 --   where
 --     showElem k x  = show k ++ ":=" ++ show x
--- 
--- 
+--
+--
 -- {- | /O(n)/. The expression (@'showTreeWith' showelem hang wide map@) shows
 --  the tree that implements the map. Elements are shown using the @showElem@ function. If @hang@ is
 --  'True', a /hanging/ tree is shown otherwise a rotated tree is shown. If
 --  @wide@ is 'True', an extra wide version is shown.
--- 
+--
 -- >  Map> let t = fromDistinctAscList [(x,()) | x <- [1..5]]
 -- >  Map> putStrLn $ showTreeWith (\k x -> show (k,x)) True False t
 -- >  (4,())
@@ -3055,13 +3015,13 @@ instance (Ord k, Read k, Read e) => Read (Map k e) where
 -- >  +--(2,())
 -- >     |
 -- >     +--(1,())
--- 
+--
 -- -}
 -- showTreeWith :: (k -> a -> String) -> Bool -> Bool -> Map k a -> String
 -- showTreeWith showelem hang wide t
 --   | hang      = (showsTreeHang showelem wide [] t) ""
 --   | otherwise = (showsTree showelem wide [] [] t) ""
--- 
+--
 -- {- Decrease showsTree 5 @-}
 -- showsTree :: (k -> a -> String) -> Bool -> [String] -> [String] -> Map k a -> ShowS
 -- showsTree showelem wide lbars rbars t
@@ -3075,7 +3035,7 @@ instance (Ord k, Read k, Read e) => Read (Map k e) where
 --              showsBars lbars . showString (showelem kx x) . showString "\n" .
 --              showWide wide lbars .
 --              showsTree showelem wide (withEmpty lbars) (withBar lbars) l
--- 
+--
 -- {- Decrease showsTreeHang 4 @-}
 -- showsTreeHang :: (k -> a -> String) -> Bool -> [String] -> Map k a -> ShowS
 -- showsTreeHang showelem wide bars t
@@ -3089,21 +3049,21 @@ instance (Ord k, Read k, Read e) => Read (Map k e) where
 --              showsTreeHang showelem wide (withBar bars) l .
 --              showWide wide bars .
 --              showsTreeHang showelem wide (withEmpty bars) r
--- 
+--
 -- showWide :: Bool -> [String] -> String -> String
 -- showWide wide bars
 --   | wide      = showString (concat (reverse bars)) . showString "|\n"
 --   | otherwise = id
--- 
+--
 -- showsBars :: [String] -> ShowS
 -- showsBars bars
 --   = case bars of
 --       [] -> id
 --       _  -> showString (concat (reverse (tail bars))) . showString node
--- 
+--
 -- node :: String
 -- node           = "+--"
--- 
+--
 -- withBar, withEmpty :: [String] -> [String]
 -- withBar bars   = "|  ":bars
 -- withEmpty bars = "   ":bars
