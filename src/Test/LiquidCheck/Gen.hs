@@ -1,7 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE OverloadedStrings          #-}
 module Test.LiquidCheck.Gen where
 
 import           Control.Applicative
@@ -10,16 +10,17 @@ import           Control.Exception
 import           Control.Monad
 import           Control.Monad.State
 import           Data.Default
-import           Data.Generics             (Data, Typeable, everywhere, mkT)
+import           Data.Generics                    (Data, Typeable, everywhere,
+                                                   mkT)
 import qualified Data.HashMap.Strict              as M
 import qualified Data.HashSet                     as S
 import           Data.List
 import           Data.Monoid
 import qualified Data.Text.Lazy                   as T
 
-import           Language.Fixpoint.Config  (SMTSolver(..))
-import           Language.Fixpoint.Names   ()
-import           Language.Fixpoint.SmtLib2 hiding (verbose)
+import           Language.Fixpoint.Config         (SMTSolver (..))
+import           Language.Fixpoint.Names          ()
+import           Language.Fixpoint.SmtLib2        hiding (verbose)
 import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.RefType
@@ -75,10 +76,13 @@ data GenState
        , makingTy     :: !Sort
        , verbose      :: !Bool
        , logging      :: !Bool
+       , keepGoing    :: !Bool -- ^ whether to keep going after finding a
+                               --   counter-example, useful for checking
+                               --   coverage
        , smtContext   :: !Context
        }
 
-initGS fp sp ctx 
+initGS fp sp ctx
   = GS { seed         = 0
        , variables    = []
        , choices      = []
@@ -101,8 +105,9 @@ initGS fp sp ctx
        , makingTy     = FObj ""
        , verbose      = False
        , logging      = False
+       , keepGoing    = False
        , smtContext   = ctx
-       } 
+       }
   where
     dcons = tidy $ map (symbol *** id) (dconsP sp)
     cts   = tidy $ map (symbol *** val) (ctors sp)

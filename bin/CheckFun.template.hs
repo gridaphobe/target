@@ -26,21 +26,21 @@ main = do
   putStrLn ""
 
 -- checkMany :: GhcSpec -> Handle -> IO [(Int, Double, Outcome)]
-checkMany spec h (T f,sp) = go 2
+checkMany spec h (T f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
   where
-    go 10     = return []
+    go 11     = return []
     go n      = checkAt n >>= \case
-                  (d,Nothing) -> do let s = printf "%d\t%.2f\t%s" n d (show TimeOut)
+                  (d,Nothing) -> do let s = printf "%s\t%d\t%.2f\t%s" sp n d (show TimeOut)
                                     putStrLn s >> hFlush stdout
                                     hPutStrLn h s >> hFlush h
                                     return [(n,d,TimeOut)]
                   --NOTE: ignore counter-examples for the sake of exploring coverage
                   --(d,Just (Failed s)) -> return [(n,d,Completed (Failed s))]
-                  (d,Just r)  -> do let s = printf "%d\t%.2f\t%s" n d (show (Complete r))
+                  (d,Just r)  -> do let s = printf "%s\t%d\t%.2f\t%s" sp n d (show (Complete r))
                                     putStrLn s >> hFlush stdout
                                     hPutStrLn h s >> hFlush h
                                     ((n,d,Complete r):) <$> go (n+1)
-    checkAt n = timed $ timeout time $ runGen spec "$file$" $ testFun f sp n
+    checkAt n = timed $ timeout time $ runGen spec "$file$" $ testFunIgnoringFailure f sp n
 
 time = $timeout$ # Minute
 

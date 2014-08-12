@@ -1,11 +1,11 @@
-{-# LANGUAGE ConstraintKinds      #-}
-{-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE BangPatterns         #-}
+{-# LANGUAGE ConstraintKinds      #-}
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE LambdaCase           #-}
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE ViewPatterns         #-}
 module Test.LiquidCheck.Testable where
 
@@ -19,8 +19,8 @@ import           Data.Proxy
 import           Text.Printf
 
 import           Language.Fixpoint.Types
-import           Language.Haskell.Liquid.Types (RType (..), SpecType, bkClass,
-                                                bkUniv, bkArrowDeep)
+import           Language.Haskell.Liquid.Types (RType (..), SpecType,
+                                                bkArrowDeep, bkClass, bkUniv)
 
 import           Test.LiquidCheck.Constrain
 import           Test.LiquidCheck.Driver
@@ -33,14 +33,14 @@ import           Test.LiquidCheck.Util
 type CanTest f = (Testable f, Show (Args f), Constrain (Res f))
 
 test :: CanTest f => f -> Int -> SpecType -> Gen Result
-test f d t 
+test f d t
   = do xs <- genArgs f d t
        cts <- gets freesyms
        vals <- allSat $ map symbol xs
        let (xs, tis, to) = bkArrowDeep $ stripQuals t
        process d f vals cts (zip xs tis) to
 
-process :: CanTest f 
+process :: CanTest f
         => Int -> f -> [[Value]] -> [(Symbol,Symbol)] -> [(Symbol,SpecType)] -> SpecType
         -> Gen Result
 process d f vs cts xts to = go vs 0
@@ -54,13 +54,16 @@ process d f vs cts xts to = go vs 0
       er <- io $ try $ evaluate (apply f xs)
       whenVerbose $ io $ print er
       case er of
-        Left (e :: SomeException) -> return $ Failed $ show xs
+        Left (e :: SomeException) -> mbKeepGoing xs vss n
         Right r -> do
           let env = map (second (`app` [])) cts ++ mkExprs f (map fst xts) xs
           sat <- evalType (M.fromList env) to (toExpr r)
           case sat of
-            False -> return $ Failed $ show xs
+            False -> mbKeepGoing xs vss n
             True -> go vss (n+1)
+    mbKeepGoing xs vss n = do
+      kg <- gets keepGoing
+      if kg then go vss (n+1) else return (Failed $ show xs)
 
 class Testable f where
   genArgs    :: f -> Int -> SpecType -> Gen [Variable]
@@ -74,11 +77,11 @@ instance ( Constrain a, Constrain b
   => Testable (a -> b) where
   genArgs _ d (stripQuals -> (RFun x i o _))
     = (:[]) <$> gen (Proxy :: Proxy a) d i
-  stitchArgs _ d [t] 
+  stitchArgs _ d [t]
     = stitch d t
-  apply f a 
+  apply f a
     = f a
-  mkExprs _ [x] a 
+  mkExprs _ [x] a
     = [(x,toExpr a)]
 
 instance ( Constrain a, Constrain b, Constrain c
@@ -94,9 +97,9 @@ instance ( Constrain a, Constrain b, Constrain c
     = do b <- stitch d tb
          a <- stitch d ta
          return (a,b)
-  apply f (a,b) 
+  apply f (a,b)
     = f a b
-  mkExprs _ [xa,xb] (a,b) 
+  mkExprs _ [xa,xb] (a,b)
     = [(xa,toExpr a), (xb,toExpr b)]
 
 instance ( Constrain a, Constrain b, Constrain c, Constrain d
@@ -115,9 +118,9 @@ instance ( Constrain a, Constrain b, Constrain c, Constrain d
          b <- stitch d tb
          a <- stitch d ta
          return (a,b,c)
-  apply f (a,b,c) 
+  apply f (a,b,c)
     = f a b c
-  mkExprs _ [xa,xb,xc] (a,b,c) 
+  mkExprs _ [xa,xb,xc] (a,b,c)
     = [(xa,toExpr a), (xb,toExpr b), (xc,toExpr c)]
 
 instance ( Constrain a, Constrain b, Constrain c, Constrain d, Constrain e
@@ -139,7 +142,7 @@ instance ( Constrain a, Constrain b, Constrain c, Constrain d, Constrain e
          b <- stitch sz tb
          a <- stitch sz ta
          return (a,b,c,d)
-  apply f (a,b,c,d) 
+  apply f (a,b,c,d)
     = f a b c d
   mkExprs _ [xa,xb,xc,xd] (a,b,c,d)
     = [(xa,toExpr a), (xb,toExpr b), (xc,toExpr c), (xd,toExpr d)]
