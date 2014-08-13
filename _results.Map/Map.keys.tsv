@@ -1,9 +1,0 @@
-Depth	Time(s)	Result
-2	0.03	Completed (Passed 3)
-3	0.07	Completed (Passed 10)
-4	0.22	Completed (Passed 21)
-5	0.88	Completed (Passed 56)
-6	4.07	Completed (Passed 153)
-7	18.51	Completed (Passed 379)
-8	97.52	Completed (Passed 985)
-9	300.07	TimedOut

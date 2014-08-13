@@ -1,0 +1,662 @@
+Testing Map.!..
+Map.!	2	0.97	Complete (Passed 12)
+Map.!	3	1.12	Complete (Passed 84)
+Map.!	4	2.21	Complete (Passed 280)
+Map.!	5	9.14	Complete (Passed 918)
+Map.!	6	50.54	Complete (Passed 2653)
+Map.!	7	60.28	TimeOut
+Testing Map.\\..
+Map.\\	2	1.31	Complete (Passed 16)
+Map.\\	3	2.94	Complete (Passed 441)
+Map.\\	4	41.64	Complete (Passed 3136)
+Map.\\	5	60.06	TimeOut
+Testing Map.lookup..
+Map.lookup	2	1.25	Complete (Passed 12)
+Map.lookup	3	1.30	Complete (Passed 84)
+Map.lookup	4	1.98	Complete (Passed 280)
+Map.lookup	5	8.69	Complete (Passed 918)
+Map.lookup	6	48.62	Complete (Passed 2653)
+Map.lookup	7	60.06	TimeOut
+Testing Map.member..
+Map.member	2	2.08	Complete (Passed 12)
+Map.member	3	2.18	Complete (Passed 84)
+Map.member	4	2.85	Complete (Passed 280)
+Map.member	5	9.53	Complete (Passed 918)
+Map.member	6	49.33	Complete (Passed 2653)
+Map.member	7	60.07	TimeOut
+Testing Map.notMember..
+Map.notMember	2	2.24	Complete (Passed 12)
+Map.notMember	3	1.62	Complete (Passed 84)
+Map.notMember	4	2.67	Complete (Passed 280)
+Map.notMember	5	9.57	Complete (Passed 918)
+Map.notMember	6	48.26	Complete (Passed 2653)
+Map.notMember	7	60.06	TimeOut
+Testing Map.findWithDefault..
+Map.findWithDefault	2	1.26	Complete (Passed 12)
+Map.findWithDefault	3	1.38	Complete (Passed 84)
+Map.findWithDefault	4	2.05	Complete (Passed 280)
+Map.findWithDefault	5	8.71	Complete (Passed 918)
+Map.findWithDefault	6	49.32	Complete (Passed 2653)
+Map.findWithDefault	7	60.06	TimeOut
+Testing Map.lookupLT..
+Map.lookupLT	2	1.21	Complete (Passed 12)
+Map.lookupLT	3	0.92	Complete (Passed 84)
+Map.lookupLT	4	2.16	Complete (Passed 280)
+Map.lookupLT	5	8.88	Complete (Passed 918)
+Map.lookupLT	6	47.92	Complete (Passed 2653)
+Map.lookupLT	7	60.06	TimeOut
+Testing Map.lookupGT..
+Map.lookupGT	2	1.34	Complete (Passed 12)
+Map.lookupGT	3	1.21	Complete (Passed 84)
+Map.lookupGT	4	1.98	Complete (Passed 280)
+Map.lookupGT	5	8.81	Complete (Passed 918)
+Map.lookupGT	6	48.07	Complete (Passed 2653)
+Map.lookupGT	7	60.06	TimeOut
+Testing Map.lookupLE..
+Map.lookupLE	2	1.37	Complete (Passed 12)
+Map.lookupLE	3	0.99	Complete (Passed 84)
+Map.lookupLE	4	2.31	Complete (Passed 280)
+Map.lookupLE	5	8.86	Complete (Passed 918)
+Map.lookupLE	6	45.33	Complete (Passed 2653)
+Map.lookupLE	7	60.06	TimeOut
+Testing Map.lookupGE..
+Map.lookupGE	2	1.08	Complete (Passed 12)
+Map.lookupGE	3	1.10	Complete (Passed 84)
+Map.lookupGE	4	2.24	Complete (Passed 280)
+Map.lookupGE	5	8.68	Complete (Passed 918)
+Map.lookupGE	6	49.26	Complete (Passed 2653)
+Map.lookupGE	7	60.06	TimeOut
+Testing Map.singleton..
+Map.singleton	2	1.34	Complete (Passed 3)
+Map.singleton	3	0.92	Complete (Passed 4)
+Map.singleton	4	1.23	Complete (Passed 5)
+Map.singleton	5	0.73	Complete (Passed 6)
+Map.singleton	6	1.07	Complete (Passed 7)
+Map.singleton	7	1.04	Complete (Passed 8)
+Map.singleton	8	0.92	Complete (Passed 9)
+Map.singleton	9	0.97	Complete (Passed 10)
+Map.singleton	10	0.85	Complete (Passed 11)
+Testing Map.insert..
+Map.insert	2	1.07	Complete (Passed 12)
+Map.insert	3	1.75	Complete (Passed 84)
+Map.insert	4	2.81	Complete (Passed 280)
+Map.insert	5	12.71	Complete (Passed 918)
+Map.insert	6	60.00	TimeOut
+Testing Map.insertWith..
+Map.insertWith	2	1.19	Complete (Passed 12)
+Map.insertWith	3	1.19	Complete (Passed 84)
+Map.insertWith	4	2.95	Complete (Passed 280)
+Map.insertWith	5	12.44	Complete (Passed 918)
+Map.insertWith	6	60.04	TimeOut
+Testing Map.insertWithKey..
+Map.insertWithKey	2	0.90	Complete (Passed 12)
+Map.insertWithKey	3	1.20	Complete (Passed 84)
+Map.insertWithKey	4	2.97	Complete (Passed 280)
+Map.insertWithKey	5	12.41	Complete (Passed 918)
+Map.insertWithKey	6	60.07	TimeOut
+Testing Map.insertLookupWithKey..
+Map.insertLookupWithKey	2	1.13	Complete (Passed 12)
+Map.insertLookupWithKey	3	1.05	Complete (Passed 84)
+Map.insertLookupWithKey	4	2.73	Complete (Passed 280)
+Map.insertLookupWithKey	5	12.80	Complete (Passed 918)
+Map.insertLookupWithKey	6	59.72	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.delete..
+Map.delete	2	1.19	Complete (Passed 12)
+Map.delete	3	0.96	Complete (Passed 84)
+Map.delete	4	2.83	Complete (Passed 280)
+Map.delete	5	11.20	Complete (Passed 918)
+Map.delete	6	58.26	Complete (Passed 2653)
+Map.delete	7	60.06	TimeOut
+Testing Map.adjust..
+Map.adjust	2	1.35	Complete (Passed 12)
+Map.adjust	3	0.84	Complete (Passed 84)
+Map.adjust	4	2.45	Complete (Passed 280)
+Map.adjust	5	11.62	Complete (Passed 918)
+Map.adjust	6	59.23	Complete (Passed 2653)
+Map.adjust	7	60.06	TimeOut
+Testing Map.adjustWithKey..
+Map.adjustWithKey	2	1.32	Complete (Passed 12)
+Map.adjustWithKey	3	1.44	Complete (Passed 84)
+Map.adjustWithKey	4	2.56	Complete (Passed 280)
+Map.adjustWithKey	5	11.80	Complete (Passed 918)
+Map.adjustWithKey	6	59.75	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.update..
+Map.update	2	2.12	Complete (Passed 12)
+Map.update	3	1.90	Complete (Passed 84)
+Map.update	4	3.87	Complete (Passed 280)
+Map.update	5	15.52	Complete (Passed 918)
+Map.update	6	60.01	TimeOut
+Testing Map.updateWithKey..
+Map.updateWithKey	2	1.99	Complete (Passed 12)
+Map.updateWithKey	3	2.20	Complete (Passed 84)
+Map.updateWithKey	4	3.63	Complete (Passed 280)
+Map.updateWithKey	5	15.53	Complete (Passed 918)
+Map.updateWithKey	6	60.03	TimeOut
+Testing Map.updateLookupWithKey..
+Map.updateLookupWithKey	2	2.22	Complete (Passed 12)
+Map.updateLookupWithKey	3	1.97	Complete (Passed 84)
+Map.updateLookupWithKey	4	4.87	Complete (Passed 280)
+Map.updateLookupWithKey	5	15.65	Complete (Passed 918)
+Map.updateLookupWithKey	6	60.01	TimeOut
+Testing Map.alter..
+Map.alter	2	1.15	Complete (Passed 12)
+Map.alter	3	1.34	Complete (Passed 84)
+Map.alter	4	2.21	Complete (Passed 280)
+Map.alter	5	17.17	Complete (Passed 918)
+Map.alter	6	60.05	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.findIndex..
+Map.findIndex	2	0.09	Complete (Passed 12)
+Map.findIndex	3	0.24	Complete (Passed 84)
+Map.findIndex	4	1.34	Complete (Passed 280)
+Map.findIndex	5	8.16	Complete (Passed 918)
+Map.findIndex	6	47.68	Complete (Passed 2653)
+Map.findIndex	7	60.01	TimeOut
+Testing Map.lookupIndex..
+Map.lookupIndex	2	0.09	Complete (Passed 12)
+Map.lookupIndex	3	0.24	Complete (Passed 84)
+Map.lookupIndex	4	1.34	Complete (Passed 280)
+Map.lookupIndex	5	8.27	Complete (Passed 918)
+Map.lookupIndex	6	48.07	Complete (Passed 2653)
+Map.lookupIndex	7	60.01	TimeOut
+Testing Map.elemAt..
+Map.elemAt	2	1.40	Complete (Passed 20)
+Map.elemAt	3	1.46	Complete (Passed 147)
+Map.elemAt	4	3.46	Complete (Passed 504)
+Map.elemAt	5	17.38	Complete (Passed 1683)
+Map.elemAt	6	60.01	TimeOut
+Testing Map.updateAt..
+Map.updateAt	2	2.49	Complete (Passed 20)
+Map.updateAt	3	2.21	Complete (Passed 147)
+Map.updateAt	4	5.05	Complete (Passed 504)
+Map.updateAt	5	22.28	Complete (Passed 1683)
+Map.updateAt	6	60.01	TimeOut
+Testing Map.deleteAt..
+Map.deleteAt	2	0.06	Complete (Passed 20)
+Map.deleteAt	3	1.47	Complete (Passed 147)
+Map.deleteAt	4	3.17	Complete (Passed 504)
+Map.deleteAt	5	18.52	Complete (Passed 1683)
+Map.deleteAt	6	60.01	TimeOut
+Testing Map.findMin..
+Map.findMin	2	0.92	Complete (Passed 4)
+Map.findMin	3	1.03	Complete (Passed 21)
+Map.findMin	4	1.23	Complete (Passed 56)
+Map.findMin	5	1.85	Complete (Passed 153)
+Map.findMin	6	7.61	Complete (Passed 379)
+Map.findMin	7	33.98	Complete (Passed 985)
+Map.findMin	8	60.01	TimeOut
+Testing Map.findMax..
+Map.findMax	2	1.14	Complete (Passed 4)
+Map.findMax	3	0.62	Complete (Passed 21)
+Map.findMax	4	1.23	Complete (Passed 56)
+Map.findMax	5	2.17	Complete (Passed 153)
+Map.findMax	6	7.51	Complete (Passed 379)
+Map.findMax	7	33.49	Complete (Passed 985)
+Map.findMax	8	60.01	TimeOut
+Testing Map.deleteMin..
+Map.deleteMin	2	0.13	Complete (Passed 4)
+Map.deleteMin	3	1.16	Complete (Passed 21)
+Map.deleteMin	4	1.20	Complete (Passed 56)
+Map.deleteMin	5	2.69	Complete (Passed 153)
+Map.deleteMin	6	8.15	Complete (Passed 379)
+Map.deleteMin	7	37.05	Complete (Passed 985)
+Map.deleteMin	8	60.01	TimeOut
+Testing Map.deleteMax..
+Map.deleteMax	2	0.09	Complete (Passed 4)
+Map.deleteMax	3	1.26	Complete (Passed 21)
+Map.deleteMax	4	0.98	Complete (Passed 56)
+Map.deleteMax	5	2.40	Complete (Passed 153)
+Map.deleteMax	6	8.43	Complete (Passed 379)
+Map.deleteMax	7	36.60	Complete (Passed 985)
+Map.deleteMax	8	60.02	TimeOut
+Testing Map.updateMin..
+Map.updateMin	2	1.98	Complete (Passed 4)
+Map.updateMin	3	1.94	Complete (Passed 21)
+Map.updateMin	4	2.28	Complete (Passed 56)
+Map.updateMin	5	3.93	Complete (Passed 153)
+Map.updateMin	6	12.21	Complete (Passed 379)
+Map.updateMin	7	57.61	Complete (Passed 985)
+Map.updateMin	8	60.12	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.updateMax..
+Map.updateMax	2	1.92	Complete (Passed 4)
+Map.updateMax	3	1.75	Complete (Passed 21)
+Map.updateMax	4	2.20	Complete (Passed 56)
+Map.updateMax	5	3.81	Complete (Passed 153)
+Map.updateMax	6	12.81	Complete (Passed 379)
+Map.updateMax	7	56.42	Complete (Passed 985)
+Map.updateMax	8	60.02	TimeOut
+Testing Map.updateMinWithKey..
+Map.updateMinWithKey	2	2.23	Complete (Passed 4)
+Map.updateMinWithKey	3	2.06	Complete (Passed 21)
+Map.updateMinWithKey	4	2.34	Complete (Passed 56)
+Map.updateMinWithKey	5	3.97	Complete (Passed 153)
+Map.updateMinWithKey	6	12.44	Complete (Passed 379)
+Map.updateMinWithKey	7	56.57	Complete (Passed 985)
+Map.updateMinWithKey	8	60.10	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.updateMaxWithKey..
+Map.updateMaxWithKey	2	1.84	Complete (Passed 4)
+Map.updateMaxWithKey	3	1.65	Complete (Passed 21)
+Map.updateMaxWithKey	4	2.09	Complete (Passed 56)
+Map.updateMaxWithKey	5	4.18	Complete (Passed 153)
+Map.updateMaxWithKey	6	11.85	Complete (Passed 379)
+Map.updateMaxWithKey	7	56.37	Complete (Passed 985)
+Map.updateMaxWithKey	8	60.10	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.minViewWithKey..
+Map.minViewWithKey	2	1.54	Complete (Passed 4)
+Map.minViewWithKey	3	0.77	Complete (Passed 21)
+Map.minViewWithKey	4	1.46	Complete (Passed 56)
+Map.minViewWithKey	5	2.34	Complete (Passed 153)
+Map.minViewWithKey	6	8.92	Complete (Passed 379)
+Map.minViewWithKey	7	37.99	Complete (Passed 985)
+Map.minViewWithKey	8	60.01	TimeOut
+Testing Map.maxViewWithKey..
+Map.maxViewWithKey	2	1.26	Complete (Passed 4)
+Map.maxViewWithKey	3	1.12	Complete (Passed 21)
+Map.maxViewWithKey	4	1.02	Complete (Passed 56)
+Map.maxViewWithKey	5	3.11	Complete (Passed 153)
+Map.maxViewWithKey	6	8.76	Complete (Passed 379)
+Map.maxViewWithKey	7	37.92	Complete (Passed 985)
+Map.maxViewWithKey	8	60.22	TimeOut
+Testing Map.minView..
+Map.minView	2	1.05	Complete (Passed 4)
+Map.minView	3	1.07	Complete (Passed 21)
+Map.minView	4	1.37	Complete (Passed 56)
+Map.minView	5	2.57	Complete (Passed 153)
+Map.minView	6	8.86	Complete (Passed 379)
+Map.minView	7	37.53	Complete (Passed 985)
+Map.minView	8	60.01	TimeOut
+Testing Map.maxView..
+Map.maxView	2	1.11	Complete (Passed 4)
+Map.maxView	3	0.84	Complete (Passed 21)
+Map.maxView	4	1.29	Complete (Passed 56)
+Map.maxView	5	2.33	Complete (Passed 153)
+Map.maxView	6	9.00	Complete (Passed 379)
+Map.maxView	7	37.44	Complete (Passed 985)
+Map.maxView	8	60.01	TimeOut
+Testing Map.unions..
+Map.unions	2	1.24	Complete (Passed 5)
+Map.unions	3	4.30	Complete (Passed 463)
+Map.unions	4	60.00	TimeOut
+Testing Map.unionsWith..
+Map.unionsWith	2	1.27	Complete (Passed 5)
+Map.unionsWith	3	4.14	Complete (Passed 463)
+Map.unionsWith	4	60.02	TimeOut
+Testing Map.union..
+Map.union	2	1.20	Complete (Passed 16)
+Map.union	3	3.99	Complete (Passed 441)
+Map.union	4	50.51	Complete (Passed 3136)
+Map.union	5	60.01	TimeOut
+Testing Map.unionWith..
+Map.unionWith	2	1.02	Complete (Passed 16)
+Map.unionWith	3	3.59	Complete (Passed 441)
+Map.unionWith	4	50.85	Complete (Passed 3136)
+Map.unionWith	5	60.02	TimeOut
+Testing Map.unionWithKey..
+Map.unionWithKey	2	1.24	Complete (Passed 16)
+Map.unionWithKey	3	2.77	Complete (Passed 441)
+Map.unionWithKey	4	50.48	Complete (Passed 3136)
+Map.unionWithKey	5	60.01	TimeOut
+Testing Map.difference..
+Map.difference	2	1.05	Complete (Passed 16)
+Map.difference	3	3.26	Complete (Passed 441)
+Map.difference	4	43.21	Complete (Passed 3136)
+Map.difference	5	60.00	TimeOut
+Testing Map.differenceWith..
+Map.differenceWith	2	1.00	Complete (Passed 16)
+Map.differenceWith	3	4.43	Complete (Passed 441)
+Map.differenceWith	4	60.09	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.differenceWithKey..
+Map.differenceWithKey	2	1.21	Complete (Passed 16)
+Map.differenceWithKey	3	4.88	Complete (Passed 441)
+Map.differenceWithKey	4	60.00	TimeOut
+Testing Map.intersection..
+Map.intersection	2	1.27	Complete (Passed 16)
+Map.intersection	3	3.11	Complete (Passed 441)
+Map.intersection	4	41.77	Complete (Passed 3136)
+Map.intersection	5	60.00	TimeOut
+Testing Map.intersectionWith..
+Map.intersectionWith	2	1.06	Complete (Passed 16)
+Map.intersectionWith	3	3.26	Complete (Passed 441)
+Map.intersectionWith	4	40.93	Complete (Passed 3136)
+Map.intersectionWith	5	60.03	TimeOut
+Testing Map.intersectionWithKey..
+Map.intersectionWithKey	2	1.26	Complete (Passed 16)
+Map.intersectionWithKey	3	2.98	Complete (Passed 441)
+Map.intersectionWithKey	4	41.95	Complete (Passed 3136)
+Map.intersectionWithKey	5	60.02	TimeOut
+Testing Map.mergeWithKey..
+Map.mergeWithKey	2	1.78	Complete (Passed 16)
+Map.mergeWithKey	3	12.80	Complete (Passed 441)
+Map.mergeWithKey	4	60.05	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.isSubmapOf..
+Map.isSubmapOf	2	2.05	Complete (Passed 16)
+Map.isSubmapOf	3	3.74	Complete (Passed 441)
+Map.isSubmapOf	4	38.85	Complete (Passed 3136)
+Map.isSubmapOf	5	60.01	TimeOut
+Testing Map.isSubmapOfBy..
+Map.isSubmapOfBy	2	4.37	Complete (Passed 16)
+Map.isSubmapOfBy	3	142.14	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.isProperSubmapOf..
+Map.isProperSubmapOf	2	1.83	Complete (Passed 16)
+Map.isProperSubmapOf	3	3.57	Complete (Passed 441)
+Map.isProperSubmapOf	4	39.69	Complete (Passed 3136)
+Map.isProperSubmapOf	5	60.00	TimeOut
+Testing Map.isProperSubmapOfBy..
+Map.isProperSubmapOfBy	2	1.74	Complete (Passed 16)
+Map.isProperSubmapOfBy	3	66.90	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.filter..
+Map.filter	2	4.61	Complete (Passed 4)
+Map.filter	3	19.12	Complete (Passed 21)
+Map.filter	4	49.74	Complete (Passed 56)
+Map.filter	5	136.72	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.filterWithKey..
+Map.filterWithKey	2	4.14	Complete (Passed 4)
+Map.filterWithKey	3	35.15	Complete (Passed 21)
+Map.filterWithKey	4	136.33	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.partition..
+Map.partition	2	4.08	Complete (Passed 4)
+Map.partition	3	3.18	Complete (Passed 21)
+Map.partition	4	3.40	Complete (Passed 56)
+Map.partition	5	5.37	Complete (Passed 153)
+Map.partition	6	14.11	Complete (Passed 379)
+Map.partition	7	56.66	Complete (Passed 985)
+Map.partition	8	60.10	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.partitionWithKey..
+Map.partitionWithKey	2	3.88	Complete (Passed 4)
+Map.partitionWithKey	3	3.30	Complete (Passed 21)
+Map.partitionWithKey	4	4.32	Complete (Passed 56)
+Map.partitionWithKey	5	7.40	Complete (Passed 153)
+Map.partitionWithKey	6	24.03	Complete (Passed 379)
+Map.partitionWithKey	7	60.03	TimeOut
+Testing Map.mapMaybe..
+Map.mapMaybe	2	1.81	Complete (Passed 4)
+Map.mapMaybe	3	1.94	Complete (Passed 21)
+Map.mapMaybe	4	2.32	Complete (Passed 56)
+Map.mapMaybe	5	4.01	Complete (Passed 153)
+Map.mapMaybe	6	10.81	Complete (Passed 379)
+Map.mapMaybe	7	55.17	Complete (Passed 985)
+Map.mapMaybe	8	60.02	TimeOut
+Testing Map.mapMaybeWithKey..
+Map.mapMaybeWithKey	2	1.76	Complete (Passed 4)
+Map.mapMaybeWithKey	3	2.46	Complete (Passed 21)
+Map.mapMaybeWithKey	4	2.01	Complete (Passed 56)
+Map.mapMaybeWithKey	5	5.98	Complete (Passed 153)
+Map.mapMaybeWithKey	6	21.58	Complete (Passed 379)
+Map.mapMaybeWithKey	7	60.07	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.mapEither..
+Map.mapEither	2	3.69	Complete (Passed 4)
+Map.mapEither	3	3.38	Complete (Passed 21)
+Map.mapEither	4	3.90	Complete (Passed 56)
+Map.mapEither	5	5.89	Complete (Passed 153)
+Map.mapEither	6	14.24	Complete (Passed 379)
+Map.mapEither	7	58.75	Complete (Passed 985)
+Map.mapEither	8	60.10	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.mapEitherWithKey..
+Map.mapEitherWithKey	2	3.87	Complete (Passed 4)
+Map.mapEitherWithKey	3	3.52	Complete (Passed 21)
+Map.mapEitherWithKey	4	4.24	Complete (Passed 56)
+Map.mapEitherWithKey	5	7.74	Complete (Passed 153)
+Map.mapEitherWithKey	6	23.82	Complete (Passed 379)
+Map.mapEitherWithKey	7	60.01	TimeOut
+Testing Map.map..
+Map.map	2	1.20	Complete (Passed 4)
+Map.map	3	1.18	Complete (Passed 21)
+Map.map	4	1.19	Complete (Passed 56)
+Map.map	5	2.73	Complete (Passed 153)
+Map.map	6	8.89	Complete (Passed 379)
+Map.map	7	38.20	Complete (Passed 985)
+Map.map	8	60.01	TimeOut
+Testing Map.mapWithKey..
+Map.mapWithKey	2	1.00	Complete (Passed 4)
+Map.mapWithKey	3	1.14	Complete (Passed 21)
+Map.mapWithKey	4	1.48	Complete (Passed 56)
+Map.mapWithKey	5	2.40	Complete (Passed 153)
+Map.mapWithKey	6	8.82	Complete (Passed 379)
+Map.mapWithKey	7	38.36	Complete (Passed 985)
+Map.mapWithKey	8	60.01	TimeOut
+Testing Map.mapAccum..
+Map.mapAccum	2	1.23	Complete (Passed 4)
+Map.mapAccum	3	0.71	Complete (Passed 21)
+Map.mapAccum	4	1.39	Complete (Passed 56)
+Map.mapAccum	5	2.57	Complete (Passed 153)
+Map.mapAccum	6	8.96	Complete (Passed 379)
+Map.mapAccum	7	38.21	Complete (Passed 985)
+Map.mapAccum	8	60.01	TimeOut
+Testing Map.mapAccumWithKey..
+Map.mapAccumWithKey	2	0.90	Complete (Passed 4)
+Map.mapAccumWithKey	3	1.07	Complete (Passed 21)
+Map.mapAccumWithKey	4	1.41	Complete (Passed 56)
+Map.mapAccumWithKey	5	2.69	Complete (Passed 153)
+Map.mapAccumWithKey	6	9.03	Complete (Passed 379)
+Map.mapAccumWithKey	7	38.61	Complete (Passed 985)
+Map.mapAccumWithKey	8	60.01	TimeOut
+Testing Map.mapAccumRWithKey..
+Map.mapAccumRWithKey	2	1.27	Complete (Passed 4)
+Map.mapAccumRWithKey	3	0.92	Complete (Passed 21)
+Map.mapAccumRWithKey	4	1.47	Complete (Passed 56)
+Map.mapAccumRWithKey	5	2.80	Complete (Passed 153)
+Map.mapAccumRWithKey	6	8.97	Complete (Passed 379)
+Map.mapAccumRWithKey	7	38.56	Complete (Passed 985)
+Map.mapAccumRWithKey	8	60.00	TimeOut
+Testing Map.mapKeys..
+Map.mapKeys	2	1.33	Complete (Passed 4)
+Map.mapKeys	3	0.88	Complete (Passed 21)
+Map.mapKeys	4	1.63	Complete (Passed 56)
+Map.mapKeys	5	4.69	Complete (Passed 153)
+Map.mapKeys	6	20.04	Complete (Passed 379)
+Map.mapKeys	7	60.07	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.mapKeysWith..
+Map.mapKeysWith	2	1.15	Complete (Passed 4)
+Map.mapKeysWith	3	1.15	Complete (Passed 21)
+Map.mapKeysWith	4	1.36	Complete (Passed 56)
+Map.mapKeysWith	5	4.33	Complete (Passed 153)
+Map.mapKeysWith	6	20.68	Complete (Passed 379)
+Map.mapKeysWith	7	60.08	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.mapKeysMonotonic..
+Map.mapKeysMonotonic	2	1.31	Complete (Passed 4)
+Map.mapKeysMonotonic	3	1.18	Complete (Passed 21)
+Map.mapKeysMonotonic	4	1.68	Complete (Passed 56)
+Map.mapKeysMonotonic	5	5.24	Complete (Passed 153)
+Map.mapKeysMonotonic	6	21.20	Complete (Passed 379)
+Map.mapKeysMonotonic	7	60.01	TimeOut
+Testing Map.foldr..
+Map.foldr	2	1.00	Complete (Passed 4)
+Map.foldr	3	1.09	Complete (Passed 21)
+Map.foldr	4	1.14	Complete (Passed 56)
+Map.foldr	5	2.80	Complete (Passed 153)
+Map.foldr	6	10.58	Complete (Passed 379)
+Map.foldr	7	50.80	Complete (Passed 985)
+Map.foldr	8	60.01	TimeOut
+Testing Map.foldr'..
+Map.foldr'	2	1.33	Complete (Passed 4)
+Map.foldr'	3	0.84	Complete (Passed 21)
+Map.foldr'	4	1.33	Complete (Passed 56)
+Map.foldr'	5	2.43	Complete (Passed 153)
+Map.foldr'	6	9.15	Complete (Passed 379)
+Map.foldr'	7	49.81	Complete (Passed 985)
+Map.foldr'	8	60.07	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.foldl..
+Map.foldl	2	1.01	Complete (Passed 4)
+Map.foldl	3	1.17	Complete (Passed 21)
+Map.foldl	4	1.27	Complete (Passed 56)
+Map.foldl	5	2.39	Complete (Passed 153)
+Map.foldl	6	10.44	Complete (Passed 379)
+Map.foldl	7	51.26	Complete (Passed 985)
+Map.foldl	8	60.11	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.foldl'..
+Map.foldl'	2	1.05	Complete (Passed 4)
+Map.foldl'	3	1.21	Complete (Passed 21)
+Map.foldl'	4	1.38	Complete (Passed 56)
+Map.foldl'	5	2.26	Complete (Passed 153)
+Map.foldl'	6	10.02	Complete (Passed 379)
+Map.foldl'	7	50.80	Complete (Passed 985)
+Map.foldl'	8	60.10	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.foldrWithKey..
+Map.foldrWithKey	2	1.33	Complete (Passed 4)
+Map.foldrWithKey	3	0.85	Complete (Passed 21)
+Map.foldrWithKey	4	1.31	Complete (Passed 56)
+Map.foldrWithKey	5	2.48	Complete (Passed 153)
+Map.foldrWithKey	6	10.69	Complete (Passed 379)
+Map.foldrWithKey	7	47.93	Complete (Passed 985)
+Map.foldrWithKey	8	60.02	TimeOut
+Testing Map.foldrWithKey'..
+Map.foldrWithKey'	2	1.31	Complete (Passed 4)
+Map.foldrWithKey'	3	0.84	Complete (Passed 21)
+Map.foldrWithKey'	4	1.28	Complete (Passed 56)
+Map.foldrWithKey'	5	2.80	Complete (Passed 153)
+Map.foldrWithKey'	6	9.73	Complete (Passed 379)
+Map.foldrWithKey'	7	50.20	Complete (Passed 985)
+Map.foldrWithKey'	8	60.11	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.foldlWithKey..
+Map.foldlWithKey	2	0.93	Complete (Passed 4)
+Map.foldlWithKey	3	1.07	Complete (Passed 21)
+Map.foldlWithKey	4	1.32	Complete (Passed 56)
+Map.foldlWithKey	5	2.54	Complete (Passed 153)
+Map.foldlWithKey	6	9.94	Complete (Passed 379)
+Map.foldlWithKey	7	49.50	Complete (Passed 985)
+Map.foldlWithKey	8	60.02	TimeOut
+Testing Map.foldlWithKey'..
+Map.foldlWithKey'	2	1.21	Complete (Passed 4)
+Map.foldlWithKey'	3	1.22	Complete (Passed 21)
+Map.foldlWithKey'	4	1.21	Complete (Passed 56)
+Map.foldlWithKey'	5	2.81	Complete (Passed 153)
+Map.foldlWithKey'	6	10.20	Complete (Passed 379)
+Map.foldlWithKey'	7	50.11	Complete (Passed 985)
+Map.foldlWithKey'	8	60.08	TimeOut
+WARNING: timeout seems to have been ignored...
+Testing Map.elems..
+Map.elems	2	1.02	Complete (Passed 4)
+Map.elems	3	1.16	Complete (Passed 21)
+Map.elems	4	1.34	Complete (Passed 56)
+Map.elems	5	2.27	Complete (Passed 153)
+Map.elems	6	8.17	Complete (Passed 379)
+Map.elems	7	34.36	Complete (Passed 985)
+Map.elems	8	60.07	TimeOut
+Testing Map.keys..
+Map.keys	2	0.19	Complete (Passed 4)
+Map.keys	3	0.09	Complete (Passed 21)
+Map.keys	4	0.34	Complete (Passed 56)
+Map.keys	5	1.46	Complete (Passed 153)
+Map.keys	6	7.16	Complete (Passed 379)
+Map.keys	7	34.20	Complete (Passed 985)
+Map.keys	8	60.01	TimeOut
+Testing Map.assocs..
+Map.assocs	2	1.13	Complete (Passed 4)
+Map.assocs	3	1.39	Complete (Passed 21)
+Map.assocs	4	0.99	Complete (Passed 56)
+Map.assocs	5	2.52	Complete (Passed 153)
+Map.assocs	6	8.56	Complete (Passed 379)
+Map.assocs	7	36.23	Complete (Passed 985)
+Map.assocs	8	60.01	TimeOut
+Testing Map.fromList..
+Map.fromList	2	1.26	Complete (Passed 4)
+Map.fromList	3	0.70	Complete (Passed 21)
+Map.fromList	4	1.29	Complete (Passed 156)
+Map.fromList	5	9.72	Complete (Passed 1555)
+Map.fromList	6	60.03	TimeOut
+Testing Map.fromListWith..
+Map.fromListWith	2	1.22	Complete (Passed 4)
+Map.fromListWith	3	1.15	Complete (Passed 21)
+Map.fromListWith	4	1.44	Complete (Passed 156)
+Map.fromListWith	5	10.01	Complete (Passed 1555)
+Map.fromListWith	6	60.00	TimeOut
+Testing Map.fromListWithKey..
+Map.fromListWithKey	2	1.03	Complete (Passed 4)
+Map.fromListWithKey	3	1.30	Complete (Passed 21)
+Map.fromListWithKey	4	1.27	Complete (Passed 156)
+Map.fromListWithKey	5	9.88	Complete (Passed 1555)
+Map.fromListWithKey	6	60.02	TimeOut
+Testing Map.toList..
+Map.toList	2	1.30	Complete (Passed 4)
+Map.toList	3	0.84	Complete (Passed 21)
+Map.toList	4	1.27	Complete (Passed 56)
+Map.toList	5	2.56	Complete (Passed 153)
+Map.toList	6	8.62	Complete (Passed 379)
+Map.toList	7	36.30	Complete (Passed 985)
+Map.toList	8	60.01	TimeOut
+Testing Map.toAscList..
+Map.toAscList	2	1.12	Complete (Passed 4)
+Map.toAscList	3	1.41	Complete (Passed 21)
+Map.toAscList	4	1.05	Complete (Passed 56)
+Map.toAscList	5	2.26	Complete (Passed 153)
+Map.toAscList	6	8.68	Complete (Passed 379)
+Map.toAscList	7	36.60	Complete (Passed 985)
+Map.toAscList	8	60.01	TimeOut
+Testing Map.toDescList..
+Map.toDescList	2	1.32	Complete (Passed 4)
+Map.toDescList	3	0.84	Complete (Passed 21)
+Map.toDescList	4	1.42	Complete (Passed 56)
+Map.toDescList	5	2.26	Complete (Passed 153)
+Map.toDescList	6	8.54	Complete (Passed 379)
+Map.toDescList	7	37.11	Complete (Passed 985)
+Map.toDescList	8	60.01	TimeOut
+Testing Map.fromAscList..
+Map.fromAscList	2	1.32	Complete (Passed 4)
+Map.fromAscList	3	0.82	Complete (Passed 15)
+Map.fromAscList	4	1.14	Complete (Passed 56)
+Map.fromAscList	5	1.93	Complete (Passed 210)
+Map.fromAscList	6	5.30	Complete (Passed 792)
+Map.fromAscList	7	24.53	Complete (Passed 3003)
+Map.fromAscList	8	60.03	TimeOut
+Testing Map.fromAscListWith..
+Map.fromAscListWith	2	1.29	Complete (Passed 4)
+Map.fromAscListWith	3	0.60	Complete (Passed 15)
+Map.fromAscListWith	4	1.39	Complete (Passed 56)
+Map.fromAscListWith	5	1.44	Complete (Passed 210)
+Map.fromAscListWith	6	5.42	Complete (Passed 792)
+Map.fromAscListWith	7	24.21	Complete (Passed 3003)
+Map.fromAscListWith	8	60.00	TimeOut
+Testing Map.fromAscListWithKey..
+Map.fromAscListWithKey	2	1.04	Complete (Passed 4)
+Map.fromAscListWithKey	3	1.33	Complete (Passed 15)
+Map.fromAscListWithKey	4	0.93	Complete (Passed 56)
+Map.fromAscListWithKey	5	2.19	Complete (Passed 210)
+Map.fromAscListWithKey	6	5.09	Complete (Passed 792)
+Map.fromAscListWithKey	7	24.60	Complete (Passed 3003)
+Map.fromAscListWithKey	8	60.02	TimeOut
+Testing Map.fromDistinctAscList..
+Map.fromDistinctAscList	2	0.99	Complete (Passed 4)
+Map.fromDistinctAscList	3	1.05	Complete (Passed 11)
+Map.fromDistinctAscList	4	1.15	Complete (Passed 26)
+Map.fromDistinctAscList	5	0.97	Complete (Passed 57)
+Map.fromDistinctAscList	6	1.56	Complete (Passed 120)
+Map.fromDistinctAscList	7	2.23	Complete (Passed 247)
+Map.fromDistinctAscList	8	5.34	Complete (Passed 502)
+Map.fromDistinctAscList	9	11.07	Complete (Passed 1013)
+Map.fromDistinctAscList	10	23.66	Complete (Passed 2036)
+Testing Map.split..
+Map.split	2	1.25	Complete (Passed 12)
+Map.split	3	1.01	Complete (Passed 84)
+Map.split	4	2.95	Complete (Passed 280)
+Map.split	5	11.37	Complete (Passed 918)
+Map.split	6	56.83	Complete (Passed 2653)
+Map.split	7	60.00	TimeOut
+Testing Map.splitLookup..
+Map.splitLookup	2	1.02	Complete (Passed 12)
+Map.splitLookup	3	1.30	Complete (Passed 84)
+Map.splitLookup	4	2.53	Complete (Passed 280)
+Map.splitLookup	5	11.78	Complete (Passed 918)
+Map.splitLookup	6	57.42	Complete (Passed 2653)
+Map.splitLookup	7	60.01	TimeOut
+done
+
