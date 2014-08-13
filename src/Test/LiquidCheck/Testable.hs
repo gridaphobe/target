@@ -11,7 +11,7 @@ module Test.LiquidCheck.Testable where
 
 import           Control.Applicative
 import           Control.Arrow                 (second)
-import           Control.Exception             (evaluate)
+import           Control.Exception             (AsyncException, evaluate)
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.State
@@ -40,7 +40,7 @@ test f d t
        vals <- allSat $ map symbol xs
        let (xs, tis, to) = bkArrowDeep $ stripQuals t
        try (process d f vals cts (zip xs tis) to) >>= \case
-         Left  (e :: LiquidException) -> return $ Failed $ show e
+         Left  (e :: LiquidException) -> return $ Errored $ show e
          Right r                      -> return r
 
 process :: CanTest f
@@ -57,7 +57,10 @@ process d f vs cts xts to = go vs 0
       er <- io $ try $ evaluate (apply f xs)
       whenVerbose $ io $ print er
       case er of
-        Left (e :: SomeException) -> mbKeepGoing xs vss n
+        Left (e :: SomeException)
+          -- DON'T catch AsyncExceptions since they are used by @timeout@
+          | Just (e :: AsyncException) <- fromException e -> throwM e
+          | otherwise -> mbKeepGoing xs vss n
         Right r -> do
           let env = map (second (`app` [])) cts ++ mkExprs f (map fst xts) xs
           sat <- evalType (M.fromList env) to (toExpr r)
@@ -130,14 +133,14 @@ instance ( Constrain a, Constrain b, Constrain c, Constrain d, Constrain e
          , Args (a -> b -> c -> d -> e) ~ (a,b,c,d)
          , Res (a -> b -> c -> d -> e) ~ e)
   => Testable (a -> b -> c -> d -> e) where
-  genArgs _ d (stripQuals -> (RFun xa ta (RFun xb tb (RFun xc tc (RFun xd td to _) _) _)_))
-    = do a <- gen (Proxy :: Proxy a) d ta
+  genArgs _ sz (stripQuals -> (RFun xa ta (RFun xb tb (RFun xc tc (RFun xd td to _) _) _) _))
+    = do a <- gen (Proxy :: Proxy a) sz ta
          let tb' = subst (mkSubst [(xa, var a)]) tb
-         b <- gen (Proxy :: Proxy b) d tb'
+         b <- gen (Proxy :: Proxy b) sz tb'
          let tc' = subst (mkSubst [(xa, var a), (xb, var b)]) tc
-         c <- gen (Proxy :: Proxy c) d tc'
+         c <- gen (Proxy :: Proxy c) sz tc'
          let td' = subst (mkSubst [(xa, var a), (xb, var b), (xc, var c)]) td
-         d <- gen (Proxy :: Proxy d) d td'
+         d <- gen (Proxy :: Proxy d) sz td'
          return [a,b,c,d]
   stitchArgs _ sz [ta,tb,tc,td]
     = do d <- stitch sz td
@@ -150,3 +153,29 @@ instance ( Constrain a, Constrain b, Constrain c, Constrain d, Constrain e
   mkExprs _ [xa,xb,xc,xd] (a,b,c,d)
     = [(xa,toExpr a), (xb,toExpr b), (xc,toExpr c), (xd,toExpr d)]
 
+instance ( Constrain a, Constrain b, Constrain c, Constrain d, Constrain e, Constrain f
+         , Args (a -> b -> c -> d -> e -> f) ~ (a,b,c,d,e)
+         , Res (a -> b -> c -> d -> e -> f) ~ f)
+  => Testable (a -> b -> c -> d -> e -> f) where
+  genArgs _ sz (stripQuals -> (RFun xa ta (RFun xb tb (RFun xc tc (RFun xd td (RFun xe te to _) _) _) _) _))
+    = do a <- gen (Proxy :: Proxy a) sz ta
+         let tb' = subst (mkSubst [(xa, var a)]) tb
+         b <- gen (Proxy :: Proxy b) sz tb'
+         let tc' = subst (mkSubst [(xa, var a), (xb, var b)]) tc
+         c <- gen (Proxy :: Proxy c) sz tc'
+         let td' = subst (mkSubst [(xa, var a), (xb, var b), (xc, var c)]) td
+         d <- gen (Proxy :: Proxy d) sz td'
+         let te' = subst (mkSubst [(xa, var a), (xb, var b), (xc, var c), (xd, var d)]) te
+         e <- gen (Proxy :: Proxy e) sz te'
+         return [a,b,c,d,e]
+  stitchArgs _ sz [ta,tb,tc,td,te]
+    = do e <- stitch sz te
+         d <- stitch sz td
+         c <- stitch sz tc
+         b <- stitch sz tb
+         a <- stitch sz ta
+         return (a,b,c,d,e)
+  apply f (a,b,c,d,e)
+    = f a b c d e
+  mkExprs _ [xa,xb,xc,xd,xe] (a,b,c,d,e)
+    = [(xa,toExpr a), (xb,toExpr b), (xc,toExpr c), (xd,toExpr d), (xe,toExpr e)]
