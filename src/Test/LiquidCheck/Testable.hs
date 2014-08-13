@@ -60,6 +60,8 @@ process d f vs cts xts to = go vs 0
         Left (e :: SomeException)
           -- DON'T catch AsyncExceptions since they are used by @timeout@
           | Just (e :: AsyncException) <- fromException e -> throwM e
+          | Just e@(SmtError _) <- fromException e -> throwM e
+          | Just e@(ExpectedValues _) <- fromException e -> throwM e
           | otherwise -> mbKeepGoing xs vss n
         Right r -> do
           let env = map (second (`app` [])) cts ++ mkExprs f (map fst xts) xs

@@ -6,6 +6,7 @@ module Test.LiquidCheck.Gen where
 
 import           Control.Applicative
 import           Control.Arrow
+import qualified Control.Exception                as Ex
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.State
@@ -39,7 +40,9 @@ instance Symbolic T.Text where
 
 newtype Gen a = Gen (StateT GenState IO a)
   deriving (Functor, Applicative, Monad, MonadIO
-           ,MonadState GenState, MonadCatch, MonadThrow)
+           ,MonadState GenState, MonadCatch)
+instance MonadThrow Gen where
+  throwM = Ex.throw
 
 runGen :: GhcSpec -> FilePath -> Gen a -> IO a
 runGen e f (Gen x)
