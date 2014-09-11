@@ -112,7 +112,7 @@ instance LSC.Serial RationalRect where
   series = LSC.cons4 RationalRect
 
 instance LSC.Serial Rational where
-  series = LSC.cons2 (%)
+  series = LSC.cons1 (%) LSC.>< (\d -> LSC.drawnFrom [1 .. fromIntegral d])
 
 
 -- instance (Ord k, SC.Serial m k, SC.Serial m v) => SC.Serial m (M.Map k v) where
@@ -466,7 +466,7 @@ prop_focus_left_master_lc (n :: Int) (x::T_LC) =
 prop_focus_left_master_sc (n :: Int) (x::T_LC) = noDuplicates x && n >= 0 SC.==>
     index (foldr (const focusUp) x [1..n]) == index x
 prop_focus_left_master_lsc (n :: Int) (x::T_LC) = noDuplicates x && n >= 0 LSC.==>
-    index (foldr (const focusUp) x [1..n]) == index (trace (show x) x)
+    index (foldr (const focusUp) x [1..n]) == index x
 prop_focus_left_master_qc (n :: Int) (x::T_LC) = noDuplicates x && n >= 0 QC.==>
     index (foldr (const focusUp) x [1..n]) == index x
 
