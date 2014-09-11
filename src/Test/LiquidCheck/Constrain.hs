@@ -35,7 +35,7 @@ import           Text.Show.Functions
 import qualified GHC
 
 import           Language.Fixpoint.SmtLib2
-import           Language.Fixpoint.Types          hiding (prop)
+import           Language.Fixpoint.Types          hiding (prop, ofReft)
 import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Tidy     (tidySymbol)
@@ -326,19 +326,19 @@ instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
 
 instance (Constrain a) => GConstrain (K1 i a) where
   gtype p    = getType (reproxy p :: Proxy a)
-  -- ggen p d t = gen (reproxy p :: Proxy a) d t
   ggen p d t = do let p' = reproxy p :: Proxy a
                   ty <- gets makingTy
                   depth <- gets depth
-                  let d' = if getType p' == ty
+                  sc <- gets scDepth
+                  let d' = if getType p' == ty || sc
                               then d
                               else depth
                   gen p' d' t
-  -- gstitch d = K1 <$> stitch d undefined
   gstitch d  = do let p = Proxy :: Proxy a
                   ty <- gets makingTy
                   depth <- gets depth
-                  let d' = if getType p == ty
+                  sc <- gets scDepth
+                  let d' = if getType p == ty || sc
                               then d
                               else depth
                   K1 <$> stitch d' undefined

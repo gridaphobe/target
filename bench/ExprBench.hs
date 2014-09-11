@@ -11,7 +11,7 @@ import           Test.LiquidCheck
 import qualified Test.QuickCheck        as QC
 import qualified Test.SmallCheck        as SC
 import qualified Test.SmallCheck.Series as SC
-
+import qualified LazySmallCheck         as LSC
 
 --------------------------------------------------------------------------------
 --- SmallCheck
@@ -22,6 +22,19 @@ prop_subst_sc e1 n e2 = closed e1 && closed e2 SC.==>
                         if Set.member n fv_e2
                         then fv_e == Set.union (Set.delete n fv_e2) fv_e1
                         else fv_e == fv_e2
+  where
+    e     = subst e1 n e2
+    fv_e  = freeVars e
+    fv_e1 = freeVars e1
+    fv_e2 = freeVars e2
+
+instance LSC.Serial Expr where
+  series = LSC.cons1 Var LSC.\/ LSC.cons2 App LSC.\/ LSC.cons2 Lam
+
+prop_subst_lsc e1 n e2 = closed e1 && closed e2 LSC.==>
+                         if Set.member n fv_e2
+                         then fv_e == Set.union (Set.delete n fv_e2) fv_e1
+                         else fv_e == fv_e2
   where
     e     = subst e1 n e2
     fv_e  = freeVars e

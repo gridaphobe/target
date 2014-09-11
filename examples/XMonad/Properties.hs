@@ -56,6 +56,9 @@ import qualified Test.QuickCheck                  as QC
 import qualified Test.SmallCheck                  as SC
 import qualified Test.SmallCheck.Series           as SC
 import           TysWiredIn                       (listTyCon, tupleTyCon)
+
+import qualified LazySmallCheck                   as LSC
+
 -- FIXME: this measure makes sure that True and False are in the environment...
 {-@ measure prop :: Bool -> Prop
     prop (True)  = true
@@ -90,6 +93,27 @@ instance (SC.Serial m i, SC.Serial m l, SC.Serial m a) => SC.Serial m (Workspace
 instance SC.Serial m a => SC.Serial m (Stack a)
 
 instance (Monad m) => SC.Serial m RationalRect
+
+instance (Ord a, LSC.Serial i, LSC.Serial l, LSC.Serial a, LSC.Serial s, LSC.Serial sd)
+  => LSC.Serial (StackSet i l a s sd) where
+  series = LSC.cons4 StackSet
+
+instance (LSC.Serial i, LSC.Serial l, LSC.Serial a, LSC.Serial s, LSC.Serial sd)
+  => LSC.Serial (Screen i l a s sd) where
+  series = LSC.cons3 Screen
+
+instance (LSC.Serial i, LSC.Serial l, LSC.Serial a) => LSC.Serial (Workspace i l a) where
+  series = LSC.cons3 Workspace
+
+instance LSC.Serial a => LSC.Serial (Stack a) where
+  series = LSC.cons3 Stack
+
+instance LSC.Serial RationalRect where
+  series = LSC.cons4 RationalRect
+
+instance LSC.Serial Rational where
+  series = LSC.cons2 (%)
+
 
 -- instance (Ord k, SC.Serial m k, SC.Serial m v) => SC.Serial m (M.Map k v) where
 --   series  = fmap M.fromList SC.series
@@ -441,6 +465,8 @@ prop_focus_left_master_lc (n :: Int) (x::T_LC) =
     index (foldr (const focusUp) x [1..n]) == index x
 prop_focus_left_master_sc (n :: Int) (x::T_LC) = noDuplicates x && n >= 0 SC.==>
     index (foldr (const focusUp) x [1..n]) == index x
+prop_focus_left_master_lsc (n :: Int) (x::T_LC) = noDuplicates x && n >= 0 LSC.==>
+    index (foldr (const focusUp) x [1..n]) == index (trace (show x) x)
 prop_focus_left_master_qc (n :: Int) (x::T_LC) = noDuplicates x && n >= 0 QC.==>
     index (foldr (const focusUp) x [1..n]) == index x
 

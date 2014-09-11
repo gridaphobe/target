@@ -11,6 +11,7 @@ import           Test.LiquidCheck
 import qualified Test.QuickCheck        as QC
 import qualified Test.SmallCheck        as SC
 import qualified Test.SmallCheck.Series as SC
+import qualified LazySmallCheck as LSC
 
 {--------------------------------------------------------------------
   Assertions
@@ -22,7 +23,11 @@ import qualified Test.SmallCheck.Series as SC
 
 valid :: Ord k => Map k a -> Bool
 valid t
- = balanced t && ordered t && validsize t
+ = ordered t && validsize t && balanced t
+
+valid_slow :: Ord k => Map k a -> Bool
+valid_slow t
+ = validsize t && balanced t && ordered t
 
 ordered :: Ord a => Map a b -> Bool
 ordered t
@@ -80,6 +85,25 @@ prop_difference_sc x y = valid x && valid y SC.==> valid z && keys z == (keys x 
 prop_delete_sc :: Monad m => K -> M -> SC.Property m
 prop_delete_sc x y = valid y SC.==> valid z && keys z == (keys y L.\\ [x])
   where z = delete x y
+
+instance (LSC.Serial k, LSC.Serial a) => LSC.Serial (Map k a) where
+  series = LSC.cons0 Tip LSC.\/ LSC.cons5 Bin
+
+prop_delete_lsc :: K -> M -> Bool
+prop_delete_lsc x y = valid y LSC.==> valid z && keys z == (keys y L.\\ [x])
+  where z = delete x y
+
+prop_delete_lsc_slow :: K -> M -> Bool
+prop_delete_lsc_slow x y = valid_slow y LSC.==> valid_slow z && keys z == (keys y L.\\ [x])
+  where z = delete x y
+
+prop_difference_lsc :: M -> M -> Bool
+prop_difference_lsc x y = valid x && valid y LSC.==> valid z && keys z == (keys x L.\\ keys y)
+  where z = difference x y
+
+prop_difference_lsc_slow :: M -> M -> Bool
+prop_difference_lsc_slow x y = valid_slow x && valid_slow y LSC.==> valid_slow z && keys z == (keys x L.\\ keys y)
+  where z = difference x y
 
 --------------------------------------------------------------------------------
 --- QuickCheck

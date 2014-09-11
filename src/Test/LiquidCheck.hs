@@ -2,7 +2,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
 module Test.LiquidCheck
-  ( liquidCheck, testModule, testFun, testFunIgnoringFailure, testOne
+  ( liquidCheck, testModule, testFun, testFunIgnoringFailure, testOne, testOneSC
   , Constrain(..), Result(..), Testable(..), Test(..), CanTest)
   where
 
@@ -57,6 +57,16 @@ testOne :: CanTest f => f -> String -> Int -> FilePath -> IO Result
 testOne f name d path
   = do sp <- getSpec path
        runGen sp path $ testFun f name d
+
+testOneMax :: CanTest f => f -> String -> Int -> Int -> FilePath -> IO Result
+testOneMax f name d max path
+  = do sp <- getSpec path
+       runGen sp path $ setMaxSuccess max >> testFun f name d
+
+testOneSC :: CanTest f => f -> String -> Int -> FilePath -> IO Result
+testOneSC f name d path
+  = do sp <- getSpec path
+       runGen sp path $ modify (\s -> s {scDepth = True}) >> testFun f name d
 
 testFunIgnoringFailure :: CanTest f => f -> String -> Int -> Gen Result
 testFunIgnoringFailure f name d

@@ -9,6 +9,10 @@ import qualified Test.QuickCheck        as QC
 import qualified Test.SmallCheck        as SC
 import qualified Test.SmallCheck.Series as SC
 
+import qualified LazySmallCheck as LSC
+
+import Debug.Trace
+
 --------------------------------------------------------------------------------
 --- QuickCheck
 --------------------------------------------------------------------------------
@@ -57,3 +61,8 @@ prop_mytake_sorted_sc n xs = sorted xs && n >= 0 && aall (>=0) xs
     zs = mytake n xs
 
 prop_insert_sc x ys = sorted ys SC.==> sorted (insert x ys)
+
+instance LSC.Serial a => LSC.Serial (List a) where
+  series = LSC.cons0 Nil LSC.\/ LSC.cons2 Cons
+
+prop_insert_lsc x ys = sorted ys LSC.==> sorted (insert x ys)

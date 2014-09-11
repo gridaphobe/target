@@ -8,6 +8,7 @@ import           Test.LiquidCheck
 import qualified Test.QuickCheck        as QC
 import qualified Test.SmallCheck        as SC
 import qualified Test.SmallCheck.Series as SC
+import qualified LazySmallCheck         as LSC
 
 --------------------------------------------------------------------------------
 -- Testing ---------------------------------------------------------------------
@@ -16,12 +17,13 @@ prop_add_lc :: Char -> RBTree Char -> RBTree Char
 prop_add_lc = add
 
 isBH (Leaf)         = True
-isBH (Node c x l r) = ((isBH l) && (isBH r) && (bh l) == (bh r))
+isBH (Node c x l r) = bh l == bh r && isBH l && isBH r 
 
 bh (Leaf)         = 0
 bh (Node c x l r) = (bh l) + (if (c == R) then 0 else 1)
 
-isRBT t = ord t && isRB t && isBH t
+isRBT t = ord t && isBH t && isRB t
+isRBT_SLOW t = isBH t && isRB t && ord t
 
 isRB (Leaf)         = True
 isRB (Node c x l r) = ((isRB l) && (isRB r) && (c == B || ((isB l) && (isB r))))
@@ -42,6 +44,18 @@ instance (Monad m, SC.Serial m a) => SC.Serial m (RBTree a)
 
 prop_add_sc :: Monad m => Char -> RBTree Char -> SC.Property m
 prop_add_sc x t = isRBT t SC.==> isRBT (add x t)
+
+instance LSC.Serial Color where
+  series = LSC.cons0 R LSC.\/ LSC.cons0 B
+
+instance LSC.Serial a => LSC.Serial (RBTree a) where
+  series = LSC.cons0 Leaf LSC.\/ LSC.cons4 Node
+
+prop_add_lsc :: Char -> RBTree Char -> Bool
+prop_add_lsc x t = isRBT t LSC.==> isRBT (add x t)
+
+prop_add_lsc_slow :: Char -> RBTree Char -> Bool
+prop_add_lsc_slow x t = isRBT_SLOW t LSC.==> isRBT_SLOW (add x t)
 
 instance QC.Arbitrary Color where
   arbitrary = QC.oneof [return R, return B]

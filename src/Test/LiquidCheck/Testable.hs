@@ -51,6 +51,7 @@ process d f vs cts xts to = go vs 0
     go []       !n = return $ Passed n
     go (vs:vss) !n = do
       when (n `mod` 100 == 0) $ whenVerbose $ io $ printf "Checked %d inputs\n" n
+      let n' = n + 1
       setValues vs
       xs <- stitchArgs f d (map snd xts)
       whenVerbose $ io $ print xs
@@ -63,7 +64,11 @@ process d f vs cts xts to = go vs 0
           sat <- evalType (M.fromList env) to (toExpr r)
           case sat of
             False -> mbKeepGoing xs vss n
-            True -> go vss (n+1)
+            True -> do max <- gets maxSuccess
+                       case max of
+                         Nothing -> go vss n'
+                         Just m | m == n' -> return $ Passed m
+                                | otherwise -> go vss n'
     mbKeepGoing xs vss n = do
       kg <- gets keepGoing
       if kg then go vss (n+1) else return (Failed $ show xs)

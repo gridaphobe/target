@@ -85,6 +85,8 @@ data GenState
        , keepGoing    :: !Bool -- ^ whether to keep going after finding a
                                --   counter-example, useful for checking
                                --   coverage
+       , maxSuccess   :: !(Maybe Int)
+       , scDepth      :: !Bool -- ^ whether to use SmallCheck's notion of depth
        , smtContext   :: !Context
        }
 
@@ -112,6 +114,8 @@ initGS fp sp ctx
        , verbose      = False
        , logging      = False
        , keepGoing    = False
+       , maxSuccess   = Nothing
+       , scDepth      = False
        , smtContext   = ctx
        }
   where
@@ -129,6 +133,8 @@ whenVerbose x
        when v x
 
 setValues vs = modify $ \s@(GS {..}) -> s { values = vs }
+
+setMaxSuccess m = modify $ \s@(GS {..}) -> s { maxSuccess = Just m }
 
 addDep from to = modify $ \s@(GS {..}) -> s { deps = (fst from, fst to):deps }
 
