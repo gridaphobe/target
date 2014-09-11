@@ -60,6 +60,9 @@ benchmark bench
   main-is:             Main.hs
   build-depends:       base,
                        aeson,
+                       bytestring,
+                       cassava,
+                       vector,
                        data-timeout >= 0.3,
                        -- for XMonad
                        -- X11,

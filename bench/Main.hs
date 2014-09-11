@@ -1,8 +1,11 @@
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TypeSynonymInstances  #-}
 module Main where
 
 import           Test.LiquidCheck
@@ -15,9 +18,16 @@ import           Control.Applicative
 import           Control.Concurrent.Timeout
 import           Control.Exception
 import           Control.Monad
+import qualified Data.ByteString            as B
+import qualified Data.ByteString.Char8      as B8
+import qualified Data.ByteString.Lazy       as LB
+import           Data.Csv
+import qualified Data.List                  as L
 import           Data.IORef
+import           Data.Monoid
 import           Data.Time.Clock.POSIX
 import           Data.Timeout
+import qualified Data.Vector                as V
 import           System.IO
 import           Text.Printf
 
@@ -38,27 +48,59 @@ data Outcome = TimeOut
              deriving (Read, Show)
 
 data TestResult
-  = TestResult { liquid :: ![(Int,Double,Outcome)]
+  = TestResult { testName :: !String
+               , liquid :: ![(Int,Double,Outcome)]
                , small  :: ![(Int,Double,Outcome)]
                , small_slow :: !(Maybe [(Int,Double,Outcome)])
                , quick  :: !(Double,Outcome)
                } deriving (Read, Show)
 
+testResultRecords :: TestResult -> [NamedRecord]
+testResultRecords (TestResult name l s ss _)
+  = [ namedRecord $ [ "Benchmark" .= (B8.pack name <> "/Target") ]
+                 ++ [ bshow d .= toResult t o | d <- [2..10], let (t,o) = lookup3 d l ]
+    , namedRecord $ [ "Benchmark" .= (B8.pack name <> "/Lazy SmallCheck") ]
+                 ++ [ bshow d .= toResult t o | d <- [2..10], let (t,o) = lookup3 d s ]
+    ]
+   ++ maybe [] (\ss ->
+    [ namedRecord $ [ "Benchmark" .= (B8.pack name <> "/Lazy SmallCheck (slow)") ]
+                 ++ [ bshow d .= toResult t o | d <- [2..10], let (t,o) = lookup3 d ss ]
+    ]) ss
+
+bshow :: Show a => a -> B.ByteString
+bshow = B8.pack . show
+
+lookup3 :: Int -> [(Int,Double,Outcome)] -> (Double,Outcome)
+lookup3 x xs = case L.find (\(a,b,c) -> a == x) xs of
+                 Nothing -> (0, TimeOut)
+                 Just (i,d,o) -> (d,o)
+
+toResult :: Double -> Outcome -> B.ByteString
+toResult d TimeOut      = "X"
+toResult d (Complete i) = bshow d
+
+header :: V.Vector B.ByteString
+header = V.fromList $ ["Benchmark"] ++ [bshow d | d <- [2..10]]
+
+logCsv f r = withFile f WriteMode $ \h -> do
+  LB.hPutStr h $ encodeByName header $ testResultRecords r
+  return r
+
 main :: IO ()
 main = do
-  print =<< listInsertTests
-  print =<< rbTreeAddTests
-  print =<< exprSubstTests
-  print =<< mapDeleteTests
-  print =<< mapDifferenceTests
-  print =<< xmonadFocusLeftTests
+  print =<< logCsv "bench/list-insert.csv"       =<< listInsertTests
+  print =<< logCsv "bench/rbtree-add.csv"        =<< rbTreeAddTests
+  print =<< logCsv "bench/expr-subst.csv"        =<< exprSubstTests
+  print =<< logCsv "bench/map-delete.csv"        =<< mapDeleteTests
+  print =<< logCsv "bench/map-difference.csv"    =<< mapDifferenceTests
+  print =<< logCsv "bench/xmonad-focus-left.csv" =<< xmonadFocusLeftTests
 
 listInsertTests = do
   l <- checkLiquid List.insert         "List.insert" "examples/List.hs"
   -- s <- checkSmall  List.prop_insert_sc "List.insert" 6
   s <- checkLazySmall  List.prop_insert_lsc "List.insert"
   q <- checkQuick  List.prop_insert_qc "List.insert"
-  return $ TestResult l s Nothing q
+  return $ TestResult "List.insert" l s Nothing q
 
 rbTreeAddTests = do
   l <- checkLiquid RBTree.prop_add_lc "RBTree.add" "examples/RBTree.hs"
@@ -66,34 +108,34 @@ rbTreeAddTests = do
   s <- checkLazySmall  RBTree.prop_add_lsc "RBTree.add"
   ss <- checkLazySmall  RBTree.prop_add_lsc_slow "RBTree.add"
   q <- checkQuick  RBTree.prop_add_qc "RBTree.add"
-  return $ TestResult l s (Just ss) q
+  return $ TestResult "RBTree.add" l s (Just ss) q
 
 exprSubstTests = do
   l <- checkLiquid Expr.subst         "Expr.subst" "examples/Expr.hs"
   s <- checkLazySmall  Expr.prop_subst_lsc "Expr.subst"
   q <- checkQuick  Expr.prop_subst_qc "Expr.subst"
-  return $ TestResult l s Nothing q
+  return $ TestResult "Expr.subst" l s Nothing q
 
 mapDeleteTests = do
   l <- checkLiquid Map.prop_delete_lc "Map.delete" "examples/Map.hs"
   s <- checkLazySmall  Map.prop_delete_lsc "Map.delete"
   ss <- checkLazySmall  Map.prop_delete_lsc_slow "Map.delete"
   q <- checkQuick  Map.prop_delete_qc "Map.delete"
-  return $ TestResult l s (Just ss) q
+  return $ TestResult "Map.delete" l s (Just ss) q
 
 mapDifferenceTests = do
   l <- checkLiquid Map.prop_difference_lc "Map.difference" "examples/Map.hs"
   s <- checkLazySmall  Map.prop_difference_lsc "Map.difference"
   ss <- checkLazySmall  Map.prop_difference_lsc_slow "Map.difference"
   q <- checkQuick  Map.prop_difference_qc "Map.difference"
-  return $ TestResult l s (Just ss) q
+  return $ TestResult "Map.difference" l s (Just ss) q
 
 xmonadFocusLeftTests = do
   l <- checkLiquid XMonad.prop_focus_left_master_lc "XMonad.Properties.prop_focus_left_master_lc"
                                                     "examples/XMonad/Properties.hs"
   s <- checkLazySmall  XMonad.prop_focus_left_master_lsc "XMonad.Properties.prop_focus_left_master"
   q <- checkQuick  XMonad.prop_focus_left_master_qc "XMonad.Properties.prop_focus_left_master"
-  return $ TestResult l s Nothing q
+  return $ TestResult "XMonad.focus_left_master" l s Nothing q
 
 
 myTimeout :: IO a -> IO (Maybe a)
@@ -117,6 +159,7 @@ checkSmall p n = checkMany (n++"/SmallCheck")
 checkLazySmall p n = checkMany (n++"/LazySmallCheck")
                                (\d -> LSC.depthCheckResult d p)
 
+checkQuick :: QC.Testable f => f -> String -> IO (Double,Outcome)
 checkQuick p n = timed $ do
   putStrNow $ printf "Testing %s/QuickCheck.. " n
   r <- QC.quickCheckWithResult (QC.stdArgs {QC.chatty = False}) p

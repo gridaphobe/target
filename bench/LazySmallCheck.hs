@@ -257,6 +257,7 @@ validCounter = unsafePerformIO $ newIORef 0
 {-# NOINLINE validCounter #-}
 
 incValidCounter = modifyIORef' validCounter (+1)
+{-# NOINLINE incValidCounter #-}
 
 (==>) :: Bool -> Bool -> Bool
 False ==> _ = True
