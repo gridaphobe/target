@@ -16,12 +16,14 @@ import           GHC
 import qualified Data.Text                     as T
 
 data LiquidException = SmtFailedToProduceOutput
+                     | SmtError String
                      | ExpectedValues Response
                      | PreconditionCheckFailed String
                      deriving Typeable
 
 instance Show LiquidException where
   show SmtFailedToProduceOutput = "The SMT solver was unable to produce an output value."
+  show (SmtError s) = "Unexpected error from the solver: " ++ s
   show (ExpectedValues r) = "Expected a Values response from the solver, got: " ++ show r
   show (PreconditionCheckFailed e) = "The pre-condition check for a generated function failed: " ++ e
 
@@ -54,6 +56,7 @@ choicesort = FObj "CHOICE"
 
 data Result = Passed !Int
             | Failed !String
+            | Errored !String
             deriving (Show)
 
 resultPassed (Passed i) = i

@@ -7,6 +7,7 @@ module Test.LiquidCheck.Driver where
 import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad
+import           Control.Monad.Catch             as Ex
 import           Control.Monad.State
 import qualified Data.HashMap.Strict             as M
 import qualified Data.HashSet                    as S
@@ -93,7 +94,7 @@ allSat roots = {-# SCC "allSat" #-} setup >>= io . go
     go (!ctx,!vs,!deps) = {-# SCC "allSat.go" #-} do
        resp <- command ctx CheckSat
        case resp of
-         Error e -> error (T.unpack e)
+         Error e -> Ex.throwM $ SmtError (T.unpack e)
          Unsat   -> return []
          Sat     -> do
            let real = [v | (v,t) <- vs, t `elem` interps]

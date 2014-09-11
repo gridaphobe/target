@@ -1,10 +1,12 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
 import qualified Map
 
 import           Control.Applicative
 import           Control.Concurrent.Timeout
+import           Control.Monad.Catch
 import           Control.Monad
 import           Data.Time.Clock.POSIX
 import           Data.Timeout
@@ -34,13 +36,26 @@ checkMany spec h (T f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
                                     putStrLn s >> hFlush stdout
                                     hPutStrLn h s >> hFlush h
                                     return [(n,d,TimeOut)]
+                  --NOTE: timeout is a bit unreliable..
+                  (d,_) | round d >= time #> Second -> do
+                    let s = printf "%s\t%d\t%.2f\t%s" sp n d (show TimeOut)
+                    putStrLn s >> hFlush stdout
+                    hPutStrLn h s >> hFlush h
+                    putStrLn "WARNING: timeout seems to have been ignored..."
+                    return [(n,d,TimeOut)]
+                  --NOTE: sometimes the timeout causes an error instead of a timeout exn
+                  (d,Just (Errored s)) -> return [(n,d,Complete (Errored s))]
                   --NOTE: ignore counter-examples for the sake of exploring coverage
-                  --(d,Just (Failed s)) -> return [(n,d,Completed (Failed s))]
+                  --(d,Just (Failed s)) -> return [(n,d,Complete (Failed s))]
                   (d,Just r)  -> do let s = printf "%s\t%d\t%.2f\t%s" sp n d (show (Complete r))
                                     putStrLn s >> hFlush stdout
                                     hPutStrLn h s >> hFlush h
                                     ((n,d,Complete r):) <$> go (n+1)
-    checkAt n = timed $ timeout time $ runGen spec "bench/Map.hs" $ testFunIgnoringFailure f sp n
+    checkAt n = timed $ do
+      r <- try $ timeout time $ runGen spec "bench/Map.hs" $ testFunIgnoringFailure f sp n
+      case r of
+        Left (e :: SomeException) -> return $ Just $ Errored $ show e
+        Right r                   -> return r
 
 time = 1 # Minute
 
