@@ -31,12 +31,15 @@ module LazySmallCheck
   , (*=>*)         -- :: Property -> Property -> Property
   , (*=*)          -- :: Property -> Property -> Property
   , depthCheckResult
+  , incValidCounter
   )
   where
 
 import Control.Monad
 import Control.Exception
+import Data.IORef
 import System.Exit
+import System.IO.Unsafe
 
 infixr 0 ==>, *=>*
 infixr 3 \/, *|*
@@ -147,7 +150,7 @@ instance Serial Integer where
   series d = drawnFrom (map toInteger [-d..d])
 
 instance Serial Char where
-  series d = drawnFrom (take d ['a'..])
+  series d = drawnFrom (take (d+1) ['a'..])
 
 instance Serial Float where
   series d = drawnFrom (floats d)
@@ -178,7 +181,7 @@ new p ps = [ Ctr c (zipWith (\i t -> Var (p++[i]) t) [0..] ts)
 
 -- Find total instantiations of a partial value
 
-total :: Term -> [Term] 
+total :: Term -> [Term]
 total val = tot val
   where
     tot (Ctr c xs) = [Ctr c ys | ys <- mapM tot xs] 
@@ -249,9 +252,17 @@ p *=* q = Eq p q
 
 -- Boolean implication
 
+validCounter :: IORef Int
+validCounter = unsafePerformIO $ newIORef 0
+{-# NOINLINE validCounter #-}
+
+incValidCounter = modifyIORef' validCounter (+1)
+
 (==>) :: Bool -> Bool -> Bool
 False ==> _ = True
-True ==> x = x
+True ==> True = unsafePerformIO $ incValidCounter >> return True
+True ==> False = False
+--True ==> x = x
 
 -- Testable
 
@@ -292,8 +303,13 @@ depthCheck d p =
 smallCheck :: Testable a => Int -> a -> IO ()
 smallCheck d p = mapM_ (`depthCheck` p) [0..d]
 
+-- refute returns the number of tests generated, not the number of *valid*
+-- tests generated, so we count the number of valid tests ourselves
 depthCheckResult :: Testable a => Int -> a -> IO Int
-depthCheckResult d p = refute $ run (const p) 0 d
+depthCheckResult d p =
+  do writeIORef validCounter 0
+     refute $ run (const p) 0 d
+     readIORef validCounter
 
 test :: Testable a => a -> IO ()
 test p = mapM_ (`depthCheck` p) [0..]

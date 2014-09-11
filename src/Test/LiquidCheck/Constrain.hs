@@ -382,18 +382,18 @@ instance (GConstrainSum f, GConstrainSum g) => GConstrainSum (f :+: g) where
   gtoExprAlts (R1 x) = gtoExprAlts x
 
 instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
-  ggenAlts p v d t | d <= 1
+  ggenAlts p v d t | d <= 0
     = do ty <- gets makingTy
          if gisRecursive p ty
            then return []
-           else pure <$> ggenAlt p v 1 t
+           else pure <$> ggenAlt p v 0 t
   ggenAlts p v d t = pure <$> ggenAlt p v d t
 
-  gstitchAlts d | d <= 1
+  gstitchAlts d | d <= 0
     = do ty <- gets makingTy
          if gisRecursive (Proxy :: Proxy (C1 c f a)) ty
            then return (error "gstitchAlts C1 CANNOT HAPPEN", False)
-           else gstitchAlt 1
+           else gstitchAlt 0
   gstitchAlts d
     = gstitchAlt d
 

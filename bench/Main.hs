@@ -47,11 +47,11 @@ data TestResult
 main :: IO ()
 main = do
   print =<< listInsertTests
-  -- print =<< rbTreeAddTests
-  -- print =<< exprSubstTests
-  -- print =<< mapDeleteTests
-  -- print =<< mapDifferenceTests
-  -- print =<< xmonadFocusLeftTests
+  print =<< rbTreeAddTests
+  print =<< exprSubstTests
+  print =<< mapDeleteTests
+  print =<< mapDifferenceTests
+  print =<< xmonadFocusLeftTests
 
 listInsertTests = do
   l <- checkLiquid List.insert         "List.insert" "examples/List.hs"
