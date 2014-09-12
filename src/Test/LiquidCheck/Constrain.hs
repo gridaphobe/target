@@ -90,14 +90,14 @@ reproxyElem = reproxy
 --------------------------------------------------------------------------------
 instance Constrain () where
   getType _ = FObj "GHC.Tuple.()"
-  gen _ _ _ = fresh [] (FObj "GHC.Tuple.()")
+  gen _ _ _ = fresh (FObj "GHC.Tuple.()")
   stitch _ _ = return ()
   -- this is super fiddly, but seemingly required since GHC.exprType chokes on "GHC.Tuple.()"
   toExpr _   = app ("()" :: Symbol) []
 
 instance Constrain Int where
   getType _ = FObj "GHC.Types.Int"
-  gen _ d t = fresh [] FInt >>= \x ->
+  gen _ d t = fresh FInt >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
        -- use the unfolding depth to constrain the range of Ints, like QuickCheck
        constrain $ var x `ge` fromIntegral (negate d)
@@ -114,7 +114,7 @@ instance Constrain Integer where
 
 instance Constrain Char where
   getType _ = FObj "GHC.Types.Char"
-  gen _ d t = fresh [] FInt >>= \x ->
+  gen _ d t = fresh FInt >>= \x ->
     do constrain $ var x `ge` 0
        constrain $ var x `le` fromIntegral d
        constrain $ ofReft x (toReft $ rt_reft t)
@@ -124,7 +124,7 @@ instance Constrain Char where
 
 instance Constrain Word8 where
   getType _ = FObj "GHC.Word.Word8"
-  gen _ d t = fresh [] FInt >>= \x ->
+  gen _ d t = fresh FInt >>= \x ->
     do _ <- gets depth
        constrain $ var x `ge` 0
        constrain $ var x `le` fromIntegral d
@@ -135,7 +135,7 @@ instance Constrain Word8 where
 
 instance Constrain Bool where
   getType _ = FObj "GHC.Types.Bool"
-  gen _ d t = fresh [] boolsort >>= \x ->
+  gen _ d t = fresh boolsort >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
        return x
   stitch _ _ = pop >>= \case
@@ -150,7 +150,7 @@ instance (Constrain a, Constrain b, Constrain c) => Constrain (a,b,c)
 
 instance (Num a, Integral a, Constrain a) => Constrain (Ratio a) where
   getType _ = FObj "GHC.Real.Ratio"
-  gen _ d t = fresh [] (FObj "GHC.Real.Ratio") >>= \x ->
+  gen _ d t = fresh (FObj "GHC.Real.Ratio") >>= \x ->
     do gen (Proxy :: Proxy Int) d t
        gen (Proxy :: Proxy Int) d t
        return x
@@ -173,18 +173,18 @@ choose x cs
                         | [x, y] <- filter ((==2) . length) $ subsequences cs ]
 
 -- make :: TH.Name -> [String] -> Sort -> Gen String
-make :: Symbol -> [Variable] -> Sort -> Gen Variable
-make c vs s
-  = do x  <- fresh vs s
-       --t <- (safeFromJust "make" . lookup c) <$> gets ctorEnv
-       t <- lookupCtor c
-       let (xs, _, rt) = bkArrowDeep t
-           su          = mkSubst $ zip (map symbol xs) (map var vs)
-           ct          = FFunc 0 $ map snd vs ++ [s]
-       addConstructor (c, ct)
-       addConstraint $ var x `eq` app c (map var vs)
-       constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
-       return x
+-- make :: Symbol -> [Variable] -> Sort -> Gen Variable
+-- make c vs s
+--   = do x  <- fresh vs s
+--        --t <- (safeFromJust "make" . lookup c) <$> gets ctorEnv
+--        t <- lookupCtor c
+--        let (xs, _, rt) = bkArrowDeep t
+--            su          = mkSubst $ zip (map symbol xs) (map var vs)
+--            ct          = FFunc 0 $ map snd vs ++ [s]
+--        addConstructor (c, ct)
+--        addConstraint $ var x `eq` app c (map var vs)
+--        constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
+--        return x
 
 make' :: Symbol -> Variable -> [Variable] -> Gen ()
 make' c x vs
@@ -211,59 +211,59 @@ constrain p
 
 -- make2 :: forall a b. (Constrain a, Constrain b)
 --       => TH.Name -> (Proxy a, Proxy b) -> SpecType -> Sort -> Int -> Gen String
-make2 c (pa,pb) t s d
-  = do dcp <- lookupCtor c -- fromJust . lookup c <$> gets ctorEnv
-       tyi <- gets tyconInfo
-       emb <- gets embEnv
-       let [t1,t2] = applyPreds (addTyConInfo emb tyi t) dcp
-       x1 <- gen pa (d-1) (snd t1)
-       let su = mkSubst [(fst t1, var x1)]
-       x2 <- gen pb (d-1) (subst su $ snd t2)
-       make c [x1,x2] s
+-- make2 c (pa,pb) t s d
+--   = do dcp <- lookupCtor c -- fromJust . lookup c <$> gets ctorEnv
+--        tyi <- gets tyconInfo
+--        emb <- gets embEnv
+--        let [t1,t2] = applyPreds (addTyConInfo emb tyi t) dcp
+--        x1 <- gen pa (d-1) (snd t1)
+--        let su = mkSubst [(fst t1, var x1)]
+--        x2 <- gen pb (d-1) (subst su $ snd t2)
+--        make c [x1,x2] s
 
--- make3 :: forall a b c. (Constrain a, Constrain b, Constrain c)
---       => TH.Name -> (Proxy a, Proxy b, Proxy c) -> SpecType -> Sort -> Int -> Gen String
-make3 c (pa,pb,pc) t s d
-  = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
-       tyi <- gets tyconInfo
-       emb <- gets embEnv
-       let [t1,t2,t3] = applyPreds (addTyConInfo emb tyi t) dcp
-       x1 <- gen pa (d-1) (snd t1)
-       let su = mkSubst [(fst t1, var x1)]
-       x2 <- gen pb (d-1) (subst su $ snd t2)
-       let su = mkSubst [(fst t1, var x1),(fst t2, var x2)]
-       x3 <- gen pc (d-1) (subst su $ snd t3)
-       make c [x1,x2,x3] s
+-- -- make3 :: forall a b c. (Constrain a, Constrain b, Constrain c)
+-- --       => TH.Name -> (Proxy a, Proxy b, Proxy c) -> SpecType -> Sort -> Int -> Gen String
+-- make3 c (pa,pb,pc) t s d
+--   = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
+--        tyi <- gets tyconInfo
+--        emb <- gets embEnv
+--        let [t1,t2,t3] = applyPreds (addTyConInfo emb tyi t) dcp
+--        x1 <- gen pa (d-1) (snd t1)
+--        let su = mkSubst [(fst t1, var x1)]
+--        x2 <- gen pb (d-1) (subst su $ snd t2)
+--        let su = mkSubst [(fst t1, var x1),(fst t2, var x2)]
+--        x3 <- gen pc (d-1) (subst su $ snd t3)
+--        make c [x1,x2,x3] s
 
-make4 c (p1,p2,p3,p4) t s d
-  = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
-       tyi <- gets tyconInfo
-       emb <- gets embEnv
-       let [t1,t2,t3,t4] = applyPreds (addTyConInfo emb tyi t) dcp
-       x1 <- gen p1 (d-1) (snd t1)
-       let su = mkSubst [(fst t1, var x1)]
-       x2 <- gen p2 (d-1) (subst su $ snd t2)
-       let su = mkSubst [(fst t1, var x1),(fst t2, var x2)]
-       x3 <- gen p3 (d-1) (subst su $ snd t3)
-       let su = mkSubst [(fst t1, var x1),(fst t2, var x2),(fst t3, var x3)]
-       x4 <- gen p4 (d-1) (subst su $ snd t4)
-       make c [x1,x2,x3,x4] s
+-- make4 c (p1,p2,p3,p4) t s d
+--   = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
+--        tyi <- gets tyconInfo
+--        emb <- gets embEnv
+--        let [t1,t2,t3,t4] = applyPreds (addTyConInfo emb tyi t) dcp
+--        x1 <- gen p1 (d-1) (snd t1)
+--        let su = mkSubst [(fst t1, var x1)]
+--        x2 <- gen p2 (d-1) (subst su $ snd t2)
+--        let su = mkSubst [(fst t1, var x1),(fst t2, var x2)]
+--        x3 <- gen p3 (d-1) (subst su $ snd t3)
+--        let su = mkSubst [(fst t1, var x1),(fst t2, var x2),(fst t3, var x3)]
+--        x4 <- gen p4 (d-1) (subst su $ snd t4)
+--        make c [x1,x2,x3,x4] s
 
-make5 c (p1,p2,p3,p4,p5) t s d
-  = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
-       tyi <- gets tyconInfo
-       emb <- gets embEnv
-       let [t1,t2,t3,t4,t5] = applyPreds (addTyConInfo emb tyi t) dcp
-       x1 <- gen p1 (d-1) (snd t1)
-       let su = mkSubst [(fst t1, var x1)]
-       x2 <- gen p2 (d-1) (subst su $ snd t2)
-       let su = mkSubst [(fst t1, var x1),(fst t2, var x2)]
-       x3 <- gen p3 (d-1) (subst su $ snd t3)
-       let su = mkSubst [(fst t1, var x1),(fst t2, var x2),(fst t3, var x3)]
-       x4 <- gen p4 (d-1) (subst su $ snd t4)
-       let su = mkSubst [(fst t1, var x1),(fst t2, var x2),(fst t3, var x3),(fst t4, var x4)]
-       x5 <- gen p5 (d-1) (subst su $ snd t5)
-       make c [x1,x2,x3,x4,x5] s
+-- make5 c (p1,p2,p3,p4,p5) t s d
+--   = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
+--        tyi <- gets tyconInfo
+--        emb <- gets embEnv
+--        let [t1,t2,t3,t4,t5] = applyPreds (addTyConInfo emb tyi t) dcp
+--        x1 <- gen p1 (d-1) (snd t1)
+--        let su = mkSubst [(fst t1, var x1)]
+--        x2 <- gen p2 (d-1) (subst su $ snd t2)
+--        let su = mkSubst [(fst t1, var x1),(fst t2, var x2)]
+--        x3 <- gen p3 (d-1) (subst su $ snd t3)
+--        let su = mkSubst [(fst t1, var x1),(fst t2, var x2),(fst t3, var x3)]
+--        x4 <- gen p4 (d-1) (subst su $ snd t4)
+--        let su = mkSubst [(fst t1, var x1),(fst t2, var x2),(fst t3, var x3),(fst t4, var x4)]
+--        x5 <- gen p5 (d-1) (subst su $ snd t5)
+--        make c [x1,x2,x3,x4,x5] s
 
 
 -- apply4 :: (Constrain a, Constrain b, Constrain c, Constrain d)
@@ -307,7 +307,7 @@ instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
 
   ggen p d t
     = inModule mod . making sort $ do
-        x  <- fresh [] sort
+        x  <- fresh sort
         xs <- ggenAlts (reproxyGElem p) x d t
         choose x xs
         constrain $ ofReft x $ toReft $ rt_reft t

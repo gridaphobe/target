@@ -51,7 +51,7 @@ genFun p d (stripQuals -> t)
          let c = dataConSymbol_noUnique dc
          t <- lookupCtor c
          addConstructor (c, rTypeSort mempty t)
-       fresh [] (getType p)
+       fresh (getType p)
 
 stitchFun :: forall f. (Constrain (Res f))
           => Proxy f -> Int -> SpecType -> Gen ([Expr] -> Res f)
@@ -100,16 +100,16 @@ genExpr (EApp (val -> c) es)
        (xs, _, to) <- bkArrowDeep . stripQuals <$> lookupCtor c
        let su  = mkSubst $ zip xs $ map (var . fst) xes
            to' = subst su to
-       x <- fresh [] $ FObj $ symbol $ rtc_tc $ rt_tycon to'
+       x <- fresh $ FObj $ symbol $ rtc_tc $ rt_tycon to'
        addConstraint $ ofReft x (toReft $ rt_reft to')
        return x
 genExpr (ECon (I i))
-  = do x <- fresh [] FInt
+  = do x <- fresh FInt
        addConstraint $ var x `eq` expr i
        return x
 genExpr (ESym (SL s)) | T.length s == 1
   -- This is a Char, so encode it as an Int
-  = do x <- fresh [] FInt
+  = do x <- fresh FInt
        addConstraint $ var x `eq` expr (ord $ T.head s)
        return x
 genExpr e = error $ "genExpr: " ++ show e
