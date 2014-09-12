@@ -25,4 +25,6 @@ average wxs = tot `div` n
 
 {-@ best   :: k:Nat -> [Score] -> {v:[Score] | len v = k} @-}
 best :: Int -> [Int] -> [Int]
-best k = take k . reverse . sort . (replicate k 0 ++)
+best k = take k . reverse . sort
+
+-- best k = take k . reverse . sort . (replicate k 0 ++)

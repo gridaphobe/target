@@ -186,8 +186,8 @@ withFreshChoice act
 -- | `fresh` generates a fresh variable and encodes the reachability
 -- relation between variables, e.g. `fresh xs sort` will return a new
 -- variable `x`, from which everything in `xs` is reachable.
-fresh :: [Variable] -> Sort -> Gen Variable
-fresh xs sort
+fresh :: Sort -> Gen Variable
+fresh sort
   = do n <- gets seed
        modify $ \s@(GS {..}) -> s { seed = seed + 1 }
        let sorts' = sortTys sort
@@ -196,7 +196,7 @@ fresh xs sort
        let x = (symbol $ T.unpack (T.intercalate "->" $ map (T.fromStrict.symbolText.unObj) sorts') ++ show n, sort)
        -- io $ print x
        modify $ \s@(GS {..}) -> s { variables = x : variables }
-       mapM_ (addDep x) xs
+       -- mapM_ (addDep x) xs
        return x
 
 sortTys :: Sort -> [Sort]
@@ -212,8 +212,9 @@ unObj s        = error $ "unObj: " ++ show s
 
 freshChoice :: [Variable] -> Gen Variable
 freshChoice xs
-  = do c <- fresh xs choicesort
+  = do c <- fresh choicesort
        modify $ \s@(GS {..}) -> s { choices = c : choices }
+       mapM_ (addDep c) xs
        return c
 
 

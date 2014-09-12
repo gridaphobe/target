@@ -12,7 +12,7 @@ import           Test.Tasty.HUnit
 
 import           Test.LiquidCheck
 
-import qualified Data.ByteString.Internal as ByteString
+-- import qualified Data.ByteString.Internal as ByteString
 import qualified Expr
 import qualified HOFs
 import           List                     (List)
@@ -61,6 +61,7 @@ shouldSucceed d f name file
        assertString $ case r of
                        Passed _ -> ""
                        Failed s -> "Unexpected counter-example: " ++ s
+                       Errored s -> "Unexpected error: " ++ s
 
 shouldFail d f name file
   = do r <- testOne f name d file
