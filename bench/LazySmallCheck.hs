@@ -31,10 +31,10 @@ module LazySmallCheck
   , (*=>*)         -- :: Property -> Property -> Property
   , (*=*)          -- :: Property -> Property -> Property
   , depthCheckResult
-  , incValidCounter
   )
   where
 
+import Control.Applicative ((<$>))
 import Control.Monad
 import Control.Exception
 import Data.IORef
@@ -204,7 +204,7 @@ refute r = ref (args r)
   where
     ref xs = eval (apply r xs) known unknown
       where
-        known True = return 1
+        known True = decValidCounter >> return 1
         known False = report
         unknown p = sumMapM ref 1 (refineList xs p)
 
@@ -256,12 +256,15 @@ validCounter :: IORef Int
 validCounter = unsafePerformIO $ newIORef 0
 {-# NOINLINE validCounter #-}
 
-incValidCounter = modifyIORef' validCounter (+1)
-{-# NOINLINE incValidCounter #-}
+decValidCounter = do
+  n <- readIORef validCounter
+  when (n == 1) $ throw ()
+  modifyIORef' validCounter (\n -> n - 1)
+{-# NOINLINE decValidCounter #-}
 
 (==>) :: Bool -> Bool -> Bool
 False ==> _ = True
-True ==> True = unsafePerformIO $ incValidCounter >> return True
+True ==> True = True
 True ==> False = False
 --True ==> x = x
 
@@ -306,11 +309,13 @@ smallCheck d p = mapM_ (`depthCheck` p) [0..d]
 
 -- refute returns the number of tests generated, not the number of *valid*
 -- tests generated, so we count the number of valid tests ourselves
-depthCheckResult :: Testable a => Int -> a -> IO Int
-depthCheckResult d p =
-  do writeIORef validCounter 0
-     refute $ run (const p) 0 d
-     readIORef validCounter
+depthCheckResult :: Testable a => Int -> Int -> a -> IO Int
+depthCheckResult d n p =
+  do writeIORef validCounter n
+     refute (run (const p) 0 d) `catch` \() -> return n
+     (n-) <$> readIORef validCounter
+
+instance Exception ()
 
 test :: Testable a => a -> IO ()
 test p = mapM_ (`depthCheck` p) [0..]

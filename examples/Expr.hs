@@ -66,7 +66,7 @@ freeVars (Lam v e) = freeVars e \\ Set.singleton v
 freeVars (App x y) = freeVars x `Set.union` freeVars y
 
 {-@ inv :: Closed -> Valid @-}
-inv e = freeVars e == Set.empty
+inv e = Set.null $ freeVars e 
 
 closed = inv
 

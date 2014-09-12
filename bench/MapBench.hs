@@ -23,11 +23,11 @@ import qualified LazySmallCheck as LSC
 
 valid :: Ord k => Map k a -> Bool
 valid t
- = ordered t && validsize t && balanced t
+ = ordered t && balanced t
 
 valid_slow :: Ord k => Map k a -> Bool
 valid_slow t
- = validsize t && balanced t && ordered t
+ = balanced t && ordered t
 
 ordered :: Ord a => Map a b -> Bool
 ordered t
@@ -42,19 +42,27 @@ balanced :: Map k a -> Bool
 balanced t
  = case t of
      Tip            -> True
-     Bin _ _ _ l r  -> (size l + size r <= 1 || (size l <= delta*size r && size r <= delta*size l)) &&
+     Bin _ _ _ l r  -> (sl + sr <= 1 || (sl <= delta*sr && sr <= delta*sl)) &&
                        balanced l && balanced r
+        where
+          sl = realsize l
+          sr = realsize r
 
-validsize :: Map a b -> Bool
-validsize t
- = (realsize t == Just (size t))
- where
-   realsize t'
-     = case t' of
-         Tip            -> Just 0
-         Bin sz _ _ l r -> case (realsize l,realsize r) of
-                           (Just n,Just m)  | n+m+1 == sz  -> Just sz
-                           _                               -> Nothing
+realsize t'
+  = case t' of
+      Tip            -> 0
+      Bin sz _ _ l r -> 1 + realsize l + realsize r
+
+-- validsize :: Map a b -> Bool
+-- validsize t
+--  = (realsize t == Just (size t))
+--  where
+--    realsize t'
+--      = case t' of
+--          Tip            -> Just 0
+--          Bin sz _ _ l r -> case (realsize l,realsize r) of
+--                            (Just n,Just m)  | n+m+1 == sz  -> Just sz
+--                            _                               -> Nothing
 
 
 --------------------------------------------------------------------

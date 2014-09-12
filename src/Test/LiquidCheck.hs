@@ -2,7 +2,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
 module Test.LiquidCheck
-  ( liquidCheck, testModule, testFun, testFunIgnoringFailure, testOne, testOneSC
+  ( liquidCheck, testModule, testFun, testFunIgnoringFailure, testOne, testOneSC, testOneMax
   , Constrain(..), Result(..), Testable(..), Test(..), CanTest)
   where
 

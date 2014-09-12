@@ -46,6 +46,7 @@ import           Control.Monad.State
 import qualified Data.HashMap.Strict              as HM
 import           Data.Monoid
 import           Data.Proxy
+import qualified Data.Set                         as Set
 import           Language.Fixpoint.Types          (Sort (..))
 import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.Types    (RType (..))
@@ -114,6 +115,65 @@ instance LSC.Serial RationalRect where
 instance LSC.Serial Rational where
   series = LSC.cons1 (%) LSC.>< (\d -> LSC.drawnFrom [1 .. fromIntegral d])
 
+
+noDuplicatesLiquid ss
+  = disjoint4 (workspacesElts (hidden ss))
+              (screenElts     (current ss))
+              (screensElts    (visible ss))
+              (floatingElts   (floating ss))
+ && screensNoDups (visible ss)
+ && workspacesNoDups (hidden ss)
+ && noDuplicateTags ss
+ && noDuplicateScreens ss
+
+disjoint4 w x y z = Set.null (Set.intersection w x)
+                 && Set.null (Set.intersection w y)
+                 && Set.null (Set.intersection w z)
+                 && Set.null (Set.intersection x y)
+                 && Set.null (Set.intersection x z)
+                 && Set.null (Set.intersection y z)
+
+disjoint3 x y z = Set.null (Set.intersection x y)
+               && Set.null (Set.intersection x z)
+               && Set.null (Set.intersection y z)
+
+workspaceElts :: Ord a => Workspace i l a -> Set.Set a
+workspaceElts w = Set.fromList $ concat [focus t : up t ++ down t | t <- maybeToList (stack w)]
+
+workspacesElts :: Ord a => [Workspace i l a] -> Set.Set a
+workspacesElts = Set.unions . map workspaceElts
+
+screenElts :: Ord a => Screen i l a sid sd -> Set.Set a
+screenElts s = workspaceElts (workspace s)
+
+screensElts :: Ord a => [Screen i l a sid sd] -> Set.Set a
+screensElts = Set.unions . map screenElts
+
+floatingElts :: Ord a => M.Map a RationalRect -> Set.Set a
+floatingElts f = Set.fromList $ M.keys f
+
+screensNoDups :: Ord a => [Screen i l a sid sd] -> Bool
+screensNoDups s = Set.null $ screensDups s
+screensDups [] = Set.empty
+screensDups (s:ss) = Set.union (Set.intersection (screenElts s) (screensElts ss))
+                               (screensDups ss)
+
+workspacesNoDups :: Ord a => [Workspace i l a] -> Bool
+workspacesNoDups s = Set.null $ workspacesDups s
+workspacesDups [] = Set.empty
+workspacesDups (s:ss) = Set.union (Set.intersection (workspaceElts s) (workspacesElts ss))
+                                  (workspacesDups ss)
+
+noDuplicateTags :: Ord i => StackSet i l a sid sd -> Bool
+noDuplicateTags ss
+  = disjoint3 (Set.singleton (tag (workspace (current ss))))
+              (Set.fromList (tag <$> (hidden ss)))
+              (Set.fromList (tag . workspace <$> (visible ss)))
+
+noDuplicateScreens :: Ord sid => StackSet i l a sid sd -> Bool
+noDuplicateScreens ss
+  = Set.null (Set.intersection (Set.singleton (screen (current ss)))
+                               (Set.fromList (map screen (visible ss))))
 
 -- instance (Ord k, SC.Serial m k, SC.Serial m v) => SC.Serial m (M.Map k v) where
 --   series  = fmap M.fromList SC.series
@@ -463,11 +523,11 @@ prop_index_length (x :: T) =
 {-@ prop_focus_left_master_lc :: Nat -> TT_LC -> True @-}
 prop_focus_left_master_lc (n :: Int) (x::T_LC) =
     index (foldr (const focusUp) x [1..n]) == index x
-prop_focus_left_master_sc (n :: Int) (x::T_LC) = noDuplicates x && n >= 0 SC.==>
+prop_focus_left_master_sc (n :: Int) (x::T_LC) = noDuplicatesLiquid x && n >= 0 SC.==>
     index (foldr (const focusUp) x [1..n]) == index x
-prop_focus_left_master_lsc (n :: Int) (x::T_LC) = noDuplicates x && n >= 0 LSC.==>
+prop_focus_left_master_lsc (n :: Int) (x::T_LC) = noDuplicatesLiquid x && n >= 0 LSC.==>
     index (foldr (const focusUp) x [1..n]) == index x
-prop_focus_left_master_qc (n :: Int) (x::T_LC) = noDuplicates x && n >= 0 QC.==>
+prop_focus_left_master_qc (n :: Int) (x::T_LC) = noDuplicatesLiquid x && n >= 0 QC.==>
     index (foldr (const focusUp) x [1..n]) == index x
 
 prop_focus_left_master (n :: NonNegative Int) (x::T) =
