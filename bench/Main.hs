@@ -95,12 +95,12 @@ logCsv f r = withFile f WriteMode $ \h -> do
 
 main :: IO ()
 main = do
-  print =<< logCsv "bench/list-insert.csv"       =<< listInsertTests
-  print =<< logCsv "bench/rbtree-add.csv"        =<< rbTreeAddTests
-  print =<< logCsv "bench/expr-subst.csv"        =<< exprSubstTests
-  print =<< logCsv "bench/map-delete.csv"        =<< mapDeleteTests
-  print =<< logCsv "bench/map-difference.csv"    =<< mapDifferenceTests
-  print =<< logCsv "bench/xmonad-focus-left.csv" =<< xmonadFocusLeftTests
+  print =<< logCsv "bench/List.insert.csv"       =<< listInsertTests
+  print =<< logCsv "bench/RBTree.add.csv"        =<< rbTreeAddTests
+  print =<< logCsv "bench/Expr.subst.csv"        =<< exprSubstTests
+  print =<< logCsv "bench/Map.delete.csv"        =<< mapDeleteTests
+  print =<< logCsv "bench/Map.difference.csv"    =<< mapDifferenceTests
+  print =<< logCsv "bench/XMonad.focus_left.csv" =<< xmonadFocusLeftTests
 
 listInsertTests = do
   l <- checkLiquid List.insert         "List.insert" "examples/List.hs"
@@ -190,7 +190,7 @@ checkMany name bench = do
       | n > 20
       = return []
       | otherwise
-      = putStrNow (printf "%d " n) >> timed (myTimeout (bench n 500)) >>= \case
+      = putStrNow (printf "%d " n) >> timed (myTimeout (bench n 2000)) >>= \case
               (d,Nothing) -> return [(n,d,TimeOut)]
               (d,Just i)  -> ((n,d,Complete i):) <$> go (n+1)
 
