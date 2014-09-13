@@ -118,6 +118,33 @@ instance LSC.Serial Rational where
   series = LSC.cons1 (%) LSC.>< (\d -> LSC.drawnFrom [1 .. fromIntegral d])
 
 
+class HasDepth a where
+  hasDepth :: Int -> a -> Bool
+
+instance HasDepth (StackSet i l Char sid sd) where
+  hasDepth d (StackSet c v h f) = hasDepth (d-1) c || hasDepth (d-1) v || hasDepth (d-1) h || hasDepth (d-1) f
+
+instance HasDepth (Screen i l Char sid sd) where
+  hasDepth d (Screen w _ _) = hasDepth (d-1) w
+
+instance HasDepth (Workspace i l Char) where
+  hasDepth d (Workspace _ _ Nothing)  = d <= 1
+  hasDepth d (Workspace _ _ (Just s)) = hasDepth (d-2) s
+
+instance HasDepth (Stack Char) where
+  hasDepth d (Stack f u b) = hasDepth (d-1) f || hasDepth (d-1) u || hasDepth (d-1) b
+
+instance HasDepth a => HasDepth [a] where
+  hasDepth d [] = d <= 0
+  hasDepth d (x:xs) = hasDepth (d-1) x || hasDepth (d-1) xs
+
+instance HasDepth Char where
+  hasDepth d c = d <= (ord 'a' - 97)
+
+instance HasDepth (M.Map Char a) where
+  hasDepth d M.Tip = d <= 0
+  hasDepth d (M.Bin s k v l r) = hasDepth (d-1) k || hasDepth (d-1) l || hasDepth (d-1) r
+
 noDuplicatesLiquid ss
   = disjoint4 (workspacesElts (hidden ss))
               (screenElts     (current ss))
@@ -525,10 +552,10 @@ prop_index_length (x :: T) =
 {-@ prop_focus_left_master_lc :: Nat -> TT_LC -> True @-}
 prop_focus_left_master_lc (n :: Int) (x::T_LC) =
     index (foldr (const focusUp) x [1..n]) == index x
-prop_focus_left_master_sc (n :: Int) (x::T_LC) = noDuplicatesLiquid x && n >= 0 SC.==>
+prop_focus_left_master_sc d (n :: Int) (x::T_LC) = hasDepth d x && noDuplicatesLiquid x && n >= 0 SC.==>
     index (foldr (const focusUp) x [1..n]) == index x
 
-prop_focus_left_master_lsc (n :: Int) (x::T_LC) = noDuplicatesLiquid x && n >= 0 LSC.==>
+prop_focus_left_master_lsc d (n :: Int) (x::T_LC) = hasDepth d x && noDuplicatesLiquid x && n >= 0 LSC.==>
     (unsafePerformIO $ case index (foldr (const focusUp) x [1..n]) == index x of
                          True -> LSC.decValidCounter >> return True
                          False -> return False)
