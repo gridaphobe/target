@@ -162,10 +162,10 @@ timed x = do start <- getTime
 
 -- checkLiquid :: CanTest f => f -> String -> FilePath -> IO [(Int,Double,Outcome)]
 checkLiquid f n m = checkMany (n++"/LiquidCheck")
-                              (\d max -> resultPassed <$> testOneMax f n d max m)
+                              (\d max -> resultPassed <$> testOneMaxSC f n d max m)
 
 checkSmall p n = checkMany (n++"/SmallCheck")
-                           (\d n -> fromIntegral.fst.fst <$> runTestWithStats d n p)
+                           (\d n -> fromIntegral.fst.fst <$> runTestWithStats d n (p d))
 
 checkLazySmall p n = checkMany (n++"/LazySmallCheck")
                                (\d n -> LSC.depthCheckResult d n (p d))
@@ -190,7 +190,7 @@ checkMany name bench = do
       | n > 20
       = return []
       | otherwise
-      = putStrNow (printf "%d " n) >> timed (myTimeout (bench n 10000)) >>= \case
+      = putStrNow (printf "%d " n) >> timed (myTimeout (bench n 1000)) >>= \case
               (d,Nothing) -> return [(n,d,TimeOut)]
               (d,Just i)  -> ((n,d,Complete i):) <$> go (n+1)
 

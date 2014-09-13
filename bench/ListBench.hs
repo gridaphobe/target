@@ -62,7 +62,7 @@ prop_mytake_sorted_sc n xs = sorted xs && n >= 0 && aall (>=0) xs
   where
     zs = mytake n xs
 
-prop_insert_sc x ys = sorted ys SC.==> sorted (insert x ys)
+prop_insert_sc d x ys = (llen ys >= d && sorted ys) SC.==> sorted (insert x ys)
 
 instance LSC.Serial a => LSC.Serial (List a) where
   series = LSC.cons0 Nil LSC.\/ LSC.cons2 Cons

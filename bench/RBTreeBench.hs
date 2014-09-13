@@ -51,8 +51,8 @@ ord (Node c x l r) = ord l && ord r && all (<x) l && all (>x) r
 instance Monad m => SC.Serial m Color
 instance (Monad m, SC.Serial m a) => SC.Serial m (RBTree a)
 
-prop_add_sc :: Monad m => Char -> RBTree Char -> SC.Property m
-prop_add_sc x t = isRBT t SC.==> isRBT (add x t)
+prop_add_sc :: Monad m => Int -> Char -> RBTree Char -> SC.Property m
+prop_add_sc d x t = hasDepth d t && isRBT t SC.==> isRBT (add x t)
 
 instance LSC.Serial Color where
   series = LSC.cons0 R LSC.\/ LSC.cons0 B

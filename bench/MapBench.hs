@@ -91,12 +91,12 @@ prop_delete_lc = delete
 --------------------------------------------------------------------------------
 instance (Monad m, SC.Serial m k, SC.Serial m a) => SC.Serial m (Map k a)
 
-prop_difference_sc :: Monad m => M -> M -> SC.Property m
-prop_difference_sc x y = valid x && valid y SC.==> valid z && keys z == (keys x L.\\ keys y)
+prop_difference_sc :: Monad m => Int -> M -> M -> SC.Property m
+prop_difference_sc d x y = hasDepth d x && hasDepth d y && valid x && valid y SC.==> valid z && keys z == (keys x L.\\ keys y)
   where z = difference x y
 
-prop_delete_sc :: Monad m => K -> M -> SC.Property m
-prop_delete_sc x y = valid y SC.==> valid z && keys z == (keys y L.\\ [x])
+prop_delete_sc :: Monad m => Int -> K -> M -> SC.Property m
+prop_delete_sc d x y = hasDepth d y && valid y SC.==> valid z && keys z == (keys y L.\\ [x])
   where z = delete x y
 
 instance (LSC.Serial k, LSC.Serial a) => LSC.Serial (Map k a) where

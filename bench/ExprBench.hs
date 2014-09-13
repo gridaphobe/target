@@ -20,10 +20,11 @@ import System.IO.Unsafe
 --------------------------------------------------------------------------------
 instance Monad m => SC.Serial m Expr
 
-prop_subst_sc e1 n e2 = closed e1 && closed e2 SC.==>
-                        if Set.member n fv_e2
-                        then fv_e == Set.union (Set.delete n fv_e2) fv_e1
-                        else fv_e == fv_e2
+prop_subst_sc d e1 n e2 
+  = (hasDepth d e1 || hasDepth d e2) && closed e1 && closed e2 SC.==>
+    if Set.member n fv_e2
+    then fv_e == Set.union (Set.delete n fv_e2) fv_e1
+    else fv_e == fv_e2
   where
     e     = subst e1 n e2
     fv_e  = freeVars e
