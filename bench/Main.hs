@@ -60,18 +60,18 @@ testResultRecords :: TestResult -> [NamedRecord]
 testResultRecords (TestResult name l s ls lss _)
   = [ namedRecord $ [ "Benchmark" .= B8.pack name
                     , "Tool"      .= B8.pack "Target" ]
-                 ++ [ bshow d .= toResult t o | d <- [2..10], let (t,o) = lookup3 d l ]
+                 ++ [ bshow d .= toResult t o | d <- [2..20], let (t,o) = lookup3 d l ]
     , namedRecord $ [ "Benchmark" .= B8.pack name
                     , "Tool"      .= B8.pack "SmallCheck" ]
-                 ++ [ bshow d .= toResult t o | d <- [2..10], let (t,o) = lookup3 d s ]
+                 ++ [ bshow d .= toResult t o | d <- [2..20], let (t,o) = lookup3 d s ]
     , namedRecord $ [ "Benchmark" .= B8.pack name
                     , "Tool"      .= B8.pack "Lazy-SmallCheck" ]
-                 ++ [ bshow d .= toResult t o | d <- [2..10], let (t,o) = lookup3 d ls ]
+                 ++ [ bshow d .= toResult t o | d <- [2..20], let (t,o) = lookup3 d ls ]
     ]
    ++ maybe [] (\ss ->
     [ namedRecord $ [ "Benchmark" .= B8.pack name
                     , "Tool"      .= B8.pack "Lazy-SmallCheck-slow" ]
-                 ++ [ bshow d .= toResult t o | d <- [2..10], let (t,o) = lookup3 d ss ]
+                 ++ [ bshow d .= toResult t o | d <- [2..20], let (t,o) = lookup3 d ss ]
     ]) lss
 
 bshow :: Show a => a -> B.ByteString
@@ -87,7 +87,7 @@ toResult d TimeOut      = "X"
 toResult d (Complete i) = bshow d
 
 header :: V.Vector B.ByteString
-header = V.fromList $ ["Benchmark", "Tool"] ++ [bshow d | d <- [2..10]]
+header = V.fromList $ ["Benchmark", "Tool"] ++ [bshow d | d <- [2..20]]
 
 logCsv f r = withFile f WriteMode $ \h -> do
   LB.hPutStr h $ encodeByName header $ testResultRecords r
