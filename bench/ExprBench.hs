@@ -31,10 +31,11 @@ prop_subst_sc e1 n e2 = closed e1 && closed e2 SC.==>
 instance LSC.Serial Expr where
   series = LSC.cons1 Var LSC.\/ LSC.cons2 App LSC.\/ LSC.cons2 Lam
 
-prop_subst_lsc e1 n e2 = closed e1 && closed e2 LSC.==>
-                         if Set.member n fv_e2
-                         then fv_e == Set.union (Set.delete n fv_e2) fv_e1
-                         else fv_e == fv_e2
+prop_subst_lsc d e1 n e2 
+  = (hasDepth d e1 || hasDepth d e2) && closed e1 && closed e2 LSC.==>
+    if Set.member n fv_e2
+    then fv_e == Set.union (Set.delete n fv_e2) fv_e1
+    else fv_e == fv_e2
   where
     e     = subst e1 n e2
     fv_e  = freeVars e

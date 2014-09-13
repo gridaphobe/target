@@ -34,6 +34,10 @@ data Expr = Var Char
           | App Expr Expr
           deriving (Generic, Show)
 
+hasDepth d (Var c)   = d == 1
+hasDepth d (Lam c e) = hasDepth (d-1) e
+hasDepth d (App f e) = hasDepth (d-1) f || hasDepth (d-1) e
+
 {-@ measure freeVars :: Expr -> (Set Char)
     freeVars (Var v)   = (Set_sng v)
     freeVars (Lam v e) = (Set_dif (freeVars e) (Set_sng v))

@@ -258,8 +258,8 @@ validCounter = unsafePerformIO $ newIORef 0
 
 decValidCounter = do
   n <- readIORef validCounter
-  when (n == 1) $ throw ()
   modifyIORef' validCounter (\n -> n - 1)
+  when (n == 1) $ throw ()
 {-# NOINLINE decValidCounter #-}
 
 (==>) :: Bool -> Bool -> Bool
