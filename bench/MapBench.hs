@@ -13,6 +13,8 @@ import qualified Test.SmallCheck        as SC
 import qualified Test.SmallCheck.Series as SC
 import qualified LazySmallCheck as LSC
 
+import System.IO.Unsafe
+
 {--------------------------------------------------------------------
   Assertions
 --------------------------------------------------------------------}
@@ -101,23 +103,37 @@ instance (LSC.Serial k, LSC.Serial a) => LSC.Serial (Map k a) where
   series = LSC.cons0 Tip LSC.\/ LSC.cons5 Bin
 
 prop_delete_lsc :: Int -> K -> M -> Bool
-prop_delete_lsc d x y = hasDepth d y && valid y LSC.==> 
-                        valid z && keys z == (keys y L.\\ [x])
+prop_delete_lsc d x y = hasDepth d y && valid y LSC.==> (unsafePerformIO $
+  case valid z && keys z == (keys y L.\\ [x]) of
+    True -> LSC.decValidCounter >> return True
+    False -> return False
+  )
   where z = delete x y
 
 prop_delete_lsc_slow :: Int -> K -> M -> Bool
-prop_delete_lsc_slow d x y = hasDepth d y && valid_slow y LSC.==> 
-                             valid_slow z && keys z == (keys y L.\\ [x])
+prop_delete_lsc_slow d x y = hasDepth d y && valid_slow y LSC.==> (unsafePerformIO $
+  case valid_slow z && keys z == (keys y L.\\ [x]) of
+    True -> LSC.decValidCounter >> return True
+    False -> return False
+  )
   where z = delete x y
 
 prop_difference_lsc :: Int -> M -> M -> Bool
 prop_difference_lsc d x y = (hasDepth d x || hasDepth d y) && valid x && valid y 
-                    LSC.==> valid z && keys z == (keys x L.\\ keys y)
+  LSC.==> (unsafePerformIO $
+   case valid z && keys z == (keys x L.\\ keys y) of
+     True -> LSC.decValidCounter >> return True
+     False -> return False
+   )
   where z = difference x y
 
 prop_difference_lsc_slow :: Int -> M -> M -> Bool
 prop_difference_lsc_slow d x y = (hasDepth d x || hasDepth d y) && valid_slow x && valid_slow y 
-                         LSC.==> valid_slow z && keys z == (keys x L.\\ keys y)
+  LSC.==> (unsafePerformIO $
+   case valid_slow z && keys z == (keys x L.\\ keys y) of
+     True -> LSC.decValidCounter >> return True
+     False -> return False
+   )
   where z = difference x y
 
 --------------------------------------------------------------------------------

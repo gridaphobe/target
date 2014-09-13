@@ -13,6 +13,8 @@ import qualified Test.SmallCheck        as SC
 import qualified Test.SmallCheck.Series as SC
 import qualified LazySmallCheck         as LSC
 
+import System.IO.Unsafe
+
 --------------------------------------------------------------------------------
 --- SmallCheck
 --------------------------------------------------------------------------------
@@ -33,9 +35,12 @@ instance LSC.Serial Expr where
 
 prop_subst_lsc d e1 n e2 
   = (hasDepth d e1 || hasDepth d e2) && closed e1 && closed e2 LSC.==>
-    if Set.member n fv_e2
-    then fv_e == Set.union (Set.delete n fv_e2) fv_e1
-    else fv_e == fv_e2
+    (unsafePerformIO $ case (if Set.member n fv_e2
+                             then fv_e == Set.union (Set.delete n fv_e2) fv_e1
+                             else fv_e == fv_e2) of
+                         True -> LSC.decValidCounter >> return True
+                         False -> return False
+    )
   where
     e     = subst e1 n e2
     fv_e  = freeVars e

@@ -11,6 +11,8 @@ import qualified Test.SmallCheck.Series as SC
 
 import qualified LazySmallCheck as LSC
 
+import System.IO.Unsafe
+
 import Debug.Trace
 
 --------------------------------------------------------------------------------
@@ -65,4 +67,8 @@ prop_insert_sc x ys = sorted ys SC.==> sorted (insert x ys)
 instance LSC.Serial a => LSC.Serial (List a) where
   series = LSC.cons0 Nil LSC.\/ LSC.cons2 Cons
 
-prop_insert_lsc d x ys = (llen ys == d && sorted ys) LSC.==> sorted (insert x ys)
+prop_insert_lsc d x ys = (llen ys >= d && sorted ys) LSC.==> (unsafePerformIO $
+  case sorted (insert x ys) of
+    True -> LSC.decValidCounter >> return True
+    False -> return False
+  )

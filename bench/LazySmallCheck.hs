@@ -31,6 +31,7 @@ module LazySmallCheck
   , (*=>*)         -- :: Property -> Property -> Property
   , (*=*)          -- :: Property -> Property -> Property
   , depthCheckResult
+  , decValidCounter
   )
   where
 
@@ -204,7 +205,7 @@ refute r = ref (args r)
   where
     ref xs = eval (apply r xs) known unknown
       where
-        known True = decValidCounter >> return 1
+        known True = return 1
         known False = report
         unknown p = sumMapM ref 1 (refineList xs p)
 
@@ -264,9 +265,7 @@ decValidCounter = do
 
 (==>) :: Bool -> Bool -> Bool
 False ==> _ = True
-True ==> True = True
-True ==> False = False
---True ==> x = x
+True ==> x = x
 
 -- Testable
 

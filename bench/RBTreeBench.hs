@@ -12,10 +12,14 @@ import qualified LazySmallCheck         as LSC
 
 import           Test.LiquidCheck.Util
 
+import System.IO.Unsafe
+
+import Debug.Trace
+
 --------------------------------------------------------------------------------
 -- Testing ---------------------------------------------------------------------
 --------------------------------------------------------------------------------
-hasDepth d Leaf = d == 0
+hasDepth d Leaf = d <= 0
 hasDepth d (Node _ _ l r) = hasDepth (d-1) l || hasDepth (d-1) r
 
 prop_add_lc :: Char -> RBTree Char -> RBTree Char
@@ -57,10 +61,18 @@ instance LSC.Serial a => LSC.Serial (RBTree a) where
   series = LSC.cons0 Leaf LSC.\/ LSC.cons4 Node
 
 prop_add_lsc :: Int -> Char -> RBTree Char -> Bool
-prop_add_lsc d x t = hasDepth d t && isRBT t LSC.==> isRBT (add x $ myTrace "prop_add_lsc" t)
+prop_add_lsc d x t = hasDepth d t && isRBT t LSC.==> (unsafePerformIO $
+  case isRBT (add x t) of
+    True  -> LSC.decValidCounter >> return True
+    False -> return False
+  )
 
 prop_add_lsc_slow :: Int -> Char -> RBTree Char -> Bool
-prop_add_lsc_slow d x t = hasDepth d t && isRBT_SLOW t LSC.==> isRBT_SLOW (add x t)
+prop_add_lsc_slow d x t = hasDepth d t && isRBT_SLOW t LSC.==> (unsafePerformIO $
+  case isRBT_SLOW (add x t) of
+    True  -> LSC.decValidCounter >> return True
+    False -> return False
+  )
 
 instance QC.Arbitrary Color where
   arbitrary = QC.oneof [return R, return B]

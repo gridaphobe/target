@@ -190,7 +190,7 @@ checkMany name bench = do
       | n > 20
       = return []
       | otherwise
-      = putStrNow (printf "%d " n) >> timed (myTimeout (bench n 2000)) >>= \case
+      = putStrNow (printf "%d " n) >> timed (myTimeout (bench n 10000)) >>= \case
               (d,Nothing) -> return [(n,d,TimeOut)]
               (d,Just i)  -> ((n,d,Complete i):) <$> go (n+1)
 

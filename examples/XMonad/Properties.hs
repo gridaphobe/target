@@ -60,6 +60,8 @@ import           TysWiredIn                       (listTyCon, tupleTyCon)
 
 import qualified LazySmallCheck                   as LSC
 
+import System.IO.Unsafe
+
 -- FIXME: this measure makes sure that True and False are in the environment...
 {-@ measure prop :: Bool -> Prop
     prop (True)  = true
@@ -525,8 +527,12 @@ prop_focus_left_master_lc (n :: Int) (x::T_LC) =
     index (foldr (const focusUp) x [1..n]) == index x
 prop_focus_left_master_sc (n :: Int) (x::T_LC) = noDuplicatesLiquid x && n >= 0 SC.==>
     index (foldr (const focusUp) x [1..n]) == index x
+
 prop_focus_left_master_lsc (n :: Int) (x::T_LC) = noDuplicatesLiquid x && n >= 0 LSC.==>
-    index (foldr (const focusUp) x [1..n]) == index x
+    (unsafePerformIO $ case index (foldr (const focusUp) x [1..n]) == index x of
+                         True -> LSC.decValidCounter >> return True
+                         False -> return False)
+
 prop_focus_left_master_qc (n :: Int) (x::T_LC) = noDuplicatesLiquid x && n >= 0 QC.==>
     index (foldr (const focusUp) x [1..n]) == index x
 
