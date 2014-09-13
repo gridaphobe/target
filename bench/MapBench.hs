@@ -53,6 +53,9 @@ realsize t'
       Tip            -> 0
       Bin sz _ _ l r -> 1 + realsize l + realsize r
 
+hasDepth d Tip = d == 0
+hasDepth d (Bin _ _ _ l r) = hasDepth (d-1) l || hasDepth (d-1) r
+
 -- validsize :: Map a b -> Bool
 -- validsize t
 --  = (realsize t == Just (size t))
@@ -97,20 +100,24 @@ prop_delete_sc x y = valid y SC.==> valid z && keys z == (keys y L.\\ [x])
 instance (LSC.Serial k, LSC.Serial a) => LSC.Serial (Map k a) where
   series = LSC.cons0 Tip LSC.\/ LSC.cons5 Bin
 
-prop_delete_lsc :: K -> M -> Bool
-prop_delete_lsc x y = valid y LSC.==> valid z && keys z == (keys y L.\\ [x])
+prop_delete_lsc :: Int -> K -> M -> Bool
+prop_delete_lsc d x y = hasDepth d y && valid y LSC.==> 
+                        valid z && keys z == (keys y L.\\ [x])
   where z = delete x y
 
-prop_delete_lsc_slow :: K -> M -> Bool
-prop_delete_lsc_slow x y = valid_slow y LSC.==> valid_slow z && keys z == (keys y L.\\ [x])
+prop_delete_lsc_slow :: Int -> K -> M -> Bool
+prop_delete_lsc_slow d x y = hasDepth d y && valid_slow y LSC.==> 
+                             valid_slow z && keys z == (keys y L.\\ [x])
   where z = delete x y
 
-prop_difference_lsc :: M -> M -> Bool
-prop_difference_lsc x y = valid x && valid y LSC.==> valid z && keys z == (keys x L.\\ keys y)
+prop_difference_lsc :: Int -> M -> M -> Bool
+prop_difference_lsc d x y = (hasDepth d x || hasDepth d y) && valid x && valid y 
+                    LSC.==> valid z && keys z == (keys x L.\\ keys y)
   where z = difference x y
 
-prop_difference_lsc_slow :: M -> M -> Bool
-prop_difference_lsc_slow x y = valid_slow x && valid_slow y LSC.==> valid_slow z && keys z == (keys x L.\\ keys y)
+prop_difference_lsc_slow :: Int -> M -> M -> Bool
+prop_difference_lsc_slow d x y = (hasDepth d x || hasDepth d y) && valid_slow x && valid_slow y 
+                         LSC.==> valid_slow z && keys z == (keys x L.\\ keys y)
   where z = difference x y
 
 --------------------------------------------------------------------------------

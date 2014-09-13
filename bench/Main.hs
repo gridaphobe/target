@@ -168,7 +168,7 @@ checkSmall p n = checkMany (n++"/SmallCheck")
                            (\d n -> fromIntegral.fst.fst <$> runTestWithStats d n p)
 
 checkLazySmall p n = checkMany (n++"/LazySmallCheck")
-                               (\d n -> LSC.depthCheckResult d n p)
+                               (\d n -> LSC.depthCheckResult d n (p d))
 
 checkQuick :: QC.Testable f => f -> String -> IO (Double,Outcome)
 checkQuick p n = timed $ do

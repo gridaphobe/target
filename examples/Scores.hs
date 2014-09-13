@@ -5,7 +5,7 @@ import Test.LiquidCheck
 
 {-@ type Pos = {v:Int | 0 < v} @-}
 {-@ type NotZero = {v:Int | 0 != v} @-}
-{-@ type Rng N = {v:Nat | v <  N} @-}
+{-@ type Rng N = {v:Nat | v <= N} @-}
 {-@ type Score = Rng 100 @-}
 
 {-@ rescale :: r1:NotZero -> r2:NotZero -> s:Rng r1 -> Rng r2 @-}
