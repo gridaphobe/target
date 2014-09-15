@@ -73,17 +73,6 @@ import System.IO.Unsafe
 {-@ type TT_LC = {v: StackSet () () Char () () | (NoDuplicates v) && (mlen (lfloating v) = 0) } @-}
 type T_LC = StackSet () () Char () ()
 
-instance (Ord a, Constrain i, Constrain l, Constrain a, Constrain s, Constrain sd)
-  => Constrain (StackSet i l a s sd)
-
-instance (Constrain i, Constrain l, Constrain a, Constrain s, Constrain sd)
-  => Constrain (Screen i l a s sd)
-
-instance (Constrain i, Constrain l, Constrain a) => Constrain (Workspace i l a)
-
-instance Constrain a => Constrain (Stack a)
-
-instance Constrain RationalRect
 
 instance (Ord a, SC.Serial m i, SC.Serial m l, SC.Serial m a, SC.Serial m s, SC.Serial m sd)
   => SC.Serial m (StackSet i l a s sd)

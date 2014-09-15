@@ -7,7 +7,12 @@
 
 {-@ LIQUID "--no-termination"   @-}
 
-module RBTree where
+module RBTree
+  ( RBTree(..), Color(..), add, ins, remove, del, append, deleteMin
+  , lbalS, rbalS, lbal, rbal, makeRed, makeBlack
+  , Char, Int
+  )
+  where
 
 import           Debug.Trace
 

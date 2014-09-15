@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PatternGuards #-}
-
+{-@ LIQUID "-i../../bench" @-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  XMonad.StackSet
@@ -50,6 +50,9 @@ module XMonad.StackSet (
 
         -- for testing
         abort
+        
+        --LIQUID
+        , Char, Int, Bool, Maybe
     ) where
 
 {-@ LIQUID "--totality" @-}
@@ -63,6 +66,9 @@ import qualified Map          as M (Map, delete, empty, insert)
 
 import qualified Data.Set
 import           GHC.Generics
+
+import Test.LiquidCheck
+
 -- $intro
 --
 -- The 'StackSet' data type encodes a window manager abstraction. The
@@ -1366,3 +1372,16 @@ allIsNothingW []                          = True
 {-@ isNothing :: x:Maybe a -> {v:Bool | ((Prop v) <=> (isNothing x)) } @-}
 isNothing (Nothing) = True
 isNothing (Just _)  = False
+
+
+instance (Ord a, Constrain i, Constrain l, Constrain a, Constrain s, Constrain sd)
+  => Constrain (StackSet i l a s sd)
+
+instance (Constrain i, Constrain l, Constrain a, Constrain s, Constrain sd)
+  => Constrain (Screen i l a s sd)
+
+instance (Constrain i, Constrain l, Constrain a) => Constrain (Workspace i l a)
+
+instance Constrain a => Constrain (Stack a)
+
+instance Constrain RationalRect

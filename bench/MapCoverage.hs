@@ -10,6 +10,7 @@ import           Control.Monad.Catch
 import           Control.Monad
 import           Data.Time.Clock.POSIX
 import           Data.Timeout
+import           System.Environment
 import           System.IO
 import           Text.Printf
 
@@ -20,15 +21,16 @@ import           Test.LiquidCheck.Util
 
 main :: IO ()
 main = do
+  [t]  <- getArgs
   spec <- getSpec "bench/Map.hs"
-  withFile "_results/Map.tsv" WriteMode $ \h -> do
+  withFile ("_results/Map-" ++ t ++ ".tsv") WriteMode $ \h -> do
     hPutStrLn h "Function\tDepth\tTime(s)\tResult"
-    mapM_ (checkMany spec h) funs
+    mapM_ (checkMany spec h (read t # Minute)) funs
   putStrLn "done"
   putStrLn ""
 
 -- checkMany :: GhcSpec -> Handle -> IO [(Int, Double, Outcome)]
-checkMany spec h (T f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
+checkMany spec h time (T f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
   where
     go 21     = return []
     go n      = checkAt n >>= \case
@@ -57,7 +59,7 @@ checkMany spec h (T f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
         Left (e :: SomeException) -> return $ Just $ Errored $ show e
         Right r                   -> return r
 
-time = 5 # Minute
+-- time = 5 # Minute
 
 getTime :: IO Double
 getTime = realToFrac `fmap` getPOSIXTime
