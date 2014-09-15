@@ -3,6 +3,7 @@
 module Test.LiquidCheck.Eval where
 
 import           Control.Applicative
+import           Control.Monad.Catch
 import           Control.Monad.State
 import           Data.Function
 import qualified Data.HashMap.Strict             as M
@@ -20,6 +21,7 @@ import           Language.Haskell.Liquid.Types   hiding (var)
 -- import           Test.LiquidCheck.Constrain
 import           Test.LiquidCheck.Expr
 import           Test.LiquidCheck.Gen
+import           Test.LiquidCheck.Types
 import           Test.LiquidCheck.Util
 
 
@@ -70,7 +72,7 @@ evalPred (PIff p q)      m = and <$> sequence [ evalPred (p `imp` q) m
                                               ]
 evalPred (PAtom b e1 e2) m = evalBrel b <$> evalExpr e1 m <*> evalExpr e2 m
 evalPred (PBexp e)       m = (==0) <$> evalExpr e m
-evalPred p               m = error $ "evalPred: " ++ show p
+evalPred p               m = throwM $ EvalError $ "evalPred: " ++ show p
 -- evalPred (PAll ss p)     m = undefined
 -- evalPred PTop            m = undefined
 
@@ -94,7 +96,7 @@ applyMeasure m (EApp c xs) env = evalBody eq xs env
       c -> c
     eq = safeFromJust ("applyMeasure: " ++ ct)
        $ find ((==ct) . show . ctor) $ eqns m
-applyMeasure m e           env = error $ printf "applyMeasure(%s, %s)" (showpp m) (showpp e)
+applyMeasure m e           env = throwM $ EvalError $ printf "applyMeasure(%s, %s)" (showpp m) (showpp e)
 
 setSym :: Symbol
 setSym = "LC_SET"
@@ -119,7 +121,7 @@ evalSet "Set_sub" [EApp _ e1, EApp _ e2] env
   = return $ if e1 \\ e2 == [] then 0 else 1
 evalSet "Set_mem" [e1, EApp f e2] env | val f == setSym
   = return $ if e1 `elem` e2 then 0 else 1
-evalSet f es env = error $ printf "evalSet(%s, %s)" (show f) (show es)
+evalSet f es env = throwM $ EvalError $ printf "evalSet(%s, %s)" (show f) (show es)
 
 evalBody eq xs env = go $ body eq
   where
@@ -127,7 +129,7 @@ evalBody eq xs env = go $ body eq
     go (P p) = evalPred (subst su p) env >>= \b -> return $ if b then 0 else 1
     go (R v p) = do e <- evalRel v (subst su p) env
                     case e of
-                      Nothing -> error $ "evalBody can't handle: " ++ show (R v p)
+                      Nothing -> throwM $ EvalError $ "evalBody can't handle: " ++ show (R v p)
                       Just e  -> return e
     --go (R v (PBexp (EApp f e))) | val f == "Set_emp" = return $ app setSym []
     ----FIXME: figure out how to handle the general case..
@@ -147,7 +149,7 @@ evalRel v (PBexp (EApp f [EVar v'])) m
   | v == v' && val f == "Set_emp"
   = return $ Just $ app setSym []
 evalRel v p               m
-  = error $ "evalRel: " ++ show p
+  = throwM $ EvalError $ "evalRel: " ++ show p
 
 evalExpr :: Expr -> M.HashMap Symbol Expr -> Gen Expr
 evalExpr (ECon i)       m = return $ ECon i
@@ -169,7 +171,7 @@ evalExpr (EIte p e1 e2) m
        if b
          then evalExpr e1 m
          else evalExpr e2 m
-evalExpr e              m = error $ printf "evalExpr(%s)" (show e)
+evalExpr e              m = throwM $ EvalError $ printf "evalExpr(%s)" (show e)
 
 evalBop Plus  (ECon (I x)) (ECon (I y)) = ECon . I $ x + y
 evalBop Minus (ECon (I x)) (ECon (I y)) = ECon . I $ x - y

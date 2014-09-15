@@ -19,6 +19,7 @@ data LiquidException = SmtFailedToProduceOutput
                      | SmtError String
                      | ExpectedValues Response
                      | PreconditionCheckFailed String
+                     | EvalError String
                      deriving Typeable
 
 instance Show LiquidException where
@@ -26,6 +27,7 @@ instance Show LiquidException where
   show (SmtError s) = "Unexpected error from the solver: " ++ s
   show (ExpectedValues r) = "Expected a Values response from the solver, got: " ++ show r
   show (PreconditionCheckFailed e) = "The pre-condition check for a generated function failed: " ++ e
+  show (EvalError s) = "Couldn't evaluate a concrete refinement: " ++ s
 
 instance Ex.Exception LiquidException
 
