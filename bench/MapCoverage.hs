@@ -5,6 +5,8 @@ module Main where
 import qualified Map
 
 import           Control.Applicative
+import           Control.Concurrent.Async
+import           Control.Concurrent.MSem
 import           Control.Concurrent.Timeout
 import           Control.Monad.Catch
 import           Control.Monad
@@ -25,9 +27,14 @@ main = do
   spec <- getSpec "bench/Map.hs"
   withFile ("_results/Map-" ++ t ++ ".tsv") WriteMode $ \h -> do
     hPutStrLn h "Function\tDepth\tTime(s)\tResult"
-    mapM_ (checkMany spec h (read t # Minute)) funs
+    mapPool 4 (checkMany spec h (read t # Minute)) funs
   putStrLn "done"
   putStrLn ""
+
+mapPool max f xs = do
+  sem <- new max
+  mapConcurrently (with sem . f) xs
+
 
 -- checkMany :: GhcSpec -> Handle -> IO [(Int, Double, Outcome)]
 checkMany spec h time (T f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2

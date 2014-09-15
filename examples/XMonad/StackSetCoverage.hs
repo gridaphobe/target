@@ -4,6 +4,8 @@ module Main where
 import qualified XMonad.StackSet
 
 import Control.Applicative
+import           Control.Concurrent.Async
+import           Control.Concurrent.MSem
 import Control.Monad
 import Control.Concurrent.Timeout
 import Data.Time.Clock.POSIX
@@ -23,9 +25,13 @@ main = do
   spec <- getSpec "bench/XMonad/StackSet.hs"
   withFile ("_results/XMonad.StackSet"++t++".tsv") WriteMode $ \h -> do
     hPutStrLn h "Function\tDepth\tTime(s)\tResult"
-    mapM_ (checkMany spec h (read t # Minute)) funs
+    mapPool 4 (checkMany spec h (read t # Minute)) funs
   putStrLn "done"
   putStrLn ""
+
+mapPool max f xs = do
+  sem <- new max
+  mapConcurrently (with sem . f) xs
 
 -- checkMany :: GhcSpec -> Handle -> IO [(Int, Double, Outcome)]
 checkMany spec h time (T f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
@@ -60,14 +66,7 @@ data Outcome = Complete Result
              | TimeOut
              deriving (Show)
 
-funs = [(T ((XMonad.StackSet.tag) :: XMonad.StackSet.Workspace () () XMonad.StackSet.Char -> ()), "XMonad.StackSet.tag")
-       ,(T ((XMonad.StackSet.stack) :: XMonad.StackSet.Workspace () () XMonad.StackSet.Char-> XMonad.StackSet.Maybe     (XMonad.StackSet.Stack XMonad.StackSet.Char)), "XMonad.StackSet.stack")
-       ,(T ((XMonad.StackSet.layout) :: XMonad.StackSet.Workspace () () XMonad.StackSet.Char -> ()), "XMonad.StackSet.layout")
-       ,(T ((XMonad.StackSet.visible) :: XMonad.StackSet.StackSet () () XMonad.StackSet.Char () ()-> [XMonad.StackSet.Screen () () XMonad.StackSet.Char () ()]), "XMonad.StackSet.visible")
-       ,(T ((XMonad.StackSet.hidden) :: XMonad.StackSet.StackSet () () XMonad.StackSet.Char () ()-> [XMonad.StackSet.Workspace () () XMonad.StackSet.Char]), "XMonad.StackSet.hidden")
-       ,(T ((XMonad.StackSet.current) :: XMonad.StackSet.StackSet () () XMonad.StackSet.Char () ()-> XMonad.StackSet.Screen () () XMonad.StackSet.Char () ()), "XMonad.StackSet.current")
-       ,(T ((XMonad.StackSet.workspace) :: XMonad.StackSet.Screen () () XMonad.StackSet.Char () ()-> XMonad.StackSet.Workspace () () XMonad.StackSet.Char), "XMonad.StackSet.workspace")
-       ,(T ((XMonad.StackSet.view) :: ()-> XMonad.StackSet.StackSet () () XMonad.StackSet.Char () ()-> XMonad.StackSet.StackSet () () XMonad.StackSet.Char () ()), "XMonad.StackSet.view")
+funs = [(T ((XMonad.StackSet.view) :: ()-> XMonad.StackSet.StackSet () () XMonad.StackSet.Char () ()-> XMonad.StackSet.StackSet () () XMonad.StackSet.Char () ()), "XMonad.StackSet.view")
        ,(T ((XMonad.StackSet.tagMember) :: ()-> XMonad.StackSet.StackSet () () XMonad.StackSet.Char () ()-> XMonad.StackSet.Bool), "XMonad.StackSet.tagMember")
        ,(T ((XMonad.StackSet.swapMaster) :: XMonad.StackSet.StackSet () () XMonad.StackSet.Char () ()-> XMonad.StackSet.StackSet () () XMonad.StackSet.Char () ()), "XMonad.StackSet.swapMaster")
        ,(T ((XMonad.StackSet.peek) :: XMonad.StackSet.StackSet () () XMonad.StackSet.Char () ()-> XMonad.StackSet.Maybe XMonad.StackSet.Char), "XMonad.StackSet.peek")

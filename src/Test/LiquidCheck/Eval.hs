@@ -7,6 +7,7 @@ import           Control.Monad.State
 import           Data.Function
 import qualified Data.HashMap.Strict             as M
 import           Data.List
+import           Data.Maybe
 import           Text.Printf
 
 import           GHC
@@ -124,9 +125,29 @@ evalBody eq xs env = go $ body eq
   where
     go (E e) = evalExpr (subst su e) env
     go (P p) = evalPred (subst su p) env >>= \b -> return $ if b then 0 else 1
-    go (R v (PBexp (EApp f e))) | val f == "Set_emp" = return $ app setSym []
+    go (R v p) = do e <- evalRel v (subst su p) env
+                    case e of
+                      Nothing -> error $ "evalBody can't handle: " ++ show (R v p)
+                      Just e  -> return e
+    --go (R v (PBexp (EApp f e))) | val f == "Set_emp" = return $ app setSym []
+    ----FIXME: figure out how to handle the general case..
+    --go (R v p) = return (ECon (I 0))
     su = mkSubst $ zip (binds eq) xs
 
+evalRel :: Symbol -> Pred -> M.HashMap Symbol Expr -> Gen (Maybe Expr)
+evalRel v (PAnd ps)       m = Just . head . catMaybes <$> sequence [evalRel v p m | p <- ps]
+evalRel v (PImp p q)      m = do pv <- evalPred p m
+                                 if pv
+                                    then evalRel v q m
+                                    else return Nothing
+evalRel v (PAtom Eq (EVar v') e2) m
+  | v == v'
+  = Just <$> evalExpr e2 m
+evalRel v (PBexp (EApp f [EVar v'])) m
+  | v == v' && val f == "Set_emp"
+  = return $ Just $ app setSym []
+evalRel v p               m
+  = error $ "evalRel: " ++ show p
 
 evalExpr :: Expr -> M.HashMap Symbol Expr -> Gen Expr
 evalExpr (ECon i)       m = return $ ECon i

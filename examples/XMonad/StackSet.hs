@@ -672,7 +672,7 @@ tagMember :: Eq i => i -> StackSet i l a s sd -> Bool
 {-@ tagMember :: Eq i
           => x:i
           -> s:StackSet i l a s sd
-          -> {v:Bool| ( (Prop v) <=> (TagMember x s))}
+          -> {v:Bool| ( (prop v) <=> (TagMember x s))}
   @-}
 tagMember t s =   t == currentTag s
               ||  (t `elem` workspacesTags (hidden s))
@@ -771,7 +771,7 @@ mapW f (x:xs) = f x : mapW f xs
 {-@ member :: Eq a
            => x:a
            -> st:(StackSet i l a s sd)
-           -> {v:Bool| ((~(Prop v)) => (~(StackSetElt x st)))}
+           -> {v:Bool| ((~(prop v)) => (~(StackSetElt x st)))}
   @-}
 member :: Eq a => a -> StackSet i l a s sd -> Bool
 member a s =  memberStack      a (stack $ workspace $ current s)
@@ -783,7 +783,7 @@ member a s =  memberStack      a (stack $ workspace $ current s)
 {-@ memberWorkspace :: Eq a
                     => x:a
                     -> w:(Workspace i l a)
-                    -> {v:Bool|((Prop v)<=>(Set_mem x (workspaceElts w)))}
+                    -> {v:Bool|((prop v)<=>(Set_mem x (workspaceElts w)))}
   @-}
 memberWorkspace x (Workspace _ _ (Just (Stack f u d))) = x`elem` (f:u++d)
 memberWorkspace _ _                     = False
@@ -792,7 +792,7 @@ memberWorkspace _ _                     = False
 {-@ memberScreen :: Eq a
                     => x:a
                     -> w:(Screen i l a sid sd)
-                    -> {v:Bool|((Prop v)<=>(Set_mem x (screenElts w)))}
+                    -> {v:Bool|((prop v)<=>(Set_mem x (screenElts w)))}
   @-}
 memberScreen x (Screen w _ _) = memberWorkspace x w
 
@@ -801,7 +801,7 @@ memberScreen x (Screen w _ _) = memberWorkspace x w
 {-@ memberWorkspaces :: Eq a
                      => x:a
                      -> ss:[Workspace i l a]
-                     -> {v:Bool|((Prop v)<=>(Set_mem x (workspacesElts ss)))}
+                     -> {v:Bool|((prop v)<=>(Set_mem x (workspacesElts ss)))}
   @-}
 
 memberWorkspaces _ []     = False
@@ -810,7 +810,7 @@ memberWorkspaces a (w:ws) = memberWorkspace a w || memberWorkspaces a ws
 {-@ memberScreens :: Eq a
                   => x:a
                   -> ss:[Screen i l a s sd]
-                  -> {v:Bool|((Prop v)<=>(Set_mem x (screensElts ss)))}
+                  -> {v:Bool|((prop v)<=>(Set_mem x (screensElts ss)))}
   @-}
 
 memberScreens a []     = False
@@ -819,7 +819,7 @@ memberScreens a (s:ss) = memberScreen a s || memberScreens a ss
 {-@ memberStack :: Eq a
                 => x:a
                 -> st:(Maybe (UStack a))
-                -> {v:Bool|((Prop v)<=>((isJust st) && (StackElt x (fromJust st))))}
+                -> {v:Bool|((prop v)<=>((isJust st) && (StackElt x (fromJust st))))}
   @-}
 memberStack :: Eq a => a -> Maybe (Stack a) -> Bool
 memberStack x (Just (Stack f up down)) = x `elem` (f : up ++ down)
@@ -991,7 +991,7 @@ onWorkspace n f s = view (currentTag s) . f . view n $ s
 
 -- LIQUID HELPERS
 
-{-@ assume liquidAssume :: forall <p :: a -> Prop>. (a<p> -> {v:Bool| ((Prop v) <=> true)}) -> a -> a<p> @-}
+{-@ assume liquidAssume :: forall <p :: a -> Prop>. (a<p> -> {v:Bool| ((prop v) <=> true)}) -> a -> a<p> @-}
 liquidAssume :: (a -> Bool) -> a -> a
 liquidAssume p x | p x       = x
                  | otherwise = error "liquidAssume fails"
@@ -1025,7 +1025,7 @@ filterScreen f (x:xs) | f x       = x : filterScreen f xs
 {- assume elem :: Eq a
                 => x:a
                 -> xs:[a]
-                -> {v:Bool|((Prop v)<=>(ListElt x xs))}
+                -> {v:Bool|((prop v)<=>(ListElt x xs))}
   @-}
 
 {- assume reverse :: xs:(UList a)
@@ -1228,150 +1228,18 @@ filterScreen f (x:xs) | f x       = x : filterScreen f xs
 
 {-@ type EmptyStackSet i l a sid sd = StackSet <{\w -> (isNothing (lstack w))}> i l a sid sd @-}
 
-{-@ type Valid = {v:Bool | (Prop v) } @-}
+{-@ type Valid = {v:Bool | (prop v) } @-}
 {-@ type TOPROVE = Bool @-}
 
-{-@ prop_empty :: (Eq a) => EmptyStackSet i l a sid sd -> Valid  @-}
-prop_empty :: (Eq a) => StackSet i l a sid sd -> Bool
-prop_empty s@(StackSet (Screen _ _ _) vs hs _)
-  =  isNothing (stack (workspace (current s)))
-  && allIsNothingW hs && allIsNothingS vs
+{-@ measure prop :: Bool -> Prop
+    prop (True) = true
+    prop (False) = false
+  @-}
 
-{-@ prop_empty_current :: (Integral l, Eq i) => {v:[i]|(not (null v))} -> [sd] -> l ->  Valid @-}
-prop_empty_current :: (Integral l, Eq i) => [i] -> [sd] -> l -> Bool
-prop_empty_current ns@(n:_) sds l =
-    tag (workspace (current x)) == n
-    where x = new l ns sds
-
-{-@ prop_member_empty :: Eq a => a -> EmptyStackSet i l a sid sd -> TOPROVE @-}
-prop_member_empty :: Eq a => a -> StackSet i l a sid sd -> Bool
-prop_member_empty i x
-    = member i x == False
-
--- viewing workspaces
-
-{-@ prop_view_current :: (Eq s, Eq i) => StackSet i l a sid sd -> i -> Valid @-}
-prop_view_current :: (Eq sid, Eq i) => StackSet i l a sid sd -> i -> Bool
-prop_view_current x i
-  | i `tagMember` x = tag (workspace $ current (view i x)) == i
-  | otherwise       = True
-
-{-@ prop_view_local :: (Eq s, Eq i, Ord a) => StackSet i l a sid sd -> i -> Valid @-}
-prop_view_local :: (Eq sid, Eq i, Ord a) => StackSet i l a sid sd -> i -> Bool
-
-prop_view_local x i
-  | i `tagMember` x = x =~= (view i x)
-  | otherwise       = True
-
-{-@ prop_view_idem :: (Eq s, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Valid @-}
-prop_view_idem :: (Eq sid, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Bool
-prop_view_idem x i
-  | i `tagMember` x = let v = view i x in view i v == v
-  | otherwise       = True
-
-{-@ prop_view_reversible :: (Eq s, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Valid @-}
-prop_view_reversible :: (Eq sid, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Bool
-prop_view_reversible x i
-  | i `tagMember` x = let v1 = view i x in
-                      let v2 = view n v1 in v2 =~= x
-  | otherwise       = True
-  where n = currentTag x
-
--- greedyViewing workspaces
-
-{-@ prop_greedyView_current :: (Eq s, Eq i) => StackSet i l a sid sd -> i -> Valid @-}
-prop_greedyView_current :: (Eq sid, Eq i) => StackSet i l a sid sd -> i -> Bool
-prop_greedyView_current x i
-  | i `tagMember` x = tag (workspace $ current (greedyView i x)) == i
-  | otherwise       = True
-
-{-@ prop_greedyView_current_id :: (Eq s, Eq i) => StackSet i l a sid sd -> i -> Valid @-}
-prop_greedyView_current_id :: (Eq sid, Eq i) => StackSet i l a sid sd -> i -> Bool
-prop_greedyView_current_id x i
-  | not (i `tagMember` x) = tag (workspace $ current (greedyView i x)) == (currentTag x)
-  | otherwise             = True
-
-{-@ prop_greedyView_local :: (Eq s, Eq i, Ord a) => StackSet i l a sid sd -> i -> Valid @-}
-prop_greedyView_local :: (Eq sid, Eq i, Ord a) => StackSet i l a sid sd -> i -> Bool
-
-prop_greedyView_local x i
-  | i `tagMember` x = x =~= (greedyView i x)
-  | otherwise       = True
-
-{-@ prop_greedyView_idem :: (Eq s, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Valid @-}
-prop_greedyView_idem :: (Eq sid, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Bool
-prop_greedyView_idem x i
-  | i `tagMember` x = let v = greedyView i x in greedyView i v == v
-  | otherwise       = True
-
-{-@ prop_greedyView_reversible :: (Eq s, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Valid @-}
-prop_greedyView_reversible :: (Eq sid, Eq sd, Eq l, Eq i, Ord a) => StackSet i l a sid sd -> i -> Bool
-prop_greedyView_reversible x i
-  | i `tagMember` x = let v1 = greedyView i x in
-                      let v2 = greedyView n v1 in v2 =~= x
-  | otherwise       = True
-  where n = currentTag x
-
-
-
-
--- HELPERS
-
-
-{-@ (=~=) :: (Ord a) => x:StackSet i l a sid sd -> y:StackSet i l a sid sd -> {v:Bool | ((Prop v) <=> ((stackSetElts x) = (stackSetElts y)))} @-}
-(=~=) :: Ord a => StackSet i l a sid sd -> StackSet i l a sid sd -> Bool
-s1 =~= s2 = (stackSetElts s1) == (stackSetElts s2)
-
-{-@ stackSetElts :: (Ord a) => x:StackSet i l a sid sd -> {v:Data.Set.Set a | v = (stackSetElts x)} @-}
-stackSetElts :: Ord a => StackSet i l a sid sd -> Data.Set.Set a
-stackSetElts (StackSet c v h _)
-  = screenElts c `Data.Set.union` screensElts v `Data.Set.union` workspacesElts h
 
 {-@ measure stackSetElts :: (StackSet i l a sid sd) -> (Data.Set.Set a)
     stackSetElts (StackSet c v h l) = (Set_cup (screenElts c) (Set_cup (screensElts v) (workspacesElts h)))
   @-}
-
-{-@ screenElts :: (Ord a) => x:Screen i l a sid sd -> {v:Data.Set.Set a | v = (screenElts x)} @-}
-screenElts :: Ord a => Screen i l a sid sd -> Data.Set.Set a
-screenElts (Screen w _ _) = workspaceElts w
-
-{-@ screensElts :: (Ord a) => x:[Screen i l a sid sd] -> {v:Data.Set.Set a | v = (screensElts x)} @-}
-screensElts :: Ord a => [Screen i l a sid sd] -> Data.Set.Set a
-screensElts (x:xs) = screenElts x `Data.Set.union` screensElts xs
-screensElts []     = Data.Set.empty
-
-
-{-@ workspaceElts :: (Ord a) => x:Workspace i l a -> {v:Data.Set.Set a | v = (workspaceElts x)} @-}
-workspaceElts :: Ord a => Workspace i l a -> Data.Set.Set a
-workspaceElts (Workspace _ _ Nothing)  = Data.Set.empty
-workspaceElts (Workspace _ _ (Just s)) = stackElts s
-
-{-@ workspacesElts :: (Ord a) => x:[Workspace i l a] -> {v:Data.Set.Set a | v = (workspacesElts x)} @-}
-workspacesElts :: Ord a => [Workspace i l a] -> Data.Set.Set a
-workspacesElts (x:xs) = workspaceElts x `Data.Set.union` workspacesElts xs
-workspacesElts []     = Data.Set.empty
-
-{-@ stackElts :: (Ord a) => x:Stack a -> {v:Data.Set.Set a | v = (stackElts x)} @-}
-stackElts :: Ord a => Stack a -> Data.Set.Set a
-stackElts (Stack f u d) = Data.Set.fromList $ f:u++d
-
-
-
-{-@ allIsNothingS :: [Screen <{\w -> (isNothing (lstack w))}> i l a sid sd] -> {v:Bool | (Prop v) } @-}
-allIsNothingS :: [Screen i l a sid sd] -> Bool
-allIsNothingS ((Screen (Workspace _ _ Nothing) _ _):xs) = allIsNothingS xs
-allIsNothingS ((Screen (Workspace _ _ (Just _)) _ _):xs) = False
-allIsNothingS []                          = True
-
-{-@ allIsNothingW :: [{v:Workspace i l a|(isNothing (lstack v))}] -> {v:Bool | (Prop v) } @-}
-allIsNothingW :: [Workspace i l a] -> Bool
-allIsNothingW (Workspace _ _ Nothing :xs) = allIsNothingW xs
-allIsNothingW (Workspace _ _ (Just _):xs) = False
-allIsNothingW []                          = True
-
-{-@ isNothing :: x:Maybe a -> {v:Bool | ((Prop v) <=> (isNothing x)) } @-}
-isNothing (Nothing) = True
-isNothing (Just _)  = False
 
 
 instance (Ord a, Constrain i, Constrain l, Constrain a, Constrain s, Constrain sd)
