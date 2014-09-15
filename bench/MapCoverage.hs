@@ -30,7 +30,7 @@ main = do
 -- checkMany :: GhcSpec -> Handle -> IO [(Int, Double, Outcome)]
 checkMany spec h (T f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
   where
-    go 11     = return []
+    go 21     = return []
     go n      = checkAt n >>= \case
                   (d,Nothing) -> do let s = printf "%s\t%d\t%.2f\t%s" sp n d (show TimeOut)
                                     putStrLn s >> hFlush stdout
@@ -57,7 +57,7 @@ checkMany spec h (T f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
         Left (e :: SomeException) -> return $ Just $ Errored $ show e
         Right r                   -> return r
 
-time = 1 # Minute
+time = 5 # Minute
 
 getTime :: IO Double
 getTime = realToFrac `fmap` getPOSIXTime
@@ -75,6 +75,7 @@ data Outcome = Complete Result
 
 funs = [(T ((Map.!) :: Map.Map Map.Char () -> Map.Char -> ()), "Map.!")
        ,(T ((Map.\\) :: Map.Map Map.Char () -> Map.Map Map.Char () -> Map.Map Map.Char ()), "Map.\\\\")
+       ,(T ((Map.null) :: Map.Map Map.Char () -> Map.Bool), "Map.null")
        ,(T ((Map.lookup) :: Map.Char -> Map.Map Map.Char () -> Map.Maybe ()), "Map.lookup")
        ,(T ((Map.member) :: Map.Char -> Map.Map Map.Char () -> Map.Bool), "Map.member")
        ,(T ((Map.notMember) :: Map.Char -> Map.Map Map.Char () -> Map.Bool), "Map.notMember")
