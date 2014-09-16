@@ -84,7 +84,7 @@ evalBrel Lt = (<)
 evalBrel Le = (<=)
 
 applyMeasure :: Measure SpecType DataCon -> Expr -> M.HashMap Symbol Expr -> Gen Expr
-applyMeasure m (EApp c xs) env = evalBody eq xs env
+applyMeasure m (EApp c xs) env = eq >>= \eq -> evalBody eq xs env
   where
     ct = symbolString $ case val c of
       "GHC.Types.[]" -> "[]"
@@ -94,8 +94,9 @@ applyMeasure m (EApp c xs) env = evalBody eq xs env
       "GHC.Tuple.(,,,)" -> "(,,,)"
       "GHC.Tuple.(,,,,)" -> "(,,,,)"
       c -> c
-    eq = safeFromJust ("applyMeasure: " ++ ct)
-       $ find ((==ct) . show . ctor) $ eqns m
+    eq = case find ((==ct) . show . ctor) $ eqns m of
+           Nothing -> throwM $ EvalError $ printf "applyMeasure(%s): no equation for %s" (show m) (show ct)
+           Just c -> return c
 applyMeasure m e           env = throwM $ EvalError $ printf "applyMeasure(%s, %s)" (showpp m) (showpp e)
 
 setSym :: Symbol

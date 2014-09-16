@@ -11,7 +11,7 @@ map-coverage:
 	mkdir -p _results
 	cabal exec ghc -- --make -threaded -fforce-recomp -fhpc -iexamples:src -O2 bench/MapCoverage.hs -hide-package unbounded-delays
 	for t in 1 5 10 15 20 25 30; do \
-	    cabal exec ./bench/MapCoverage -- $$t +RTS -N4 -RTS 2>&1 | tee _results/MapCoverage-$$t.log; \
+	    cabal exec ./bench/MapCoverage -- $$t +RTS -N8 -RTS 2>&1 | tee _results/MapCoverage-$$t.log; \
 	    mv MapCoverage.tix _results/MapCoverage-$$t.tix; \
 	done
 
