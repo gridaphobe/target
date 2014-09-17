@@ -1,0 +1,26 @@
+Testing Map.!..
+Map.!	2	1.02	Complete (Passed 30)
+Map.!	3	1.27	Complete (Passed 84)
+Map.!	4	2.90	Complete (Passed 280)
+Map.!	5	15.74	Complete (Passed 918)
+Map.!	6	84.82	Complete (Passed 2653)
+Map.!	7	300.10	TimeOut
+Testing Map.\\..
+Map.\\	2	1.52	Complete (Passed 100)
+Map.\\	3	4.43	Complete (Passed 441)
+Map.\\	4	66.36	Complete (Passed 3136)
+Map.\\	5	300.10	TimeOut
+Testing Map.null..
+Map.null	2	2.18	Complete (Passed 10)
+Map.null	3	1.73	Complete (Passed 21)
+Map.null	4	2.20	Complete (Passed 56)
+Map.null	5	4.09	Complete (Passed 153)
+Map.null	6	13.95	Complete (Passed 379)
+Map.null	7	72.37	Complete (Passed 985)
+Map.null	8	300.08	TimeOut
+Testing Map.lookup..
+Map.lookup	2	1.18	Complete (Passed 30)
+Map.lookup	3	1.40	Complete (Passed 84)
+Map.lookup	4	3.17	Complete (Passed 280)
+Map.lookup	5	15.13	Complete (Passed 918)
+Map.lookup	6	88.98	Complete (Passed 2653)
