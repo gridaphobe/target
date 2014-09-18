@@ -48,7 +48,8 @@ runGen :: GhcSpec -> FilePath -> Gen a -> IO a
 runGen e f (Gen x)
   = do ctx <- makeContext Z3
        (do a <- evalStateT x (initGS f e ctx)
-           cleanupContext ctx
+           -- cleanupContext ctx
+           killContext ctx
            return a)
         -- if we receive an async exception, Z3 may not exit cleanly so just
         -- kill it
