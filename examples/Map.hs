@@ -421,6 +421,7 @@ type Size     = Int
 -- > Data.Map.null (empty)           == True
 -- > Data.Map.null (singleton 1 'a') == False
 
+{-@ null :: OMap k a -> Bool @-}
 null :: Map k a -> Bool
 null Tip      = True
 null (Bin {}) = False

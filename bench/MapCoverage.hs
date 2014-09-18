@@ -5,11 +5,14 @@ module Main where
 import qualified Map
 
 import           Control.Applicative
+import           Control.Concurrent.Async
+import           Control.Concurrent.MSem
 import           Control.Concurrent.Timeout
 import           Control.Monad.Catch
 import           Control.Monad
 import           Data.Time.Clock.POSIX
 import           Data.Timeout
+import           System.Environment
 import           System.IO
 import           Text.Printf
 
@@ -20,17 +23,23 @@ import           Test.LiquidCheck.Util
 
 main :: IO ()
 main = do
+  [t]  <- getArgs
   spec <- getSpec "bench/Map.hs"
-  withFile "_results/Map.tsv" WriteMode $ \h -> do
+  withFile ("_results/Map-" ++ t ++ ".tsv") WriteMode $ \h -> do
     hPutStrLn h "Function\tDepth\tTime(s)\tResult"
-    mapM_ (checkMany spec h) funs
+    mapPool 8 (checkMany spec h (read t # Minute)) funs
   putStrLn "done"
   putStrLn ""
 
+mapPool max f xs = do
+  sem <- new max
+  mapConcurrently (with sem . f) xs
+
+
 -- checkMany :: GhcSpec -> Handle -> IO [(Int, Double, Outcome)]
-checkMany spec h (T f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
+checkMany spec h time (T f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
   where
-    go 11     = return []
+    go 21     = return []
     go n      = checkAt n >>= \case
                   (d,Nothing) -> do let s = printf "%s\t%d\t%.2f\t%s" sp n d (show TimeOut)
                                     putStrLn s >> hFlush stdout
@@ -57,7 +66,7 @@ checkMany spec h (T f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
         Left (e :: SomeException) -> return $ Just $ Errored $ show e
         Right r                   -> return r
 
-time = 1 # Minute
+-- time = 5 # Minute
 
 getTime :: IO Double
 getTime = realToFrac `fmap` getPOSIXTime
@@ -75,6 +84,7 @@ data Outcome = Complete Result
 
 funs = [(T ((Map.!) :: Map.Map Map.Char () -> Map.Char -> ()), "Map.!")
        ,(T ((Map.\\) :: Map.Map Map.Char () -> Map.Map Map.Char () -> Map.Map Map.Char ()), "Map.\\\\")
+       ,(T ((Map.null) :: Map.Map Map.Char () -> Map.Bool), "Map.null")
        ,(T ((Map.lookup) :: Map.Char -> Map.Map Map.Char () -> Map.Maybe ()), "Map.lookup")
        ,(T ((Map.member) :: Map.Char -> Map.Map Map.Char () -> Map.Bool), "Map.member")
        ,(T ((Map.notMember) :: Map.Char -> Map.Map Map.Char () -> Map.Bool), "Map.notMember")

@@ -150,7 +150,7 @@ xmonadFocusLeftTests = do
 
 
 myTimeout :: IO a -> IO (Maybe a)
-myTimeout = timeout (5 # Minute)
+myTimeout = timeout (20 # Minute)
 
 getTime :: IO Double
 getTime = realToFrac `fmap` getPOSIXTime
@@ -162,10 +162,10 @@ timed x = do start <- getTime
 
 -- checkLiquid :: CanTest f => f -> String -> FilePath -> IO [(Int,Double,Outcome)]
 checkLiquid f n m = checkMany (n++"/LiquidCheck")
-                              (\d max -> resultPassed <$> testOneMax f n d max m)
+                              (\d max -> resultPassed <$> testOneMaxSC f n d max m)
 
 checkSmall p n = checkMany (n++"/SmallCheck")
-                           (\d n -> fromIntegral.fst.fst <$> runTestWithStats d n p)
+                           (\d n -> fromIntegral.fst.fst <$> runTestWithStats d n (p d))
 
 checkLazySmall p n = checkMany (n++"/LazySmallCheck")
                                (\d n -> LSC.depthCheckResult d n (p d))

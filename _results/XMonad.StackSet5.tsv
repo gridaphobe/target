@@ -1,0 +1,75 @@
+Function	Depth	Time(s)	Result
+XMonad.StackSet.peek	2	300.04	TimeOut
+XMonad.StackSet.swapMaster	2	300.04	TimeOut
+XMonad.StackSet.view	2	300.05	TimeOut
+XMonad.StackSet.tagMember	2	300.05	TimeOut
+XMonad.StackSet.new	2	4.06	Complete (Passed 9)
+XMonad.StackSet.modify'	2	5.58	Complete (Errored "The SMT solver was unable to produce an output value.")
+XMonad.StackSet.member	2	6.26	Complete (Errored "Couldn't evaluate a concrete refinement: applyMeasure(fromJust :: forall a. lq_tmp_db1:(Data.Maybe.Maybe a) -> a\nfromJust (Data.Maybe.Justx) = x): no equation for \"Data.Maybe.Nothing\"")
+XMonad.StackSet.new	3	3.58	Complete (Passed 16)
+XMonad.StackSet.new	4	4.08	Complete (Passed 25)
+XMonad.StackSet.modify'	3	8.29	Complete (Errored "The SMT solver was unable to produce an output value.")
+XMonad.StackSet.new	5	4.76	Complete (Passed 36)
+XMonad.StackSet.member	3	15.18	Complete (Errored "Couldn't evaluate a concrete refinement: applyMeasure(fromJust :: forall a. lq_tmp_db1:(Data.Maybe.Maybe a) -> a\nfromJust (Data.Maybe.Justx) = x): no equation for \"Data.Maybe.Nothing\"")
+XMonad.StackSet.new	6	5.27	Complete (Passed 49)
+XMonad.StackSet.new	7	8.31	Complete (Passed 64)
+XMonad.StackSet.new	8	12.38	Complete (Passed 81)
+XMonad.StackSet.member	4	25.46	Complete (Errored "Couldn't evaluate a concrete refinement: applyMeasure(fromJust :: forall a. lq_tmp_db1:(Data.Maybe.Maybe a) -> a\nfromJust (Data.Maybe.Justx) = x): no equation for \"Data.Maybe.Nothing\"")
+XMonad.StackSet.new	9	17.75	Complete (Passed 100)
+XMonad.StackSet.member	5	32.55	Complete (Errored "Couldn't evaluate a concrete refinement: applyMeasure(fromJust :: forall a. lq_tmp_db1:(Data.Maybe.Maybe a) -> a\nfromJust (Data.Maybe.Justx) = x): no equation for \"Data.Maybe.Nothing\"")
+XMonad.StackSet.new	10	25.75	Complete (Passed 121)
+XMonad.StackSet.new	11	32.28	Complete (Passed 144)
+XMonad.StackSet.modify'	4	104.53	Complete (Errored "The SMT solver was unable to produce an output value.")
+XMonad.StackSet.new	12	59.06	Complete (Passed 169)
+XMonad.StackSet.member	6	120.28	Complete (Errored "Couldn't evaluate a concrete refinement: applyMeasure(fromJust :: forall a. lq_tmp_db1:(Data.Maybe.Maybe a) -> a\nfromJust (Data.Maybe.Justx) = x): no equation for \"Data.Maybe.Nothing\"")
+XMonad.StackSet.new	13	63.73	Complete (Passed 196)
+XMonad.StackSet.modify	2	300.00	TimeOut
+XMonad.StackSet.mapWorkspace	2	7.31	Complete (Passed 1)
+XMonad.StackSet.mapWorkspace	3	11.10	Complete (Passed 1)
+XMonad.StackSet.new	14	88.43	Complete (Passed 225)
+XMonad.StackSet.mapWorkspace	4	68.24	Complete (Passed 3)
+XMonad.StackSet.modify'	5	300.00	TimeOut
+XMonad.StackSet.mapWorkspace	5	65.82	Complete (Passed 2)
+XMonad.StackSet.new	15	126.39	Complete (Passed 256)
+XMonad.StackSet.member	7	300.04	TimeOut
+XMonad.StackSet.integrate'	2	0.35	Complete (Passed 34)
+XMonad.StackSet.integrate'	3	3.38	Complete (Passed 197)
+XMonad.StackSet.mapWorkspace	6	73.91	Complete (Passed 1)
+XMonad.StackSet.integrate'	4	38.03	Complete (Passed 1306)
+XMonad.StackSet.new	16	210.46	Complete (Passed 289)
+XMonad.StackSet.mapLayout	2	300.05	TimeOut
+XMonad.StackSet.integrate	2	0.37	Complete (Passed 33)
+XMonad.StackSet.integrate	3	2.85	Complete (Passed 196)
+XMonad.StackSet.integrate	4	30.30	Complete (Passed 1305)
+XMonad.StackSet.mapWorkspace	7	300.00	TimeOut
+XMonad.StackSet.integrate'	5	300.02	TimeOut
+XMonad.StackSet.new	17	300.10	TimeOut
+XMonad.StackSet.integrate	5	300.09	TimeOut
+XMonad.StackSet.insertUp	2	300.01	TimeOut
+XMonad.StackSet.filter	2	1.09	Complete (Passed 33)
+XMonad.StackSet.filter	3	13.41	Complete (Passed 196)
+XMonad.StackSet.greedyView	2	300.00	TimeOut
+XMonad.StackSet.focusMaster	2	300.10	TimeOut
+XMonad.StackSet.differentiate	2	0.11	Complete (Passed 10)
+XMonad.StackSet.differentiate	3	0.37	Complete (Passed 41)
+XMonad.StackSet.differentiate	4	2.55	Complete (Passed 206)
+XMonad.StackSet.differentiate	5	26.15	Complete (Passed 1237)
+XMonad.StackSet.filter	4	177.98	Complete (Passed 1305)
+XMonad.StackSet.findTag	2	300.01	TimeOut
+XMonad.StackSet.ensureTags	2	300.09	TimeOut
+XMonad.StackSet.differentiate	6	300.08	TimeOut
+XMonad.StackSet.filter	5	300.10	Complete (Errored "Expected a Values response from the solver, got: Sat")
+XMonad.StackSet.currentTag	2	300.03	TimeOut
+XMonad.StackSet.filter	6	300.16	Complete (Errored "Expected a Values response from the solver, got: Sat")
+XMonad.StackSet.filter	7	300.23	Complete (Errored "Expected a Values response from the solver, got: Sat")
+XMonad.StackSet.filter	8	300.24	Complete (Errored "Expected a Values response from the solver, got: Sat")
+XMonad.StackSet.filter	9	300.17	Complete (Errored "Expected a Values response from the solver, got: Sat")
+XMonad.StackSet.filter	10	300.14	Complete (Errored "Expected a Values response from the solver, got: Sat")
+XMonad.StackSet.filter	11	300.08	Complete (Errored "Expected a Values response from the solver, got: Sat")
+XMonad.StackSet.filter	12	300.10	Complete (Errored "Expected a Values response from the solver, got: Sat")
+XMonad.StackSet.filter	13	300.18	Complete (Errored "Expected a Values response from the solver, got: Sat")
+XMonad.StackSet.filter	14	300.19	Complete (Errored "Expected a Values response from the solver, got: Sat")
+XMonad.StackSet.filter	15	300.15	Complete (Errored "Expected a Values response from the solver, got: Sat")
+XMonad.StackSet.filter	16	300.22	Complete (Errored "Expected a Values response from the solver, got: Sat")
+XMonad.StackSet.filter	17	300.20	Complete (Errored "Expected a Values response from the solver, got: Sat")
+XMonad.StackSet.filter	18	300.00	TimeOut

@@ -19,6 +19,7 @@ import           Data.List
 import           Data.Monoid
 import qualified Data.Text.Lazy                   as T
 import           System.Process                   (terminateProcess)
+import           Text.Printf
 
 import           Language.Fixpoint.Config         (SMTSolver (..))
 import           Language.Fixpoint.Names          ()
@@ -46,7 +47,7 @@ instance MonadThrow Gen where
 
 runGen :: GhcSpec -> FilePath -> Gen a -> IO a
 runGen e f (Gen x)
-  = do ctx <- makeContext Z3
+  = do ctx <- mkContext Z3
        (do a <- evalStateT x (initGS f e ctx)
            -- cleanupContext ctx
            killContext ctx
@@ -55,6 +56,7 @@ runGen e f (Gen x)
         -- kill it
         `onException` (killContext ctx)
   where
+    mkContext = {-if logging then makeContext else-} makeContextNoLog
     killContext ctx = terminateProcess (pId ctx) >> cleanupContext ctx
 
 evalGen :: GenState -> Gen a -> IO a
@@ -171,7 +173,7 @@ lookupCtor c
          Nothing -> do
            t <- io $ runGhc $ do
                   loadModule m
-                  ofType <$> GHC.exprType (symbolString c)
+                  ofType <$> GHC.exprType (printf "(%s)" (symbolString c))
            modify $ \s@(GS {..}) -> s { ctorEnv = (c,t) : ctorEnv }
            return t
 

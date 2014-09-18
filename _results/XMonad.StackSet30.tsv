@@ -1,0 +1,72 @@
+Function	Depth	Time(s)	Result
+XMonad.StackSet.tagMember	2	1800.10	TimeOut
+XMonad.StackSet.peek	2	1800.10	TimeOut
+XMonad.StackSet.swapMaster	2	1800.10	TimeOut
+XMonad.StackSet.view	2	1800.10	TimeOut
+XMonad.StackSet.new	2	5.00	Complete (Passed 9)
+XMonad.StackSet.modify'	2	6.19	Complete (Errored "The SMT solver was unable to produce an output value.")
+XMonad.StackSet.member	2	8.00	Complete (Errored "Couldn't evaluate a concrete refinement: applyMeasure(fromJust :: forall a. lq_tmp_db1:(Data.Maybe.Maybe a) -> a\nfromJust (Data.Maybe.Justx) = x): no equation for \"Data.Maybe.Nothing\"")
+XMonad.StackSet.new	3	4.23	Complete (Passed 16)
+XMonad.StackSet.new	4	4.81	Complete (Passed 25)
+XMonad.StackSet.modify'	3	9.28	Complete (Errored "The SMT solver was unable to produce an output value.")
+XMonad.StackSet.new	5	4.52	Complete (Passed 36)
+XMonad.StackSet.new	6	5.71	Complete (Passed 49)
+XMonad.StackSet.member	3	17.15	Complete (Errored "Couldn't evaluate a concrete refinement: applyMeasure(fromJust :: forall a. lq_tmp_db1:(Data.Maybe.Maybe a) -> a\nfromJust (Data.Maybe.Justx) = x): no equation for \"Data.Maybe.Nothing\"")
+XMonad.StackSet.new	7	7.35	Complete (Passed 64)
+XMonad.StackSet.new	8	12.48	Complete (Passed 81)
+XMonad.StackSet.member	4	28.09	Complete (Errored "Couldn't evaluate a concrete refinement: applyMeasure(fromJust :: forall a. lq_tmp_db1:(Data.Maybe.Maybe a) -> a\nfromJust (Data.Maybe.Justx) = x): no equation for \"Data.Maybe.Nothing\"")
+XMonad.StackSet.new	9	18.91	Complete (Passed 100)
+XMonad.StackSet.new	10	26.91	Complete (Passed 121)
+XMonad.StackSet.member	5	38.40	Complete (Errored "Couldn't evaluate a concrete refinement: applyMeasure(fromJust :: forall a. lq_tmp_db1:(Data.Maybe.Maybe a) -> a\nfromJust (Data.Maybe.Justx) = x): no equation for \"Data.Maybe.Nothing\"")
+XMonad.StackSet.new	11	36.49	Complete (Passed 144)
+XMonad.StackSet.modify'	4	116.14	Complete (Errored "The SMT solver was unable to produce an output value.")
+XMonad.StackSet.new	12	60.12	Complete (Passed 169)
+XMonad.StackSet.member	6	138.79	Complete (Errored "Couldn't evaluate a concrete refinement: applyMeasure(fromJust :: forall a. lq_tmp_db1:(Data.Maybe.Maybe a) -> a\nfromJust (Data.Maybe.Justx) = x): no equation for \"Data.Maybe.Nothing\"")
+XMonad.StackSet.new	13	69.66	Complete (Passed 196)
+XMonad.StackSet.new	14	89.13	Complete (Passed 225)
+XMonad.StackSet.new	15	118.59	Complete (Passed 256)
+XMonad.StackSet.modify'	5	382.86	Complete (Errored "The SMT solver was unable to produce an output value.")
+XMonad.StackSet.modify'	6	82.81	Complete (Errored "The SMT solver was unable to produce an output value.")
+XMonad.StackSet.new	16	202.07	Complete (Passed 289)
+XMonad.StackSet.member	7	462.78	Complete (Errored "Couldn't evaluate a concrete refinement: applyMeasure(fromJust :: forall a. lq_tmp_db1:(Data.Maybe.Maybe a) -> a\nfromJust (Data.Maybe.Justx) = x): no equation for \"Data.Maybe.Nothing\"")
+XMonad.StackSet.new	17	312.08	Complete (Passed 324)
+XMonad.StackSet.new	18	348.95	Complete (Passed 361)
+XMonad.StackSet.new	19	393.44	Complete (Passed 400)
+XMonad.StackSet.modify	2	1800.00	TimeOut
+XMonad.StackSet.mapWorkspace	2	6.58	Complete (Passed 1)
+XMonad.StackSet.mapWorkspace	3	10.43	Complete (Passed 1)
+XMonad.StackSet.mapWorkspace	4	65.31	Complete (Passed 3)
+XMonad.StackSet.mapWorkspace	5	74.79	Complete (Passed 2)
+XMonad.StackSet.mapWorkspace	6	95.81	Complete (Passed 1)
+XMonad.StackSet.member	8	1391.76	Complete (Errored "Couldn't evaluate a concrete refinement: applyMeasure(fromJust :: forall a. lq_tmp_db1:(Data.Maybe.Maybe a) -> a\nfromJust (Data.Maybe.Justx) = x): no equation for \"Data.Maybe.Nothing\"")
+XMonad.StackSet.modify'	7	1800.00	TimeOut
+XMonad.StackSet.new	20	834.59	Complete (Passed 441)
+XMonad.StackSet.integrate'	2	0.38	Complete (Passed 34)
+XMonad.StackSet.integrate'	3	3.24	Complete (Passed 197)
+XMonad.StackSet.integrate'	4	38.98	Complete (Passed 1306)
+XMonad.StackSet.integrate'	5	525.65	Complete (Passed 9787)
+XMonad.StackSet.mapWorkspace	7	1800.10	TimeOut
+XMonad.StackSet.integrate	2	0.34	Complete (Passed 33)
+XMonad.StackSet.integrate	3	3.17	Complete (Passed 196)
+XMonad.StackSet.member	9	1800.03	TimeOut
+XMonad.StackSet.integrate	4	31.93	Complete (Passed 1305)
+XMonad.StackSet.mapLayout	2	1800.10	TimeOut
+XMonad.StackSet.integrate	5	516.77	Complete (Passed 9786)
+XMonad.StackSet.integrate'	6	1800.10	TimeOut
+XMonad.StackSet.insertUp	2	1800.10	TimeOut
+XMonad.StackSet.greedyView	2	1800.10	TimeOut
+XMonad.StackSet.filter	2	1.11	Complete (Passed 33)
+XMonad.StackSet.filter	3	11.14	Complete (Passed 196)
+XMonad.StackSet.filter	4	151.56	Complete (Passed 1305)
+XMonad.StackSet.integrate	6	1800.04	TimeOut
+XMonad.StackSet.focusMaster	2	1800.10	TimeOut
+XMonad.StackSet.differentiate	2	0.10	Complete (Passed 10)
+XMonad.StackSet.differentiate	3	0.31	Complete (Passed 41)
+XMonad.StackSet.differentiate	4	2.78	Complete (Passed 206)
+XMonad.StackSet.differentiate	5	22.78	Complete (Passed 1237)
+XMonad.StackSet.differentiate	6	282.67	Complete (Passed 8660)
+XMonad.StackSet.findTag	2	1800.10	TimeOut
+XMonad.StackSet.filter	5	1800.09	TimeOut
+XMonad.StackSet.ensureTags	2	1800.01	TimeOut
+XMonad.StackSet.differentiate	7	1800.10	TimeOut
+XMonad.StackSet.currentTag	2	1800.10	TimeOut
