@@ -27,7 +27,7 @@ main = do
   spec <- getSpec "bench/Map.hs"
   withFile ("_results/Map-" ++ t ++ ".tsv") WriteMode $ \h -> do
     hPutStrLn h "Function\tDepth\tTime(s)\tResult"
-    mapPool 8 (checkMany spec h (read t # Minute)) funs
+    mapPool 12 (checkMany spec h (read t # Minute)) funs
   putStrLn "done"
   putStrLn ""
 
