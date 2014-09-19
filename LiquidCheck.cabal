@@ -64,6 +64,7 @@ benchmark bench
                        cassava,
                        SafeSemaphore,
                        vector,
+                       xml-conduit,
                        data-timeout >= 0.3,
                        -- for XMonad
                        -- X11,
