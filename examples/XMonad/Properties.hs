@@ -63,7 +63,7 @@ import qualified LazySmallCheck                   as LSC
 import System.IO.Unsafe
 
 -- FIXME: this measure makes sure that True and False are in the environment...
-{-@ measure prop :: Bool -> Prop
+{- measure prop :: Bool -> Prop
     prop (True)  = true
     prop (False) = false
  @-}

@@ -150,7 +150,7 @@ xmonadFocusLeftTests = do
 
 
 myTimeout :: IO a -> IO (Maybe a)
-myTimeout = timeout (20 # Minute)
+myTimeout = timeout (60 # Minute)
 
 getTime :: IO Double
 getTime = realToFrac `fmap` getPOSIXTime

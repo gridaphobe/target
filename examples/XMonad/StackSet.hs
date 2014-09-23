@@ -526,7 +526,7 @@ focusWindow w s | Just w == peek s = s
                     return $ until ((Just w ==) . peek) focusUp (view n s)
 
 -- | Get a list of all screens in the 'StackSet'.
-{-@ screens :: UStackSet i l a s sd -> [UScreen i l a s sd] @-}
+{-@ screens :: UStackSet i l a s sd -> UScreens i l a s sd @-}
 screens :: StackSet i l a s sd -> [Screen i l a s sd]
 screens s = current s : visible s
 

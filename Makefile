@@ -30,6 +30,6 @@ xmonad-coverage:
 	mkdir -p _results
 	cabal exec ghc -- --make -threaded -fforce-recomp -fhpc -iexamples:src -O2 bench/XMonad/StackSetCoverage.hs -hide-package unbounded-delays
 	for t in 1 5 10 15 20 25 30; do \
-	    cabal exec ./bench/XMonad/StackSetCoverage -- $$t +RTS -N4 -RTS 2>&1 | tee _results/XMonad.StackSetCoverage-$$t.log; \
+	    cabal exec ./bench/XMonad/StackSetCoverage -- $$t +RTS -N8 -RTS 2>&1 | tee _results/XMonad.StackSetCoverage-$$t.log; \
 	    mv StackSetCoverage.tix _results/StackSetCoverage-$$t.tix; \
 	done

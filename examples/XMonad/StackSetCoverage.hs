@@ -25,9 +25,9 @@ main :: IO ()
 main = do
   [t]  <- getArgs
   spec <- getSpec "bench/XMonad/StackSet.hs"
-  withFile ("_results/XMonad-StackSet-" ++ t ++ ".tsv") WriteMode $ \h -> do
+  withFile ("_results/XMonad.StackSet-" ++ t ++ ".tsv") WriteMode $ \h -> do
     hPutStrLn h "Function\tDepth\tTime(s)\tResult"
-    mapPool 12 (checkMany spec h (read t # Minute)) funs
+    mapPool 8 (checkMany spec h (read t # Minute)) funs
   putStrLn "done"
   putStrLn ""
 
