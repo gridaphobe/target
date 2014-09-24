@@ -233,6 +233,10 @@ abort x = error $ "xmonad: StackSet: " ++ x
 --
 -- Xinerama: Virtual workspaces are assigned to physical screens, starting at 0.
 --
+{-@ measure head :: [a] -> a
+    head (x:xs) = x
+  @-}
+
 {-@ new :: (Integral s)
         => l
         -> wids:{[i] | len wids > 0 }
