@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PatternGuards #-}
 {-@ LIQUID "-i../../bench" @-}
+
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  XMonad.StackSet
@@ -50,19 +51,15 @@ module XMonad.StackSet (
 
         -- for testing
         abort
-        
         --LIQUID
         , Char, Int, Bool, Maybe
     ) where
 
-{-@ LIQUID "--totality" @-}
-
-import           Data.List    ((\\))
-import qualified Data.List    as L (deleteBy, filter, find, nub, splitAt)
-import           Data.Maybe   (fromMaybe, isJust, listToMaybe)
-import           Prelude      hiding (filter)
--- import qualified Data.Map  as M (Map,insert,delete,empty)
-import qualified Map          as M (Map, delete, empty, insert)
+import Prelude hiding (filter)
+import Data.Maybe   (listToMaybe,isJust,fromMaybe)
+import qualified Data.List as L (deleteBy,find,splitAt,filter,nub)
+import Data.List ( (\\) )
+import qualified Map  as M (Map,insert,delete,empty)
 
 import qualified Data.Set
 import           GHC.Generics
@@ -160,51 +157,32 @@ data StackSet i l a sid sd =
 
 {-@ type UStackSet i l a sid sd = {v: (StackSet i l a sid sd) | (NoDuplicates v)} @-}
 
-{-@ visible :: x:(StackSet i l a sid sd)
-            -> {v : [(Screen i l a sid sd)] | (v = (lvisible x)) }@-}
-
-{-@ hidden :: x:(StackSet i l a sid sd)
-           -> {v : [(Workspace i l a)] | (v = (lhidden x)) }@-}
-
-{-@ current :: x:(StackSet i l a sid sd)
-            -> {v : (Screen i l a sid sd) | (v = (lcurrent x)) } @-}
-
 -- | Visible workspaces, and their Xinerama screens.
-data Screen i l a sid sd = Screen { workspace    :: !(Workspace i l a)
-                                  , screen       :: !sid
+data Screen i l a sid sd = Screen { workspace :: !(Workspace i l a)
+                                  , screen :: !sid
                                   , screenDetail :: !sd }
     deriving (Show, Read, Eq, Generic)
+
 {-@ data Screen i l a sid sd <p :: Workspace i l a -> Prop>
    = Screen { lworkspace    :: <(Workspace i l a) <p>>
             , lscreen       :: sid
             , lscreenDetail :: sd
             }
 @-}
-{-@ workspace :: x:(Screen i l a sid sd)
-              -> {v:(Workspace i l a) | v = (lworkspace x)}@-}
 
 -- |
 -- A workspace is just a tag, a layout, and a stack.
 --
 data Workspace i l a = Workspace  { tag :: !i, layout :: l, stack :: Maybe (Stack a) }
-   deriving (Show, Read, Eq, Generic)
+    deriving (Show, Read, Eq, Generic)
+
 {-@
 data Workspace i l a = Workspace  { ltag    :: i
                                   , llayout :: l
                                   , lstack :: (Maybe (UStack a)) }
   @-}
 
-
-{-@ layout :: x:(Workspace i l a) -> {v:l | (v = (llayout x))} @-}
-{-@ tag    :: x:(Workspace i l a) -> {v:i | (v = (ltag x))} @-}
-
-{-@ stack  :: w:(Workspace i l a)
-           -> {v:(Maybe (UStack a)) | v = (lstack w)}
-  @-}
-
-
 -- | A structure for window geometries
-{-@ data RationalRect = RationalRect {r1::Rational, r2::Rational, r3::Rational, r4::Rational} @-}
 data RationalRect = RationalRect Rational Rational Rational Rational
     deriving (Show, Read, Eq, Generic)
 
@@ -226,9 +204,9 @@ data RationalRect = RationalRect Rational Rational Rational Rational
 -- structures, it is the differentiation of a [a], and integrating it
 -- back has a natural implementation used in 'index'.
 --
-data Stack a = Stack { focus :: !a        -- focused thing in this set
-                     , up    :: [a]       -- clowns to the left
-                     , down  :: [a] }     -- jokers to the right
+data Stack a = Stack { focus  :: !a        -- focused thing in this set
+                     , up     :: [a]       -- clowns to the left
+                     , down   :: [a] }     -- jokers to the right
     deriving (Show, Read, Eq, Generic)
 
 {-@
@@ -255,8 +233,6 @@ abort x = error $ "xmonad: StackSet: " ++ x
 --
 -- Xinerama: Virtual workspaces are assigned to physical screens, starting at 0.
 --
-
-
 {-@ new :: (Integral s)
         => l
         -> wids:{[i] | len wids > 0 }
@@ -267,7 +243,7 @@ new :: (Integral s) => l -> [i] -> [sd] -> StackSet i l a s sd
 new l wids m | not (null wids) && length m <= length wids && not (null m)
   = StackSet cur visi unseen M.empty
   where (seen,unseen) = L.splitAt (length m) $ map (\i -> Workspace i l Nothing) wids
-        (cur:visi)    = [ Screen i s sd |  ((i, s), sd) <- zip (zip seen [0..]) m ]
+        (cur:visi)    = [ Screen i s sd |  (i, s, sd) <- zip3 seen [0..] m ]
                 -- now zip up visibles with their screen id
 new _ _ _ = abort "non-positive argument to StackSet.new"
 
@@ -332,6 +308,7 @@ view i s
 -- current workspace to 'hidden'.  If that workspace is 'visible' on another
 -- screen, the workspaces of the current screen and the other screen are
 -- swapped.
+
 {-@ greedyView :: (Eq s, Eq i)
          => x:i
          -> s:UStackSet i l a s sd
@@ -368,17 +345,9 @@ lookupWorkspace sc w = listToMaybe [ tag i | Screen i s _ <- current w : visible
 with :: b -> (Stack a -> b) -> StackSet i l a s sd -> b
 with dflt f = maybe dflt f . stack . workspace . current
 
-withStack :: Maybe (Stack a)
-          -> (Stack a -> Maybe (Stack a))
-          -> StackSet i l a s sd
-          -> Maybe (Stack a)
-withStack dflt f = maybe dflt f . stack . workspace . current
-
 -- |
 -- Apply a function, and a default value for 'Nothing', to modify the current stack.
 --
---
-
 {-@ predicate GoodCurrent X ST =
        (Set_sub (mStackElts X) (mStackElts (lstack (lworkspace (lcurrent ST))))) @-}
 
@@ -439,7 +408,6 @@ differentiate :: [a] -> Maybe (Stack a)
 differentiate []     = Nothing
 differentiate (x:xs) = Just $ Stack x [] xs
 
-
 -- |
 -- /O(n)/. 'filter p s' returns the elements of 's' such that 'p' evaluates to
 -- 'True'.  Order is preserved, and focus moves as described for 'delete'.
@@ -484,26 +452,10 @@ swapDown  = modify' (reverseStack . swapUp' . reverseStack)
 
 -- | Variants of 'focusUp' and 'focusDown' that work on a
 -- 'Stack' rather than an entire 'StackSet'.
-
-
-{-@ invariant {v:[a] |
-       ((not (null v)) => (listElts v) = (Set_cup (Set_sng (head v)) (listElts (tail v)))) }@-}
-
-{-@ invariant {v:[a] | ((null v) => (Set_emp (listElts v))) }@-}
-
-
-{-@ measure head :: [a] -> a
-    head (x:xs) = x
-  @-}
-
-{-@ measure tail :: [a] -> [a]
-    tail (x:xs) = xs
-  @-}
-
 {-@ focusUp', focusDown', swapUp', reverseStack :: x:UStack a -> {v:UStack a|((stackElts v) = (stackElts x))} @-}
 focusUp', focusDown' :: Stack a -> Stack a
 focusUp' (Stack t (l:ls) rs) = Stack l ls (t:rs)
-focusUp' (Stack t []     rs) = Stack (head xs) (tail xs) [] where xs = reverse (t:rs)
+focusUp' (Stack t []     rs) = Stack x xs [] where (x:xs) = reverse (t:rs)
 focusDown'                   = reverseStack . focusUp' . reverseStack
 
 swapUp' :: Stack a -> Stack a
@@ -571,33 +523,22 @@ ensureTags l allt st = et allt (map tag (workspaces st) \\ allt) st
           et (i:is) [] s = et is [] (s { hidden = Workspace i l Nothing : hidden s })
           et (i:is) (r:rs) s = et is rs $ renameTag r i s
 
-
-{- invariant {v:Screen i l a sid sd | (screenElts v) = (workspaceElts (lworkspace v)) } @-}
-
 -- | Map a function on all the workspaces in the 'StackSet'.
 {-@ mapWorkspace :: (x:Workspace i l a -> {v:Workspace i l a| (workspaceElts x) = (workspaceElts v)})
                  -> UStackSet i l a s sd
                  -> UStackSet i l a s sd @-}
 mapWorkspace :: (Workspace i l a -> Workspace i l a) -> StackSet i l a s sd -> StackSet i l a s sd
-mapWorkspace f s
-  = s { current = updScr (current s)
-      , visible = map updScr (visible s)
-      , hidden  = map f (hidden s) }
-  where
-     {- updScr :: x:Screen i l a sid sd -> {v:Screen i l a sid sd | (screenElts v) = (screenElts x)} @-}
-     updScr (Screen w sid sd) = (Screen (f w) sid sd)
-
+mapWorkspace f s = s { current = updScr (current s)
+                     , visible = map updScr (visible s)
+                     , hidden  = map f (hidden s) }
+    where updScr scr = scr { workspace = f (workspace scr) }
 
 -- | Map a function on all the layouts in the 'StackSet'.
 {-@ mapLayout :: (l1 -> l2) -> UStackSet i l1 a s sd -> UStackSet i l2 a s sd @-}
 mapLayout :: (l -> l') -> StackSet i l a s sd -> StackSet i l' a s sd
 mapLayout f (StackSet v vs hs m) = StackSet (fScreen v) (map fScreen vs) (map fWorkspace hs) m
  where
-
-{- fScreen :: x:Screen i l1 a s sid -> {v:Screen i l2 a s sid | (screenElts x) = (screenElts v)} @-}
     fScreen (Screen ws s sd) = Screen (fWorkspace ws) s sd
-
-{-  fWorkspace :: x:Workspace i l1 a -> {v:Workspace i l2 a | (workspaceElts x) = (workspaceElts v)} @-}
     fWorkspace (Workspace t l s) = Workspace t (f l) s
 
 -- | /O(n)/. Is a window in the 'StackSet'?
@@ -608,7 +549,6 @@ mapLayout f (StackSet v vs hs m) = StackSet (fScreen v) (map fScreen vs) (map fW
   @-}
 member :: Eq a => a -> StackSet i l a s sd -> Bool
 member a s = isJust (findTag a s)
-
 
 -- | /O(1) on current window, O(n) in general/.
 -- Return 'Just' the workspace tag of the given window, or 'Nothing'
@@ -679,7 +619,6 @@ delete' w s = s { current = removeFromScreen        (current s)
     where removeFromWorkspace ws = ws { stack = stack ws >>= filter (/=w) }
           removeFromScreen scr   = scr { workspace = removeFromWorkspace (workspace scr) }
 
-
 ------------------------------------------------------------------------
 
 -- | Given a window, and its preferred rectangle, set it as floating
@@ -703,7 +642,7 @@ sink w s = s { floating = M.delete w (floating s) }
 swapMaster :: StackSet i l a s sd -> StackSet i l a s sd
 swapMaster = modify' $ \c -> case c of
     Stack _ [] _  -> c    -- already master.
-    Stack t ls rs -> Stack t [] ((tail xs) ++ (head xs):rs) where xs = reverse ls
+    Stack t ls rs -> Stack t [] (xs ++ x : rs) where (x:xs) = reverse ls
 
 -- natural! keep focus, move current to the top, move top to current.
 
@@ -721,8 +660,8 @@ shiftMaster = modify' $ \c -> case c of
 {-@ focusMaster :: UStackSet i l a s sd -> UStackSet i l a s sd @-}
 focusMaster :: StackSet i l a s sd -> StackSet i l a s sd
 focusMaster = modify' $ \c -> case c of
-    Stack _ [] _ -> c
-    Stack t ls rs ->  Stack (head xs) [] (tail xs ++ t:rs) where xs = reverse ls
+    Stack _ [] _  -> c
+    Stack t ls rs -> Stack x [] (xs ++ t : rs) where (x:xs) = reverse ls
 
 --
 -- ---------------------------------------------------------------------
@@ -754,7 +693,6 @@ shiftWin n w s = case findTag w s of
 onWorkspace :: (Eq i, Eq s) => i -> (StackSet i l a s sd -> StackSet i l a s sd)
             -> (StackSet i l a s sd -> StackSet i l a s sd)
 onWorkspace n f s = view (currentTag s) . f . view n $ s
-
 
 {-@ predicate NoDuplicates SS =
       (
