@@ -123,6 +123,7 @@ instance (Constrain a, Constrain b, b ~ Res (a -> b))
     = do f <- stitchFun (Proxy :: Proxy (a -> b)) d t
          return $ \a -> f [toExpr a]
   toExpr  f = var ("FUNCTION" :: Symbol)
+  encode _ _ = error "can't encode a function!"
 
 instance (Constrain a, Constrain b, Constrain c, c ~ Res (a -> b -> c))
   => Constrain (a -> b -> c) where
@@ -133,6 +134,7 @@ instance (Constrain a, Constrain b, Constrain c, c ~ Res (a -> b -> c))
     = do f <- stitchFun (Proxy :: Proxy (a -> b -> c)) d t
          return $ \a b -> f [toExpr a, toExpr b]
   toExpr  f = var ("FUNCTION" :: Symbol)
+  encode _ _ = error "can't encode a function!"
 
 instance (Constrain a, Constrain b, Constrain c, Constrain d, d ~ Res (a -> b -> c -> d))
   => Constrain (a -> b -> c -> d) where
@@ -143,3 +145,4 @@ instance (Constrain a, Constrain b, Constrain c, Constrain d, d ~ Res (a -> b ->
     = do f <- stitchFun (Proxy :: Proxy (a -> b -> c -> d)) sz t
          return $ \a b c -> f [toExpr a, toExpr b, toExpr c]
   toExpr  f = var ("FUNCTION" :: Symbol)
+  encode _ _ = error "can't encode a function!"

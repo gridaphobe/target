@@ -6,24 +6,26 @@
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeFamilies         #-}
+{-# LANGUAGE ParallelListComp     #-}
 {-# LANGUAGE ViewPatterns         #-}
 module Test.LiquidCheck.Testable where
 
 import           Control.Applicative
-import           Control.Arrow                 (second)
-import           Control.Exception             (AsyncException, evaluate)
+import           Control.Arrow              (second)
+import           Control.Exception          (AsyncException, evaluate)
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.State
-import qualified Data.HashMap.Strict           as M
+import qualified Data.HashMap.Strict        as M
 import           Data.Proxy
+import           Language.Fixpoint.SmtLib2
 import           Text.Printf
 
 import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.Types (RType (..), SpecType,
                                                 bkArrowDeep, bkClass, bkUniv)
 
-import           Test.LiquidCheck.Constrain
+import           Test.LiquidCheck.Constrain hiding (apply)
 import           Test.LiquidCheck.Driver
 import           Test.LiquidCheck.Eval
 import           Test.LiquidCheck.Expr
@@ -35,11 +37,13 @@ type CanTest f = (Testable f, Show (Args f), Constrain (Res f))
 
 test :: CanTest f => f -> Int -> SpecType -> Gen Result
 test f d t
-  = do xs <- genArgs f d t
+  = do vs <- genArgs f d t
        cts <- gets freesyms
-       vals <- allSat $ map symbol xs
+       vals <- allSat $ map symbol vs
        let (xs, tis, to) = bkArrowDeep $ stripQuals t
-       try (process d f vals cts (zip xs tis) to) >>= \case
+       let su = mkSubst [(x, var v) | (v,_) <- vs | x <- xs]
+       let to' = subst su to
+       try (process d f vals cts (zip xs tis) to') >>= \case
          Left  (e :: LiquidException) -> return $ Errored $ show e
          Right r                      -> return r
 
@@ -65,8 +69,9 @@ process d f vs cts xts to = go vs 0
           | Just e@(ExpectedValues _) <- fromException e -> throwM e
           | otherwise -> mbKeepGoing xs vss n
         Right r -> do
-          let env = map (second (`app` [])) cts ++ mkExprs f (map fst xts) xs
-          sat <- evalType (M.fromList env) to (toExpr r)
+          -- let env = map (second (`app` [])) cts ++ mkExprs f (map fst xts) xs
+          -- sat <- evalType (M.fromList env) to (toExpr r)
+          sat <- check r to
           case sat of
             False -> mbKeepGoing xs vss n
             True -> do max <- gets maxSuccess
@@ -186,3 +191,25 @@ instance ( Constrain a, Constrain b, Constrain c, Constrain d, Constrain e, Cons
     = f a b c d e
   mkExprs _ [xa,xb,xc,xd,xe] (a,b,c,d,e)
     = [(xa,toExpr a), (xb,toExpr b), (xc,toExpr c), (xd,toExpr d), (xe,toExpr e)]
+
+
+check :: Constrain a => a -> SpecType -> Gen Bool
+check v t = do
+  state' <- get
+  let state = state' { variables = [], choices = [], constraints = []
+                     , values = [], deps = [], constructors = [] }
+  put state
+  ctx <- gets smtContext
+  io $ command ctx Push
+
+  void $ encode v t
+  vs <- gets variables
+  mapM_ (\x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
+  cs <- gets constraints
+  mapM_ (\c -> io . command ctx $ Assert Nothing c) cs
+  resp <- io $ command ctx CheckSat
+
+  io $ command ctx Pop
+  put state'
+  return (resp == Sat)
+  

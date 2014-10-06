@@ -52,6 +52,7 @@ reaches root model deps = go root
         taken    = val == "true"
         reached  = V.map snd . V.filter ((==root).fst)
 
+
 allSat :: [Symbol] -> Gen [[Value]]
 allSat roots = {-# SCC "allSat" #-} setup >>= io . go
   where

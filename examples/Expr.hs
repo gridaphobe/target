@@ -114,6 +114,8 @@ instance (Ord a, Constrain a) => Constrain (Set a) where
   stitch  d t = stitch d t >>= \(xs :: [a]) -> return $ Set.fromList xs
   toExpr  s = app setSym [toExpr x | x <- Set.toList s]
 
+  encode v t = undefined
+
 liquidTests :: [(String, Test)]
 liquidTests = [ ("inv",     T inv)
               , ("freshen", T freshen)

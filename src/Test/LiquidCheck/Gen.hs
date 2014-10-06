@@ -47,14 +47,8 @@ instance MonadThrow Gen where
 
 runGen :: GhcSpec -> FilePath -> Gen a -> IO a
 runGen e f (Gen x)
-  = do ctx <- mkContext Z3
-       (do a <- evalStateT x (initGS f e ctx)
-           -- cleanupContext ctx
-           killContext ctx
-           return a)
-        -- if we receive an async exception, Z3 may not exit cleanly so just
-        -- kill it
-        `onException` (killContext ctx)
+  = do ctx <- makeContext Z3
+       evalStateT x (initGS f e ctx) `finally` (killContext ctx)
   where
     mkContext = {-if logging then makeContext else-} makeContextNoLog
     killContext ctx = terminateProcess (pId ctx) >> cleanupContext ctx
