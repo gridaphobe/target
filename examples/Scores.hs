@@ -28,3 +28,14 @@ best :: Int -> [Int] -> [Int]
 best k = take k . reverse . sort
 
 -- best k = take k . reverse . sort . (replicate k 0 ++)
+
+{-@ paddedAverage     :: (s:Score -> {v:Score | v >= s}) 
+                      -> [(Pos, Score)] -> Score
+  @-}
+paddedAverage :: (Int -> Int) -> [(Int,Int)] -> Int
+paddedAverage f []  = f 0
+paddedAverage f wxs = total `div` n
+  where
+    total   = sum [w * f x | (w, x) <- wxs ]
+    n       = sum [w       | (w, _) <- wxs ]
+

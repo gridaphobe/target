@@ -74,13 +74,14 @@ inv e = Set.null $ freeVars e
 
 closed = inv
 
-{-@ subst :: e1:Closed -> n:Char -> e2:Closed
+{- subst :: e1:Closed -> n:Char -> e2:Closed
           -> {v:Closed | (if (Set_mem n (freeVars e2))
                           then (freeVars v) = (Set_cup (Set_dif (freeVars e2)
                                                                 (Set_sng n))
                                                        (freeVars e1))
                           else (freeVars v) = (freeVars e2))}
   @-}
+{-@ subst :: e1:Closed -> n:Char -> e2:Closed -> Closed @-}
 subst :: Expr -> Char -> Expr -> Expr
 subst e1 v e2@(Var v')
   = if v == v' then e1 else e2
