@@ -1,9 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE ViewPatterns      #-}
 module Main where
 
 import Control.Monad
+import qualified Data.ByteString.Lazy as B
+import qualified Data.Csv as C
+import qualified Data.Vector as V
 import Data.Maybe
 import Data.String
 import qualified Data.Text as T
@@ -60,6 +64,26 @@ data HpcStats = HpcStats
   , alts         :: (Double,Double)
   , local        :: (Double,Double)
   }
+
+instance C.ToNamedRecord HpcStats where
+  toNamedRecord (HpcStats {..}) =
+    C.namedRecord [ "depth"           C..= depth
+                  , "expressions"     C..= exprs
+                  , "booleans"        C..= booleans
+                  , "always-true"     C..= alwaysTrue
+                  , "always-false"    C..= alwaysFalse
+                  , "alternatives"    C..= alts
+                  , "local-functions" C..= local
+                  ]
+
+instance C.ToField (Double,Double) where
+  toField (x,y) = C.toField (x / y)
+
+hpcHeader :: C.Header
+hpcHeader = V.fromList [ "depth", "expressions", "booleans"
+                       , "always-true", "always-false"
+                       , "alternatives", "local-functions"
+                       ]
 
 readHpc = fmap toHpcStats . readFile def
 
