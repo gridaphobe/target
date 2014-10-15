@@ -210,8 +210,9 @@ noDuplicateScreens ss
 instance (Num a, Constrain a) => Constrain (NonNegative a) where
   getType p = getType (Proxy :: Proxy a)
   gen p d t = gen (Proxy :: Proxy a) d t
-  stitch d t = stitch d t >>= \(x::a) -> return $ NonNegative $ x + fromIntegral d
+  decode v t = decode v t >>= \ (x::a) -> return $ NonNegative $ abs x
   toExpr (NonNegative x) = toExpr x
+  encode = undefined
 
 
 -- ---------------------------------------------------------------------
