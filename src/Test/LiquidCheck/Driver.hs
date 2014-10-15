@@ -93,30 +93,34 @@ allSat roots = {-# SCC "allSat" #-} setup >>= io . go
 
     go :: (Context, [Variable], V.Vector (Symbol,Symbol)) -> IO [[Value]]
     go (!ctx,!vs,!deps) = {-# SCC "allSat.go" #-} do
+       real <- gets realized
+       modify $ \s@(GS {..}) -> s { realized = [] }
+       unless (null real) $
+         command ctx $ Assert Nothing $ PNot $ pAnd cs
        resp <- command ctx CheckSat
        case resp of
          Error e -> Ex.throwM $ SmtError (T.unpack e)
          Unsat   -> return []
          Sat     -> do
-           let real = [v | (v,t) <- vs, t `elem` interps]
-           Values model <- {-# SCC "allSat.go.GetValue" #-}
-             if null real
-             then return $ Values []
-             else ensureValues $ command ctx (GetValue real)
-           -- print model
-           let cs = V.toList $ refute roots (M.fromList model) deps vs
-           -- i <- gets seed
-           -- modify $ \s@(GS {..}) -> s { seed = seed + 1 }
+           -- let real = [v | (v,t) <- vs, t `elem` interps]
+           -- Values model <- {-# SCC "allSat.go.GetValue" #-}
+           --   if null real
+           --   then return $ Values []
+           --   else ensureValues $ command ctx (GetValue real)
+           -- -- print model
+           -- let cs = V.toList $ refute roots (M.fromList model) deps vs
+           -- -- i <- gets seed
+           -- -- modify $ \s@(GS {..}) -> s { seed = seed + 1 }
            (map snd model:) <$> unsafeInterleaveIO (command ctx (Assert Nothing $ PNot $ pAnd cs) >> go (ctx,vs,deps))
 
-    ints vs = S.fromList [symbol v | (v,t) <- vs, t `elem` interps]
-    interps = [FInt, boolsort, choicesort]
-    refute !roots !model !deps !vs
-      = {-# SCC "refute" #-} V.map    (\(x,v) -> var x `eq` ESym (SL v))
-      . V.filter (\(x,v) -> x `S.member` ints vs)
-      $ realized
-      where
-        realized = {-# SCC "realized" #-} V.concat $ map (\root -> reaches root model deps) roots
+    -- ints vs = S.fromList [symbol v | (v,t) <- vs, t `elem` interps]
+    -- interps = [FInt, boolsort, choicesort]
+    -- refute !roots !model !deps !vs
+    --   = {-# SCC "refute" #-} V.map    (\(x,v) -> var x `eq` ESym (SL v))
+    --   . V.filter (\(x,v) -> x `S.member` ints vs)
+    --   $ realized
+    --   where
+    --     realized = {-# SCC "realized" #-} V.concat $ map (\root -> reaches root model deps) roots
 
 generateDepGraph :: String -> V.Vector (Symbol,Symbol) -> Constraint -> IO ()
 generateDepGraph name deps constraints = writeFile (name <.> "dot") digraph

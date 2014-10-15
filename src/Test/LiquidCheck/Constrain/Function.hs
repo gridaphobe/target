@@ -59,7 +59,7 @@ stitchFun _ d (bkArrowDeep . stripQuals -> (vs, tis, to))
   = do mref <- io $ newIORef []
        state' <- get
        let state = state' { variables = [], choices = [], constraints = []
-                          , values = [], deps = [], constructors = [] }
+                          , deps = mempty, constructors = [] }
        return $ \es -> unsafePerformIO $ evalGen state $ do
          -- let es = map toExpr xs
          mv <- lookup es <$> io (readIORef mref)
@@ -85,10 +85,11 @@ stitchFun _ d (bkArrowDeep . stripQuals -> (vs, tis, to))
                  resp <- io $ command ctx CheckSat
                  when (resp == Unsat) $ Ex.throwM SmtFailedToProduceOutput
                  let real = [symbol v | (v,t) <- vs, t `elem` [FInt, choicesort, boolsort]]
-                 Values model <- if null real then return $ Values []
-                                 else ensureValues $ io $ command ctx (GetValue real)
-                 setValues (map snd model)
-                 o  <- stitch d to
+                 -- Values model <- if null real then return $ Values []
+                 --                 else ensureValues $ io $ command ctx (GetValue real)
+                 -- setValues (map snd model)
+                 -- o  <- stitch d to
+                 o <- decode (fst xo) to
                  whenVerbose $ io $ printf "%s -> %s\n" (show es) (show o)
                  io (modifyIORef mref ((es,o):))
                  io $ command ctx Pop
@@ -119,8 +120,8 @@ instance (Constrain a, Constrain b, b ~ Res (a -> b))
   => Constrain (a -> b) where
   getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)]
   gen = genFun
-  stitch d t
-    = do f <- stitchFun (Proxy :: Proxy (a -> b)) d t
+  decode v t
+    = do f <- stitchFun (Proxy :: Proxy (a -> b)) undefined t
          return $ \a -> f [toExpr a]
   toExpr  f = var ("FUNCTION" :: Symbol)
   encode _ _ = error "can't encode a function!"
@@ -130,8 +131,8 @@ instance (Constrain a, Constrain b, Constrain c, c ~ Res (a -> b -> c))
   getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)
                       ,getType (Proxy :: Proxy c)]
   gen = genFun
-  stitch d t
-    = do f <- stitchFun (Proxy :: Proxy (a -> b -> c)) d t
+  decode _ t
+    = do f <- stitchFun (Proxy :: Proxy (a -> b -> c)) undefined t
          return $ \a b -> f [toExpr a, toExpr b]
   toExpr  f = var ("FUNCTION" :: Symbol)
   encode _ _ = error "can't encode a function!"
@@ -141,8 +142,8 @@ instance (Constrain a, Constrain b, Constrain c, Constrain d, d ~ Res (a -> b ->
   getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)
                       ,getType (Proxy :: Proxy c), getType (Proxy :: Proxy d)]
   gen = genFun
-  stitch sz t
-    = do f <- stitchFun (Proxy :: Proxy (a -> b -> c -> d)) sz t
+  decode _ t
+    = do f <- stitchFun (Proxy :: Proxy (a -> b -> c -> d)) undefined t
          return $ \a b c -> f [toExpr a, toExpr b, toExpr c]
   toExpr  f = var ("FUNCTION" :: Symbol)
   encode _ _ = error "can't encode a function!"

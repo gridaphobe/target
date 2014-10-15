@@ -21,7 +21,7 @@ library
   exposed-modules:     Test.LiquidCheck,
                        Test.LiquidCheck.Constrain,
                        Test.LiquidCheck.Constrain.Function,
-                       Test.LiquidCheck.Driver,
+                       -- Test.LiquidCheck.Driver,
                        Test.LiquidCheck.Eval,
                        Test.LiquidCheck.Expr,
                        Test.LiquidCheck.Gen,

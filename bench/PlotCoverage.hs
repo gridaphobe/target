@@ -28,7 +28,8 @@ import System.FilePath
 -- depths = [2..20]
 
 getStats :: String -> IO [HpcStats]
-getStats m = forM ["1", "5", "10", "15", "20", "25", "30"] $ \d ->
+getStats m = forM ["1", "5", "10", "15", "20", "25", "30"] $ \d -> do
+               -- system $ printf "hpc --xml-output --hpcdir=_results _results/%s-%s.tix"
                readHpc $ fromString $ printf "%s-%s.xml" m (d::String)
 
 mkPlot name stats = toFile (def {_fo_format = EPS}) (name<.>"eps") $ do

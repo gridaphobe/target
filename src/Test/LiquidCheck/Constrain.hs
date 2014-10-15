@@ -41,7 +41,7 @@ import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Tidy     (tidySymbol)
 import           Language.Haskell.Liquid.Types    hiding (var)
 
-import           Test.LiquidCheck.Driver
+-- import           Test.LiquidCheck.Driver
 import           Test.LiquidCheck.Expr
 import           Test.LiquidCheck.Eval
 import           Test.LiquidCheck.Gen
@@ -50,15 +50,18 @@ import           Test.LiquidCheck.Util
 
 import Text.Printf
 
+import Debug.Trace
+
 --------------------------------------------------------------------------------
 --- Constrainable Data
 --------------------------------------------------------------------------------
 class Show a => Constrain a where
   getType :: Proxy a -> Sort
   gen     :: Proxy a -> Int -> SpecType -> Gen Variable
-  stitch  :: Int -> SpecType -> Gen a
+  -- stitch  :: Symbol -> SpecType -> Gen a
   toExpr  :: a -> Expr
 
+  decode  :: Symbol -> SpecType -> Gen a
   encode  :: a -> SpecType -> Gen Variable
 
   default getType :: (Generic a, GConstrain (Rep a))
@@ -69,13 +72,22 @@ class Show a => Constrain a where
               => Proxy a -> Int -> SpecType -> Gen Variable
   gen p = ggen (reproxyRep p)
 
-  default stitch :: (Generic a, GConstrain (Rep a))
-                 => Int -> SpecType -> Gen a
-  stitch d t = to <$> gstitch d
+  -- default stitch :: (Generic a, GConstrain (Rep a))
+  --                => Symbol -> SpecType -> Gen a
+  -- stitch d t = to <$> gstitch d
 
   default toExpr :: (Generic a, GConstrain (Rep a))
                  => a -> Expr
   toExpr = gtoExpr . from
+
+  default decode :: (Generic a, GDecode (Rep a))
+                 => Symbol -> SpecType -> Gen a
+  decode v t = do
+    x <- whichOf v
+    -- traceShowM x
+    (c, fs) <- unapply x
+    -- traceShowM (c,fs)
+    to <$> gdecode c fs
 
   default encode :: (Generic a, GEncode (Rep a))
                  => a -> SpecType -> Gen Variable
@@ -97,9 +109,10 @@ reproxyElem = reproxy
 instance Constrain () where
   getType _ = FObj "GHC.Tuple.()"
   gen _ _ _ = fresh (FObj "GHC.Tuple.()")
-  stitch _ _ = return ()
   -- this is super fiddly, but seemingly required since GHC.exprType chokes on "GHC.Tuple.()"
   toExpr _   = app ("()" :: Symbol) []
+
+  decode _ _ = return ()
   encode v t = fresh (FObj "GHC.Tuple.()")
 
 
@@ -111,9 +124,9 @@ instance Constrain Int where
        constrain $ var x `ge` fromIntegral (negate d)
        constrain $ var x `le` fromIntegral d
        return x
-  stitch _ _ = read . T.unpack <$> pop
   toExpr i = ECon $ I $ fromIntegral i
 
+  decode v _ = read . T.unpack <$> getValue v
   encode i t =
     do v <- fresh FInt
        constrain $ var v `eq` fromIntegral i
@@ -124,9 +137,9 @@ instance Constrain Int where
 instance Constrain Integer where
   getType _ = FObj "GHC.Integer.Type.Integer"
   gen _ d t = gen (Proxy :: Proxy Int) d t
-  stitch d t = stitch d t >>= \(x::Int) -> return . fromIntegral $ x + d
   toExpr  x = toExpr (fromIntegral x :: Int)
 
+  decode v t = decode v t >>= \(x::Int) -> return . fromIntegral $ x
   encode i t =
     do v <- fresh FInt
        constrain $ var v `eq` fromIntegral i
@@ -141,9 +154,9 @@ instance Constrain Char where
        constrain $ var x `le` fromIntegral d
        constrain $ ofReft x (toReft $ rt_reft t)
        return x
-  stitch d t = stitch d t >>= \(x::Int) -> return . chr $ x + ord 'a'
   toExpr  c = ESym $ SL $ T.singleton c
 
+  decode v t = decode v t >>= \(x::Int) -> return . chr $ x + ord 'a'
   encode c t =
     do v <- fresh FInt
        constrain $ var v `eq` fromIntegral (ord c - ord 'a')
@@ -159,9 +172,9 @@ instance Constrain Word8 where
        constrain $ var x `le` fromIntegral d
        constrain $ ofReft x (toReft $ rt_reft t)
        return x
-  stitch d t = stitch d t >>= \(x::Int) -> return $ fromIntegral x
   toExpr i   = ECon $ I $ fromIntegral i
 
+  decode v t = decode v t >>= \(x::Int) -> return $ fromIntegral x
   encode w t =
     do v <- fresh FInt
        constrain $ var v `eq` fromIntegral w
@@ -174,7 +187,8 @@ instance Constrain Bool where
   gen _ d t = fresh boolsort >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
        return x
-  stitch _ _ = pop >>= \case
+
+  decode v _ = getValue v >>= \case
     "true"  -> return True
     "false" -> return False
 
@@ -253,6 +267,12 @@ apply c vs = do
   addConstructor (c, rTypeSort mempty t)
   constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
   return x
+
+unapply :: Symbol -> Gen (Symbol, [Symbol])
+unapply c = do
+  let [_,cn,_] = T.splitOn "-" $ symbolText c
+  deps <- gets deps
+  return (symbol cn, M.lookupDefault [] c deps)
 
 constrain :: Pred -> Gen ()
 constrain p
@@ -349,9 +369,12 @@ reproxyRep = reproxy
 class GConstrain f where
   gtype        :: Proxy (f a) -> Sort
   ggen         :: Proxy (f a) -> Int    -> SpecType -> Gen Variable
-  gstitch      :: Int -> Gen (f a)
+  -- gstitch      :: Symbol -> Gen (f a)
   gtoExpr      :: f a -> Expr
 
+
+class GDecode f where
+  gdecode      :: Symbol -> [Symbol] -> Gen (f a)
 
 class GEncode f where
   gencode      :: f a -> SpecType -> Gen Variable
@@ -374,13 +397,18 @@ instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
       mod  = symbol $ GHC.Generics.moduleName (undefined :: D1 c f a)
       sort = FObj $ qualifiedDatatypeName (undefined :: D1 c f a)
 
-  gstitch d = M1 <$> making sort (fst <$> gstitchAlts d)
-    where
-      sort = FObj $ qualifiedDatatypeName (undefined :: D1 c f a)
+  -- gstitch d = M1 <$> making sort (fst <$> gstitchAlts d)
+  --   where
+  --     sort = FObj $ qualifiedDatatypeName (undefined :: D1 c f a)
 
   gtoExpr c@(M1 x) = app (qualify c (symbolString $ val d)) xs
     where
       (EApp d xs) = gtoExprAlts x
+
+instance (Datatype c, GDecode f) => GDecode (D1 c f) where
+  gdecode c vs = M1 <$> making sort (gdecode c vs)
+    where
+      sort = FObj $ qualifiedDatatypeName (undefined :: D1 c f a)
 
 instance (Datatype c, GEncode f) => GEncode (D1 c f) where
   gencode (M1 x) t = inModule mod . making sort $ gencode x t
@@ -399,15 +427,21 @@ instance (Constrain a) => GConstrain (K1 i a) where
                               then d
                               else depth
                   gen p' d' t
-  gstitch d  = do let p = Proxy :: Proxy a
-                  ty <- gets makingTy
-                  depth <- gets depth
-                  sc <- gets scDepth
-                  let d' = if getType p == ty || sc
-                              then d
-                              else depth
-                  K1 <$> stitch d' undefined
+  -- gstitch d  = do let p = Proxy :: Proxy a
+  --                 ty <- gets makingTy
+  --                 depth <- gets depth
+  --                 sc <- gets scDepth
+  --                 let d' = if getType p == ty || sc
+  --                             then d
+  --                             else depth
+  --                 K1 <$> stitch d' undefined
   gtoExpr (K1 x) = toExpr x
+
+
+instance Constrain a => GDecodeFields (K1 i a) where
+  gdecodeFields (v:vs) = do
+    x <- decode v undefined
+    return (vs, K1 x)
 
 instance Constrain a => GEncodeFields (K1 i a) where
   gencodeFields (K1 x) ((f,t):ts) = do
@@ -427,7 +461,7 @@ qualifiedDatatypeName d = symbol $ qualify d (datatypeName d)
 --------------------------------------------------------------------------------
 class GConstrainSum f where
   ggenAlts      :: Proxy (f a) -> Variable -> Int -> SpecType -> Gen [Variable]
-  gstitchAlts   :: Int -> Gen (f a, Bool)
+  -- gstitchAlts   :: Symbol -> Gen (f a, Bool)
   gtoExprAlts   :: f a -> Expr
 
 reproxyLeft :: Proxy ((c (f :: * -> *) (g :: * -> *)) a) -> Proxy (f a)
@@ -442,16 +476,20 @@ instance (GConstrainSum f, GConstrainSum g) => GConstrainSum (f :+: g) where
          ys <- ggenAlts (reproxyRight p) v d t
          return $! xs++ys
 
-  gstitchAlts d
-    = do (g,cg) <- gstitchAlts d
-         (f,cf) <- gstitchAlts d
-         case (cf,cg) of
-           (True,_) -> return (L1 f, True)
-           (_,True) -> return (R1 g, True)
-           _        -> return (error "gstitchAlts :+: CANNOT HAPPEN", False)
+  -- gstitchAlts d
+  --   = do (g,cg) <- gstitchAlts d
+  --        (f,cf) <- gstitchAlts d
+  --        case (cf,cg) of
+  --          (True,_) -> return (L1 f, True)
+  --          (_,True) -> return (R1 g, True)
+  --          _        -> return (error "gstitchAlts :+: CANNOT HAPPEN", False)
 
   gtoExprAlts (L1 x) = gtoExprAlts x
   gtoExprAlts (R1 x) = gtoExprAlts x
+
+instance (GDecode f, GDecode g) => GDecode (f :+: g) where
+  gdecode c vs =  L1 <$> gdecode c vs
+              <|> R1 <$> gdecode c vs
 
 instance (GEncode f, GEncode g) => GEncode (f :+: g) where
   gencode (L1 x) t = gencode x t
@@ -466,15 +504,23 @@ instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
            else pure <$> ggenAlt p v 0 t
   ggenAlts p v d t = pure <$> ggenAlt p v d t
 
-  gstitchAlts d | d <= 0
-    = do ty <- gets makingTy
-         if gisRecursive (Proxy :: Proxy (C1 c f a)) ty
-           then return (error "gstitchAlts C1 CANNOT HAPPEN", False)
-           else gstitchAlt 0
-  gstitchAlts d
-    = gstitchAlt d
+  -- gstitchAlts d | d <= 0
+  --   = do ty <- gets makingTy
+  --        if gisRecursive (Proxy :: Proxy (C1 c f a)) ty
+  --          then return (error "gstitchAlts C1 CANNOT HAPPEN", False)
+  --          else gstitchAlt 0
+  -- gstitchAlts d
+  --   = gstitchAlt d
 
   gtoExprAlts c@(M1 x)  = app (symbol $ conName c) (gtoExprs x)
+
+instance (Constructor c, GDecodeFields f) => GDecode (C1 c f) where
+  gdecode c vs
+    -- | trace (show (c, symbol (conName (undefined :: C1 c f a)))) False = undefined
+    | c == symbol (conName (undefined :: C1 c f a))
+    = M1 . snd <$> gdecodeFields vs
+    | otherwise
+    = empty
 
 instance (Constructor c, GEncodeFields f) => GEncode (C1 c f) where
   gencode c@(M1 x) t = do
@@ -498,8 +544,7 @@ gisRecursive (p :: Proxy (C1 c f a)) t
 ggenAlt :: (Constructor c, GConstrainProd f)
         => Proxy (C1 c f a) -> Variable -> Int -> SpecType -> Gen Variable
 ggenAlt (p :: Proxy (C1 c f a)) x d t
-  = withFreshChoice $ \ch -> do
-     let cn = conName (undefined :: C1 c f a)
+  = withFreshChoice cn $ \ch -> do
      mod <- symbolString <$> gets modName
      dcp <- lookupCtor (symbol $ mod++"."++cn)
      tyi <- gets tyconInfo
@@ -507,12 +552,14 @@ ggenAlt (p :: Proxy (C1 c f a)) x d t
      let ts = applyPreds (addTyConInfo emb tyi t) dcp
      xs  <- ggenArgs (reproxyGElem p) d ts
      make' (symbol $ mod++"."++cn) x xs
+  where
+    cn = conName (undefined :: C1 c f a)
 
-gstitchAlt :: GConstrainProd f => Int -> Gen (C1 c f a, Bool)
-gstitchAlt d
-  = do x <- gstitchArgs d
-       c <- popChoice
-       return (M1 x, c)
+-- gstitchAlt :: GConstrainProd f => Symbol -> Gen (C1 c f a, Bool)
+-- gstitchAlt v
+--   = do x <- gstitchArgs v
+--        c <- getValue v
+--        return (M1 x, c)
 
 --------------------------------------------------------------------------------
 --- Products
@@ -520,8 +567,11 @@ gstitchAlt d
 class GConstrainProd f where
   gconArgTys  :: Proxy (f a) -> [Sort]
   ggenArgs    :: Proxy (f a) -> Int -> [(Symbol,SpecType)] -> Gen [Variable]
-  gstitchArgs :: Int -> Gen (f a)
+  -- gstitchArgs :: Int -> Gen (f a)
   gtoExprs    :: f a -> [Expr]
+
+class GDecodeFields f where
+  gdecodeFields :: [Symbol] -> Gen ([Symbol], f a)
 
 class GEncodeFields f where
   gencodeFields :: f a -> [(Symbol,SpecType)] -> Gen ([Variable], [(Symbol,SpecType)])
@@ -537,12 +587,18 @@ instance (GConstrainProd f, GConstrainProd g) => GConstrainProd (f :*: g) where
          ys <- ggenArgs (reproxyRight p) d (map (second (subst su)) ts')
          return $ xs ++ ys
 
-  gstitchArgs d
-    = do ys <- gstitchArgs d
-         xs <- gstitchArgs d
-         return $ xs :*: ys
+  -- gstitchArgs d
+  --   = do ys <- gstitchArgs d
+  --        xs <- gstitchArgs d
+  --        return $ xs :*: ys
 
   gtoExprs (f :*: g) = gtoExprs f ++ gtoExprs g
+
+instance (GDecodeFields f, GDecodeFields g) => GDecodeFields (f :*: g) where
+  gdecodeFields vs = do
+    (vs', ls)  <- gdecodeFields vs
+    (vs'', rs) <- gdecodeFields vs'
+    return (vs'', ls :*: rs)
 
 instance (GEncodeFields f, GEncodeFields g) => GEncodeFields (f :*: g) where
   gencodeFields (f :*: g) ts = do
@@ -554,8 +610,13 @@ instance (GEncodeFields f, GEncodeFields g) => GEncodeFields (f :*: g) where
 instance (GConstrain f) => GConstrainProd (S1 c f) where
   gconArgTys p        = [gtype (reproxyGElem p)]
   ggenArgs p d (t:ts) = sequence [ggen (reproxyGElem p) (d-1) (snd t)]
-  gstitchArgs d       = M1 <$> gstitch (d-1)
+  -- gstitchArgs d       = M1 <$> gstitch (d-1)
   gtoExprs (M1 x)     = [gtoExpr x]
+
+instance GDecodeFields f => GDecodeFields (S1 c f) where
+  gdecodeFields vs = do
+    (vs, x) <- gdecodeFields vs
+    return (vs, M1 x)
 
 instance (GEncodeFields f) => GEncodeFields (S1 c f) where
   gencodeFields (M1 x) ts = gencodeFields x ts
@@ -563,8 +624,11 @@ instance (GEncodeFields f) => GEncodeFields (S1 c f) where
 instance GConstrainProd U1 where
   gconArgTys p    = []
   ggenArgs p d _  = return []
-  gstitchArgs d   = return U1
+  -- gstitchArgs d   = return U1
   gtoExprs _      = []
+
+instance GDecodeFields U1 where
+  gdecodeFields vs = return (vs, U1)
 
 instance GEncodeFields U1 where
   gencodeFields _ ts = return ([], ts)

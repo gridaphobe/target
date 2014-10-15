@@ -95,7 +95,7 @@ runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
                           , GHC.hscTarget = GHC.HscNothing --GHC.HscInterpreted
                           -- , GHC.optLevel  = 0 --2
                           , GHC.log_action = \_ _ _ _ _ -> return ()
-                          , GHC.importPaths = "bench":"src":(GHC.importPaths df)
+                          , GHC.importPaths = (GHC.importPaths df)
                           } `GHC.gopt_set` GHC.Opt_ImplicitImportQualified
                             `GHC.xopt_set` GHC.Opt_MagicHash
              GHC.setSessionDynFlags df'

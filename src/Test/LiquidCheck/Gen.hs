@@ -15,7 +15,8 @@ import           Data.Generics                    (Data, Typeable, everywhere,
                                                    mkT)
 import qualified Data.HashMap.Strict              as M
 import qualified Data.HashSet                     as S
-import           Data.List
+import           Data.List                        hiding (sort)
+import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Text.Lazy                   as T
 import           System.Process                   (terminateProcess)
@@ -40,7 +41,7 @@ instance Symbolic T.Text where
   symbol = symbol . T.toStrict
 
 newtype Gen a = Gen (StateT GenState IO a)
-  deriving (Functor, Applicative, Monad, MonadIO
+  deriving (Functor, Applicative, Monad, MonadIO, Alternative
            ,MonadState GenState, MonadCatch)
 instance MonadThrow Gen where
   throwM = Ex.throw
@@ -64,8 +65,8 @@ data GenState
        , variables    :: ![Variable]
        , choices      :: ![Variable]
        , constraints  :: !Constraint
-       , values       :: ![Value]
-       , deps         :: ![(Symbol, Symbol)]
+       , deps         :: !(M.HashMap Symbol [Symbol])
+       , realized     :: ![(Symbol, Value)]
        , dconEnv      :: ![(Symbol, DataConP)]
        , ctorEnv      :: !DataConEnv
        , measEnv      :: !MeasureEnv
@@ -95,8 +96,8 @@ initGS fp sp ctx
        , variables    = []
        , choices      = []
        , constraints  = []
-       , values       = []
-       , deps         = []
+       , deps         = mempty
+       , realized     = []
        , dconEnv      = dcons
        , ctorEnv      = cts
        , measEnv      = meas
@@ -132,11 +133,12 @@ whenVerbose x
   = do v <- gets verbose
        when v x
 
-setValues vs = modify $ \s@(GS {..}) -> s { values = vs }
+noteUsed (v,x) = modify $ \s@(GS {..}) -> s { realized = (v,x) : realized }
 
 setMaxSuccess m = modify $ \s@(GS {..}) -> s { maxSuccess = Just m }
 
-addDep from to = modify $ \s@(GS {..}) -> s { deps = (fst from, fst to):deps }
+addDep from to = modify $ \s@(GS {..}) ->
+  s { deps = M.insertWith (flip (++)) (fst from) [fst to] deps }
 
 addConstraint p = modify $ \s@(GS {..}) -> s { constraints = p:constraints }
 
@@ -171,9 +173,9 @@ lookupCtor c
            modify $ \s@(GS {..}) -> s { ctorEnv = (c,t) : ctorEnv }
            return t
 
-withFreshChoice :: (Variable -> Gen ()) -> Gen Variable
-withFreshChoice act
-  = do c  <- freshChoice []
+withFreshChoice :: String -> (Variable -> Gen ()) -> Gen Variable
+withFreshChoice cn act
+  = do c  <- freshChoice cn []
        mc <- gets chosen
        modify $ \s -> s { chosen = Just c }
        act c
@@ -207,33 +209,58 @@ unObj FInt     = "Int"
 unObj (FObj s) = s
 unObj s        = error $ "unObj: " ++ show s
 
-freshChoice :: [Variable] -> Gen Variable
-freshChoice xs
-  = do c <- fresh choicesort
-       modify $ \s@(GS {..}) -> s { choices = c : choices }
-       mapM_ (addDep c) xs
-       return c
+freshChoice :: String -> [Variable] -> Gen Variable
+freshChoice cn xs
+  = do n <- gets seed
+       modify $ \s@(GS {..}) -> s { seed = seed + 1 }
+       modify $ \s@(GS {..}) -> s { sorts = S.insert choicesort sorts }
+       let x = (symbol $ T.unpack (smt2 choicesort) ++ "-" ++ cn ++ "-" ++ show n, choicesort)
+       -- io $ print x
+       modify $ \s@(GS {..}) -> s { variables = x : variables }
+       -- mapM_ (addDep x) xs
+       return x
 
 
+getValue :: Symbol -> Gen Value
+getValue v = do
+  ctx <- gets smtContext
+  Values [x] <- io $ ensureValues $ command ctx (GetValue [v])
+  noteUsed x
+  return (snd x)
 
-pop :: Gen Value
-pop = do (v:vs) <- gets values
-         modify $ \s@(GS {..}) -> s { values = vs }
-         return v
+whichOf :: Symbol -> Gen Symbol
+whichOf v = do
+  deps <- gets deps
+  -- io $ print deps
+  -- io $ print v
+  let Just cs = M.lookup v deps
+  [c]  <- catMaybes <$> forM cs (\c -> do
+    val <- getValue c
+    if val == "true"
+      then return (Just c)
+      else return Nothing)
+  return c
+  -- return $ head $ deps M.! c
 
-popN :: Int -> Gen [Value]
-popN d = replicateM d pop
 
-popChoice :: Gen Bool
-popChoice = read <$> pop
-  where
-    read "true"  = True
-    read "false" = False
-    read e       = error $ "popChoice: " ++ show e
+-- pop :: Gen Value
+-- pop = do (v:vs) <- gets values
+--          modify $ \s@(GS {..}) -> s { values = vs }
+--          return v
 
-popChoices :: Int -> Gen [Bool]
-popChoices n = fmap read <$> popN n
-  where
-    read "true"  = True
-    read "false" = False
-    read e       = error $ "popChoices: " ++ show e
+-- popN :: Int -> Gen [Value]
+-- popN d = replicateM d pop
+
+-- popChoice :: Gen Bool
+-- popChoice = read <$> pop
+--   where
+--     read "true"  = True
+--     read "false" = False
+--     read e       = error $ "popChoice: " ++ show e
+
+-- popChoices :: Int -> Gen [Bool]
+-- popChoices n = fmap read <$> popN n
+--   where
+--     read "true"  = True
+--     read "false" = False
+--     read e       = error $ "popChoices: " ++ show e
