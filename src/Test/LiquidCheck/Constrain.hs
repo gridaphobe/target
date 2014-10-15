@@ -199,19 +199,22 @@ instance (Constrain a, Constrain b) => Constrain (Either a b)
 instance (Constrain a, Constrain b) => Constrain (a,b)
 instance (Constrain a, Constrain b, Constrain c) => Constrain (a,b,c)
 
--- instance (Num a, Integral a, Constrain a) => Constrain (Ratio a) where
---   getType _ = FObj "GHC.Real.Ratio"
---   gen _ d t = fresh (FObj "GHC.Real.Ratio") >>= \x ->
---     do gen (Proxy :: Proxy Int) d t
---        gen (Proxy :: Proxy Int) d t
---        return x
---   stitch d t = do x :: Int <- stitch d t
---                   y' :: Int <- stitch d t
---                   -- we should really modify `t' above to have Z3 generate non-zero denoms
---                   let y = if y' == 0 then 1 else y'
---                   let toA z = fromIntegral z :: a
---                   return $ toA x % toA y
---   toExpr x = EApp (dummyLoc "GHC.Real.:%") [toExpr (numerator x), toExpr (denominator x)]
+instance (Num a, Integral a, Constrain a) => Constrain (Ratio a) where
+  getType _ = FObj "GHC.Real.Ratio"
+  gen _ d t = gen (Proxy :: Proxy Int) d t
+  decode v t= decode v t >>= \ (x::Int) -> return (fromIntegral x)
+  -- gen _ d t = fresh (FObj "GHC.Real.Ratio") >>= \x ->
+  --   do gen (Proxy :: Proxy Int) d t
+  --      gen (Proxy :: Proxy Int) d t
+  --      return x
+  -- stitch d t = do x :: Int <- stitch d t
+  --                 y' :: Int <- stitch d t
+  --                 -- we should really modify `t' above to have Z3 generate non-zero denoms
+  --                 let y = if y' == 0 then 1 else y'
+  --                 let toA z = fromIntegral z :: a
+  --                 return $ toA x % toA y
+  toExpr x = EApp (dummyLoc "GHC.Real.:%") [toExpr (numerator x), toExpr (denominator x)]
+  encode = undefined
 
 
 choose :: Variable -> [Variable] -> Gen ()

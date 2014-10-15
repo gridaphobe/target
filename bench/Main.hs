@@ -31,8 +31,8 @@ import qualified Data.Vector                as V
 import           System.IO
 import           Text.Printf
 
-import qualified Expr
-import qualified ExprBench                  as Expr
+-- import qualified Expr
+-- import qualified ExprBench                  as Expr
 import qualified List
 import qualified ListBench                  as List
 import qualified MapBench                   as Map
@@ -97,7 +97,7 @@ main :: IO ()
 main = do
   print =<< logCsv "bench/List.insert.csv"       =<< listInsertTests
   print =<< logCsv "bench/RBTree.add.csv"        =<< rbTreeAddTests
-  print =<< logCsv "bench/Expr.subst.csv"        =<< exprSubstTests
+  -- print =<< logCsv "bench/Expr.subst.csv"        =<< exprSubstTests
   print =<< logCsv "bench/Map.delete.csv"        =<< mapDeleteTests
   print =<< logCsv "bench/Map.difference.csv"    =<< mapDifferenceTests
   print =<< logCsv "bench/XMonad.focus_left.csv" =<< xmonadFocusLeftTests
@@ -117,12 +117,12 @@ rbTreeAddTests = do
   q <- checkQuick  RBTree.prop_add_qc "RBTree.add"
   return $ TestResult "RBTree.add" l s ls (Just lss) q
 
-exprSubstTests = do
-  l <- checkLiquid Expr.subst         "Expr.subst" "examples/Expr.hs"
-  s <- checkSmall  Expr.prop_subst_sc "Expr.subst"
-  ls <- checkLazySmall  Expr.prop_subst_lsc "Expr.subst"
-  q <- checkQuick  Expr.prop_subst_qc "Expr.subst"
-  return $ TestResult "Expr.subst" l s ls Nothing q
+-- exprSubstTests = do
+--   l <- checkLiquid Expr.subst         "Expr.subst" "examples/Expr.hs"
+--   s <- checkSmall  Expr.prop_subst_sc "Expr.subst"
+--   ls <- checkLazySmall  Expr.prop_subst_lsc "Expr.subst"
+--   q <- checkQuick  Expr.prop_subst_qc "Expr.subst"
+--   return $ TestResult "Expr.subst" l s ls Nothing q
 
 mapDeleteTests = do
   l <- checkLiquid Map.prop_delete_lc "Map.delete" "examples/Map.hs"
