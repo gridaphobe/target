@@ -24,6 +24,7 @@ import           Test.LiquidCheck.Gen
 import           Test.LiquidCheck.Types
 import           Test.LiquidCheck.Util
 
+import Debug.Trace
 
 -- evalType :: Env -> RApp -> Expr -> Gen Bool
 evalType :: M.HashMap Symbol Expr -> SpecType -> Expr -> Gen Bool

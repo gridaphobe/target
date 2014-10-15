@@ -41,6 +41,8 @@ import           Test.LiquidCheck.Gen
 import           Test.LiquidCheck.Types
 import           Test.LiquidCheck.Util
 
+import Debug.Trace
+
 type CanTest f = (Testable f, Show (Args f), Constrain (Res f))
 
 test :: CanTest f => f -> Int -> SpecType -> Gen Result
@@ -53,10 +55,12 @@ test f d t
        let interps = [FInt, boolsort, choicesort]
        let real = [v | (v,t) <- vars, t `elem` interps]
        let (xs, tis, to) = bkArrowDeep $ stripQuals t
-       let su = mkSubst [(x, var v) | (v,_) <- vs | x <- xs]
-       let to' = subst su to
+       -- let su = mkSubst [(x, var v) | (v,_) <- vs | x <- xs]
+       -- let to' = subst su to
+       -- let to' = to
+       -- traceShowM to'
        ctx <- gets smtContext
-       try (process d f ctx vs real cts (zip xs tis) to') >>= \case
+       try (process d f ctx vs real cts (zip xs tis) to) >>= \case
          Left  (e :: LiquidException) -> return $ Errored $ show e
          Right r                      -> return r
 
