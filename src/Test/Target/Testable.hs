@@ -49,25 +49,16 @@ test :: CanTest f => f -> Int -> SpecType -> Gen Result
 test f d t
   = do vs <- genArgs f d t
        setup
-       cts <- gets freesyms
-       -- vals <- allSat $ map symbol vs
-       vars <- gets variables
-       let interps = [FInt, boolsort, choicesort]
-       let real = [v | (v,t) <- vars, t `elem` interps]
        let (xs, tis, to) = bkArrowDeep $ stripQuals t
-       -- let su = mkSubst [(x, var v) | (v,_) <- vs | x <- xs]
-       -- let to' = subst su to
-       -- let to' = to
-       -- traceShowM to'
        ctx <- gets smtContext
-       try (process d f ctx vs real cts (zip xs tis) to) >>= \case
+       try (process f ctx vs (zip xs tis) to) >>= \case
          Left  (e :: TargetException) -> return $ Errored $ show e
          Right r                      -> return r
 
 process :: CanTest f
-        => Int -> f -> Context -> [Variable] -> [Symbol] -> [(Symbol,Symbol)] -> [(Symbol,SpecType)] -> SpecType
+        => f -> Context -> [Variable] -> [(Symbol,SpecType)] -> SpecType
         -> Gen Result
-process d f ctx vs real cts xts to = go 0 =<< io (command ctx CheckSat)
+process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
   where
     go !n Unsat    = return $ Passed n
     go _  (Error e)= throwM $ SmtError $ T.unpack e
@@ -81,17 +72,25 @@ process d f ctx vs real cts xts to = go 0 =<< io (command ctx CheckSat)
       case er of
         Left (e :: SomeException)
           -- DON'T catch AsyncExceptions since they are used by @timeout@
-          | Just (e :: AsyncException) <- fromException e -> throwM e
-          | Just e@(SmtError _) <- fromException e -> throwM e
-          | Just e@(ExpectedValues _) <- fromException e -> throwM e
+          | Just (_ :: AsyncException) <- fromException e -> throwM e
+          | Just (SmtError _) <- fromException e -> throwM e
+          | Just (ExpectedValues _) <- fromException e -> throwM e
           | otherwise -> mbKeepGoing xs n
         Right r -> do
           real <- gets realized
+          -- traceShowM real
+          -- traceShowM             [ ESym (SL x) `eq` ESym (SL v) | (x,v) <- real ]
           modify $ \s@(GS {..}) -> s { realized = [] }
-          io $ command ctx $ Assert Nothing $ PNot $ pAnd
-            [ var x `eq` ESym (SL v) | (x,v) <- real ]
           let su = mkSubst $ mkExprs f (map fst xts) xs
           (sat, _) <- check r (subst su to)
+
+          -- refute model *after* checking output in case we have HOFs, which
+          -- need to query the solver. if this is the last set of inputs, e.g.
+          -- refuting the current model forces the solver to return unsat next
+          -- time, the solver will return unsat when the HOF queries for an output,
+          -- causing us to return a spurious error
+          io $ command ctx $ Assert Nothing $ PNot $ pAnd
+            [ ESym (SL $ symbolText x) `eq` ESym (SL v) | (x,v) <- real ]
           -- let env = map (second (`app` [])) cts ++ mkExprs f (map fst xts) xs
           -- sat <- evalType (M.fromList env) to (toExpr r)
           case sat of

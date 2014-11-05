@@ -41,8 +41,7 @@ evalType m t e
 
 freshen [] = return []
 freshen ((v,t):vts)
-  = do n <- gets seed
-       modify $ \s@ (GS {..}) -> s { seed = seed + 1 }
+  = do n <- freshInt
        let v' = symbol . (++show n) . symbolString $ v
            su = mkSubst [(v,var v')]
            t' = subst su t

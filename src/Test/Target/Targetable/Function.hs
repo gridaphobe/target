@@ -54,13 +54,14 @@ genFun p d (stripQuals -> t)
        fresh (getType p)
 
 stitchFun :: forall f. (Targetable (Res f))
-          => Proxy f -> Int -> SpecType -> Gen ([Expr] -> Res f)
-stitchFun _ d (bkArrowDeep . stripQuals -> (vs, tis, to))
+          => Proxy f -> SpecType -> Gen ([Expr] -> Res f)
+stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, to))
   = do mref <- io $ newIORef []
+       d <- gets depth
        state' <- get
-       let state = state' { variables = [], choices = [], constraints = []
-                          , deps = mempty, constructors = [] }
-       return $ \es -> unsafePerformIO $ evalGen state $ do
+       let st = state' { variables = [], choices = [], constraints = []
+                       , deps = mempty, constructors = [] }
+       return $ \es -> unsafePerformIO $ evalGen st $ do
          -- let es = map toExpr xs
          mv <- lookup es <$> io (readIORef mref)
          case mv of
@@ -82,16 +83,13 @@ stitchFun _ d (bkArrowDeep . stripQuals -> (vs, tis, to))
                  mapM_ (\x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
                  cs <- gets constraints
                  mapM_ (\c -> io . command ctx $ Assert Nothing c) cs
+
                  resp <- io $ command ctx CheckSat
                  when (resp == Unsat) $ Ex.throwM SmtFailedToProduceOutput
-                 let real = [symbol v | (v,t) <- vs, t `elem` [FInt, choicesort, boolsort]]
-                 -- Values model <- if null real then return $ Values []
-                 --                 else ensureValues $ io $ command ctx (GetValue real)
-                 -- setValues (map snd model)
-                 -- o  <- stitch d to
+
                  o <- decode (fst xo) to
                  whenVerbose $ io $ printf "%s -> %s\n" (show es) (show o)
-                 io (modifyIORef mref ((es,o):))
+                 io (modifyIORef' mref ((es,o):))
                  io $ command ctx Pop
                  return o
     
@@ -121,7 +119,7 @@ instance (Targetable a, Targetable b, b ~ Res (a -> b))
   getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)]
   gen = genFun
   decode v t
-    = do f <- stitchFun (Proxy :: Proxy (a -> b)) undefined t
+    = do f <- stitchFun (Proxy :: Proxy (a -> b)) t
          return $ \a -> f [toExpr a]
   toExpr  f = var ("FUNCTION" :: Symbol)
   check _ _ = error "can't check a function!"
@@ -133,7 +131,7 @@ instance (Targetable a, Targetable b, Targetable c, c ~ Res (a -> b -> c))
                       ,getType (Proxy :: Proxy c)]
   gen = genFun
   decode _ t
-    = do f <- stitchFun (Proxy :: Proxy (a -> b -> c)) undefined t
+    = do f <- stitchFun (Proxy :: Proxy (a -> b -> c)) t
          return $ \a b -> f [toExpr a, toExpr b]
   toExpr  f = var ("FUNCTION" :: Symbol)
   check _ _ = error "can't check a function!"
@@ -145,7 +143,7 @@ instance (Targetable a, Targetable b, Targetable c, Targetable d, d ~ Res (a -> 
                       ,getType (Proxy :: Proxy c), getType (Proxy :: Proxy d)]
   gen = genFun
   decode _ t
-    = do f <- stitchFun (Proxy :: Proxy (a -> b -> c -> d)) undefined t
+    = do f <- stitchFun (Proxy :: Proxy (a -> b -> c -> d)) t
          return $ \a b c -> f [toExpr a, toExpr b, toExpr c]
   toExpr  f = var ("FUNCTION" :: Symbol)
   check _ _ = error "can't check a function!"

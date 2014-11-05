@@ -15,10 +15,12 @@ import           Data.Generics                    (Data, Typeable, everywhere,
                                                    mkT)
 import qualified Data.HashMap.Strict              as M
 import qualified Data.HashSet                     as S
+import           Data.IORef
 import           Data.List                        hiding (sort)
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Text.Lazy                   as T
+import           System.IO.Unsafe
 import           System.Process                   (terminateProcess)
 import           Text.Printf
 
@@ -36,7 +38,7 @@ import qualified GHC
 import           Test.Target.Types
 import           Test.Target.Util
 
-import Debug.Trace
+import           Debug.Trace
 
 
 instance Symbolic T.Text where
@@ -62,9 +64,18 @@ evalGen s (Gen x) = evalStateT x s
 -- execGen :: GhcSpec -> Gen a -> IO GenState
 -- execGen e (Gen x) = execStateT x (initGS e)
 
+seed :: IORef Int
+seed = unsafePerformIO $ newIORef 0
+{-# NOINLINE seed #-}
+
+freshInt :: Gen Int
+freshInt = liftIO $ do
+  n <- readIORef seed
+  modifyIORef' seed (+1)
+  return n
+
 data GenState
-  = GS { seed         :: !Int
-       , variables    :: ![Variable]
+  = GS { variables    :: ![Variable]
        , choices      :: ![Variable]
        , constraints  :: !Constraint
        , deps         :: !(M.HashMap Symbol [Symbol])
@@ -94,8 +105,7 @@ data GenState
        }
 
 initGS fp sp ctx
-  = GS { seed         = 0
-       , variables    = []
+  = GS { variables    = []
        , choices      = []
        , constraints  = []
        , deps         = mempty
@@ -193,8 +203,7 @@ withFreshChoice cn act
 -- variable `x`, from which everything in `xs` is reachable.
 fresh :: Sort -> Gen Variable
 fresh sort
-  = do n <- gets seed
-       modify $ \s@(GS {..}) -> s { seed = seed + 1 }
+  = do n <- freshInt
        let sorts' = sortTys sort
        -- io $ print sorts'
        modify $ \s@(GS {..}) -> s { sorts = S.union (S.fromList (arrowize sort : sorts')) sorts }
@@ -217,8 +226,7 @@ unObj s        = error $ "unObj: " ++ show s
 
 freshChoice :: String -> [Variable] -> Gen Variable
 freshChoice cn xs
-  = do n <- gets seed
-       modify $ \s@(GS {..}) -> s { seed = seed + 1 }
+  = do n <- freshInt
        modify $ \s@(GS {..}) -> s { sorts = S.insert choicesort sorts }
        let x = (symbol $ T.unpack (smt2 choicesort) ++ "-" ++ cn ++ "-" ++ show n, choicesort)
        -- io $ print x
