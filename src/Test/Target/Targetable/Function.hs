@@ -5,7 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE ViewPatterns         #-}
-module Test.LiquidCheck.Constrain.Function where
+module Test.Target.Targetable.Function where
 
 import           Control.Applicative
 import           Control.Arrow                   (first, second)
@@ -28,12 +28,12 @@ import           Language.Haskell.Liquid.Types   hiding (var)
 import           System.IO.Unsafe
 import           Text.Printf
 
-import           Test.LiquidCheck.Constrain
-import           Test.LiquidCheck.Eval
-import           Test.LiquidCheck.Expr
-import           Test.LiquidCheck.Gen
-import           Test.LiquidCheck.Types
-import           Test.LiquidCheck.Util
+import           Test.Target.Targetable
+import           Test.Target.Eval
+import           Test.Target.Expr
+import           Test.Target.Gen
+import           Test.Target.Types
+import           Test.Target.Util
 
 
 getCtors :: SpecType -> [GHC.DataCon]
@@ -53,7 +53,7 @@ genFun p d (stripQuals -> t)
          addConstructor (c, rTypeSort mempty t)
        fresh (getType p)
 
-stitchFun :: forall f. (Constrain (Res f))
+stitchFun :: forall f. (Targetable (Res f))
           => Proxy f -> Int -> SpecType -> Gen ([Expr] -> Res f)
 stitchFun _ d (bkArrowDeep . stripQuals -> (vs, tis, to))
   = do mref <- io $ newIORef []
@@ -116,8 +116,8 @@ genExpr (ESym (SL s)) | T.length s == 1
 genExpr e = error $ "genExpr: " ++ show e
 
 
-instance (Constrain a, Constrain b, b ~ Res (a -> b))
-  => Constrain (a -> b) where
+instance (Targetable a, Targetable b, b ~ Res (a -> b))
+  => Targetable (a -> b) where
   getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)]
   gen = genFun
   decode v t
@@ -126,8 +126,8 @@ instance (Constrain a, Constrain b, b ~ Res (a -> b))
   toExpr  f = var ("FUNCTION" :: Symbol)
   encode _ _ = error "can't encode a function!"
 
-instance (Constrain a, Constrain b, Constrain c, c ~ Res (a -> b -> c))
-  => Constrain (a -> b -> c) where
+instance (Targetable a, Targetable b, Targetable c, c ~ Res (a -> b -> c))
+  => Targetable (a -> b -> c) where
   getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)
                       ,getType (Proxy :: Proxy c)]
   gen = genFun
@@ -137,8 +137,8 @@ instance (Constrain a, Constrain b, Constrain c, c ~ Res (a -> b -> c))
   toExpr  f = var ("FUNCTION" :: Symbol)
   encode _ _ = error "can't encode a function!"
 
-instance (Constrain a, Constrain b, Constrain c, Constrain d, d ~ Res (a -> b -> c -> d))
-  => Constrain (a -> b -> c -> d) where
+instance (Targetable a, Targetable b, Targetable c, Targetable d, d ~ Res (a -> b -> c -> d))
+  => Targetable (a -> b -> c -> d) where
   getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)
                       ,getType (Proxy :: Proxy c), getType (Proxy :: Proxy d)]
   gen = genFun

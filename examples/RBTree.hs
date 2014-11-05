@@ -17,7 +17,7 @@ module RBTree
 import           Debug.Trace
 
 import           GHC.Generics
-import           Test.LiquidCheck
+import           Test.Target
 
 import           Language.Haskell.Liquid.Prelude
 
@@ -30,8 +30,8 @@ data Color = B -- ^ Black
            | R -- ^ Red
            deriving (Eq,Show,Generic)
 
-instance Constrain Color
-instance Constrain a => Constrain (RBTree a)
+instance Targetable Color
+instance Targetable a => Targetable (RBTree a)
 
 ---------------------------------------------------------------------------
 -- | Add an element -------------------------------------------------------

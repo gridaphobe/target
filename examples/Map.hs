@@ -286,8 +286,8 @@ import           Text.Read
 
 import           Data.Set             (Set)
 import           GHC.Generics
-import           Test.LiquidCheck
-import           Test.LiquidCheck.Gen (Gen)
+import           Test.Target
+import           Test.Target.Gen (Gen)
 #endif
 
 -- Use macros to define strictness of functions.
@@ -327,7 +327,7 @@ m1 \\ m2 = difference m1 m2
 #endif
 
 -- LiquidCheck tests
-instance (Constrain k, Constrain a) => Constrain (Map k a)
+instance (Targetable k, Targetable a) => Targetable (Map k a)
 
 {--------------------------------------------------------------------
   Size balanced trees.
@@ -2439,7 +2439,7 @@ fromDistinctAscList xs
 
 data MaybeS a = NothingS | JustS a deriving (Generic, Show) -- LIQUID: !-annot-fix
 
-instance Constrain a => Constrain (MaybeS a)
+instance Targetable a => Targetable (MaybeS a)
 
 
 {--------------------------------------------------------------------

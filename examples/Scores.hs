@@ -1,7 +1,7 @@
 module Scores where
 
 import Data.List (sort)
-import Test.LiquidCheck
+import Test.Target
 
 {-@ type Pos = {v:Int | 0 < v} @-}
 {-@ type NotZero = {v:Int | 0 != v} @-}

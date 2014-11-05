@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
-module Test.LiquidCheck.Gen where
+module Test.Target.Gen where
 
 import           Control.Applicative
 import           Control.Arrow
@@ -33,8 +33,8 @@ import           Language.Haskell.Liquid.Types
 
 import qualified GHC
 
-import           Test.LiquidCheck.Types
-import           Test.LiquidCheck.Util
+import           Test.Target.Types
+import           Test.Target.Util
 
 
 instance Symbolic T.Text where

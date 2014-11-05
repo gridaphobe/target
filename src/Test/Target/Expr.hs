@@ -1,4 +1,4 @@
-module Test.LiquidCheck.Expr where
+module Test.Target.Expr where
 
 import Language.Fixpoint.Types
 

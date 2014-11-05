@@ -19,14 +19,14 @@ import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Tidy     (tidySymbol)
 import           Language.Haskell.Liquid.Types    hiding (var)
 
-import           Test.LiquidCheck.Constrain hiding (make,make',make2,ofReft,constrain,choose)
--- import           Test.LiquidCheck.Driver
-import           Test.LiquidCheck.Expr
-import           Test.LiquidCheck.Eval
-import           Test.LiquidCheck.Gen
-import           Test.LiquidCheck.Types
-import           Test.LiquidCheck.Util
-import           Test.LiquidCheck
+import           Test.Target.Targetable hiding (make,make',make2,ofReft,constrain,choose)
+-- import           Test.Target.Driver
+import           Test.Target.Expr
+import           Test.Target.Eval
+import           Test.Target.Gen
+import           Test.Target.Types
+import           Test.Target.Util
+import           Test.Target
 
 import           Data.Proxy
 import           Debug.Trace
@@ -70,11 +70,11 @@ mymap f Nil         = Nil
 mymap f (Cons x xs) = Cons (f x) (mymap f xs)
 
 --------------------------------------------------------------------------------
---- LiquidCheck
+--- Target
 --------------------------------------------------------------------------------
-instance Constrain a => Constrain (List a)
+instance Targetable a => Targetable (List a)
 
--- instance Constrain a => Constrain (List a) where
+-- instance Targetable a => Targetable (List a) where
 --   -- bookkeeping to ease debugging of .smt2 file, not strictly necessary
 --   getType _ = FObj "List.List"
 
@@ -142,7 +142,7 @@ instance Constrain a => Constrain (List a)
 -- -- deconstruct `t` to determine proper types for `x` and `xs`. `applyPreds` does
 -- -- for us, in particular it handles propagating the instantiation of `a` and any
 -- -- abstract refinements.
--- make2 :: (Constrain a, Constrain b)
+-- make2 :: (Targetable a, Targetable b)
 --       => Symbol             -- ^ the DataCon
 --       -> (Proxy a, Proxy b) -- ^ proxies for the type-class instances
 --       -> SpecType           -- ^ the refined type

@@ -34,7 +34,7 @@ import qualified Type                       as GHC
 import qualified TypeRep                    as GHC
 
 import           Language.Fixpoint.Misc     (stripParens)
-import           Test.LiquidCheck
+import           Test.Target
 
 findFuns :: T.Text -> [T.Text]
 findFuns hs = specs `intersect` decls
@@ -129,8 +129,8 @@ monomorphic df int monos (GHC.ForAllTy a t)
 monomorphic df int monos t
   = error $ "Don't know how to monomorphize " ++ GHC.showPpr df t
 
-mkLiquidCheck d path m fun ty
-  = printf "Test.LiquidCheck.testOne %d (%s :: %s) \"%s\" \"%s\""
+mkTarget d path m fun ty
+  = printf "Test.Target.testOne %d (%s :: %s) \"%s\" \"%s\""
            d fun ty (m++"."++fun) path
 
 data Outcome = Completed Result
@@ -147,7 +147,7 @@ checkMany path mod fun ty = go 2
     checkAt :: Int -> IO (Double, Maybe Result)
     checkAt n = do (test :: IO Result) <- runGhc $ do
                      loadModule path
-                     let liquidCheck = mkLiquidCheck n path mod fun ty
+                     let liquidCheck = mkTarget n path mod fun ty
                      GHC.liftIO $ print liquidCheck
                      GHC.Exts.unsafeCoerce# <$> GHC.compileExpr liquidCheck
                    putStrNow (printf "%d " n)
@@ -179,13 +179,13 @@ runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
              x
 
 loadModule f = do target <- GHC.guessTarget f Nothing
-                  --lcheck <- GHC.guessTarget "src/Test/LiquidCheck.hs" Nothing
+                  --lcheck <- GHC.guessTarget "src/Test/Target.hs" Nothing
                   GHC.setTargets [target] -- [target,lcheck]
                   GHC.load GHC.LoadAllTargets
                   modGraph <- GHC.getModuleGraph
                   let m = fromJust $ find ((==f) . GHC.msHsFilePath) modGraph
                   GHC.setContext [ GHC.IIModule (GHC.ms_mod_name m)
                                  -- , GHC.IIDecl $ GHC.simpleImportDecl
-                                 --              $ GHC.mkModuleName "Test.LiquidCheck"
+                                 --              $ GHC.mkModuleName "Test.Target"
                                  ]
                   return m

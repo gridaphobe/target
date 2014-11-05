@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-module Test.LiquidCheck.Eval where
+module Test.Target.Eval where
 
 import           Control.Applicative
 import           Control.Monad.Catch
@@ -18,11 +18,11 @@ import           Language.Haskell.Liquid.Measure
 import           Language.Haskell.Liquid.RefType (addTyConInfo)
 import           Language.Haskell.Liquid.Types   hiding (var)
 
--- import           Test.LiquidCheck.Constrain
-import           Test.LiquidCheck.Expr
-import           Test.LiquidCheck.Gen
-import           Test.LiquidCheck.Types
-import           Test.LiquidCheck.Util
+-- import           Test.Target.Targetable
+import           Test.Target.Expr
+import           Test.Target.Gen
+import           Test.Target.Types
+import           Test.Target.Util
 
 import Debug.Trace
 

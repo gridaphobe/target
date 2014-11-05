@@ -8,8 +8,8 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 module Main where
 
-import           Test.LiquidCheck
-import           Test.LiquidCheck.Types
+import           Test.Target
+import           Test.Target.Types
 import qualified Test.QuickCheck            as QC
 import qualified Test.SmallCheck            as SC
 import qualified Test.SmallCheck.Drivers    as SC
@@ -103,14 +103,14 @@ main = do
   print =<< logCsv "bench/XMonad.focus_left.csv" =<< xmonadFocusLeftTests
 
 listInsertTests = do
-  l <- checkLiquid List.insert         "List.insert" "examples/List.hs"
+  l <- checkTarget List.insert         "List.insert" "examples/List.hs"
   s <- checkSmall  List.prop_insert_sc "List.insert"
   ls <- checkLazySmall  List.prop_insert_lsc "List.insert"
   q <- checkQuick  List.prop_insert_qc "List.insert"
   return $ TestResult "List.insert" l s ls Nothing q
 
 rbTreeAddTests = do
-  l <- checkLiquid RBTree.prop_add_lc "RBTree.add" "examples/RBTree.hs"
+  l <- checkTarget RBTree.prop_add_lc "RBTree.add" "examples/RBTree.hs"
   s <- checkSmall  RBTree.prop_add_sc "RBTree.add"
   ls <- checkLazySmall  RBTree.prop_add_lsc "RBTree.add"
   lss <- checkLazySmall  RBTree.prop_add_lsc_slow "RBTree.add"
@@ -118,14 +118,14 @@ rbTreeAddTests = do
   return $ TestResult "RBTree.add" l s ls (Just lss) q
 
 -- exprSubstTests = do
---   l <- checkLiquid Expr.subst         "Expr.subst" "examples/Expr.hs"
+--   l <- checkTarget Expr.subst         "Expr.subst" "examples/Expr.hs"
 --   s <- checkSmall  Expr.prop_subst_sc "Expr.subst"
 --   ls <- checkLazySmall  Expr.prop_subst_lsc "Expr.subst"
 --   q <- checkQuick  Expr.prop_subst_qc "Expr.subst"
 --   return $ TestResult "Expr.subst" l s ls Nothing q
 
 mapDeleteTests = do
-  l <- checkLiquid Map.prop_delete_lc "Map.delete" "examples/Map.hs"
+  l <- checkTarget Map.prop_delete_lc "Map.delete" "examples/Map.hs"
   s <- checkSmall  Map.prop_delete_sc "Map.delete"
   ls <- checkLazySmall  Map.prop_delete_lsc "Map.delete"
   lss <- checkLazySmall  Map.prop_delete_lsc_slow "Map.delete"
@@ -133,7 +133,7 @@ mapDeleteTests = do
   return $ TestResult "Map.delete" l s ls (Just lss) q
 
 mapDifferenceTests = do
-  l <- checkLiquid Map.prop_difference_lc "Map.difference" "examples/Map.hs"
+  l <- checkTarget Map.prop_difference_lc "Map.difference" "examples/Map.hs"
   s <- checkSmall  Map.prop_difference_sc "Map.difference"
   ls <- checkLazySmall  Map.prop_difference_lsc "Map.difference"
   lss <- checkLazySmall  Map.prop_difference_lsc_slow "Map.difference"
@@ -141,7 +141,7 @@ mapDifferenceTests = do
   return $ TestResult "Map.difference" l s ls (Just lss) q
 
 xmonadFocusLeftTests = do
-  l <- checkLiquid XMonad.prop_focus_left_master_lc "XMonad.Properties.prop_focus_left_master_lc"
+  l <- checkTarget XMonad.prop_focus_left_master_lc "XMonad.Properties.prop_focus_left_master_lc"
                                                     "examples/XMonad/Properties.hs"
   s <- checkSmall  XMonad.prop_focus_left_master_sc "XMonad.Properties.prop_focus_left_master"
   ls <- checkLazySmall  XMonad.prop_focus_left_master_lsc "XMonad.Properties.prop_focus_left_master"
@@ -160,8 +160,8 @@ timed x = do start <- getTime
              end   <- getTime
              return (end-start, v)
 
--- checkLiquid :: CanTest f => f -> String -> FilePath -> IO [(Int,Double,Outcome)]
-checkLiquid f n m = checkMany (n++"/LiquidCheck")
+-- checkTarget :: CanTest f => f -> String -> FilePath -> IO [(Int,Double,Outcome)]
+checkTarget f n m = checkMany (n++"/Target")
                               (\d max -> resultPassed <$> testOneMaxSC f n d max m)
 
 checkSmall p n = checkMany (n++"/SmallCheck")

@@ -7,7 +7,7 @@ import           Expr
 import           Control.Applicative
 import qualified Data.Set               as Set
 
-import           Test.LiquidCheck
+import           Test.Target
 import qualified Test.QuickCheck        as QC
 import qualified Test.SmallCheck        as SC
 import qualified Test.SmallCheck.Series as SC

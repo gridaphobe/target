@@ -17,9 +17,9 @@ import           System.IO
 import           Text.Printf
 
 import           Language.Haskell.Liquid.Types (GhcSpec)
-import           Test.LiquidCheck
-import           Test.LiquidCheck.Gen
-import           Test.LiquidCheck.Util
+import           Test.Target
+import           Test.Target.Gen
+import           Test.Target.Util
 
 main :: IO ()
 main = do

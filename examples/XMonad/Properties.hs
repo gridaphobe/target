@@ -50,9 +50,9 @@ import qualified Data.Set                         as Set
 import           Language.Fixpoint.Types          (Sort (..))
 import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.Types    (RType (..))
-import           Test.LiquidCheck
-import           Test.LiquidCheck.Gen             (GenState (..))
-import           Test.LiquidCheck.Util
+import           Test.Target
+import           Test.Target.Gen             (GenState (..))
+import           Test.Target.Util
 import qualified Test.QuickCheck                  as QC
 import qualified Test.SmallCheck                  as SC
 import qualified Test.SmallCheck.Series           as SC
@@ -196,8 +196,8 @@ noDuplicateScreens ss
 -- instance (Ord k, SC.Serial m k, SC.Serial m v) => SC.Serial m (M.Map k v) where
 --   series  = fmap M.fromList SC.series
 
---FIXME: this belongs in Constrain.hs
--- instance (Ord k, Constrain k, Constrain v) => Constrain (M.Map k v) where
+--FIXME: this belongs in Targetable.hs
+-- instance (Ord k, Targetable k, Targetable v) => Targetable (M.Map k v) where
 --   getType _ = FObj "Data.Map.Base.Map"
 --   gen p d (RApp c ts ps r)
 --     = do tyi <- gets tyconInfo
@@ -207,7 +207,7 @@ noDuplicateScreens ss
 --   stitch d t = stitch d t >>= \(kvs :: [(k,v)]) -> return $ M.fromList kvs
 --   toExpr  m = toExpr $ M.toList m
 
-instance (Num a, Constrain a) => Constrain (NonNegative a) where
+instance (Num a, Targetable a) => Targetable (NonNegative a) where
   getType p = getType (Proxy :: Proxy a)
   gen p d t = gen (Proxy :: Proxy a) d t
   decode v t = decode v t >>= \ (x::a) -> return $ NonNegative $ abs x

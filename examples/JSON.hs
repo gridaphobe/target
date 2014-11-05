@@ -7,7 +7,7 @@ import Data.Aeson
 import Data.Maybe
 import GHC.Generics
 
-import Test.LiquidCheck
+import Test.Target
 import Test.SmallCheck.Series
 
 -- FIXME: need a more interesting type than Coord, preferably with some constraints, like XMONADD
@@ -17,7 +17,7 @@ data Coord = Coord { x :: Int, y :: Int } deriving (Show, Generic, Eq)
 instance FromJSON Coord
 instance ToJSON Coord
 
-instance Constrain Coord
+instance Targetable Coord
 instance Monad m => Serial m Coord
 
 -- FIXME: this measure makes sure that True and False are in the environment...

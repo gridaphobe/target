@@ -1,6 +1,6 @@
 module HOFs where
 
-import           Test.LiquidCheck
+import           Test.Target
 
 {-@ foo :: (x:Int -> {v:Int | v > x}) -> {v:Int | v > 0} @-}
 foo :: (Int -> Int) -> Int

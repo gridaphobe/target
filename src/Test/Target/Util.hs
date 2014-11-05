@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE BangPatterns #-}
-module Test.LiquidCheck.Util where
+module Test.Target.Util where
 
 import           Control.Applicative
 import           Control.Monad.Catch
@@ -103,13 +103,13 @@ runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
 
 loadModule :: FilePath -> GHC.Ghc GHC.ModSummary
 loadModule f = do target <- GHC.guessTarget f Nothing
-                  --lcheck <- GHC.guessTarget "src/Test/LiquidCheck.hs" Nothing
+                  --lcheck <- GHC.guessTarget "src/Test/Target.hs" Nothing
                   GHC.setTargets [target] -- [target,lcheck]
                   GHC.load GHC.LoadAllTargets
                   modGraph <- GHC.getModuleGraph
                   let m = fromJust $ find ((==f) . GHC.msHsFilePath) modGraph
                   GHC.setContext [ GHC.IIModule (GHC.ms_mod_name m)
                                  --, GHC.IIDecl $ GHC.simpleImportDecl
-                                 --             $ GHC.mkModuleName "Test.LiquidCheck"
+                                 --             $ GHC.mkModuleName "Test.Target"
                                  ]
                   return m

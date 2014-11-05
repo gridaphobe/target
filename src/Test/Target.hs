@@ -1,9 +1,9 @@
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
-module Test.LiquidCheck
+module Test.Target
   ( liquidCheck, testModule, testFun, testFunIgnoringFailure, testOne, testOneMaxSC, testOneMax
-  , Constrain(..), Result(..), Testable(..), Test(..), CanTest)
+  , Targetable(..), Result(..), Testable(..), Test(..), CanTest)
   where
 
 import           Control.Applicative
@@ -22,12 +22,12 @@ import           Language.Haskell.Liquid.Tidy         (tidySymbol)
 import           Language.Haskell.Liquid.Types        (GhcInfo (..),
                                                        GhcSpec (..), showpp)
 
-import           Test.LiquidCheck.Constrain
-import           Test.LiquidCheck.Constrain.Function  ()
-import           Test.LiquidCheck.Gen
-import           Test.LiquidCheck.Testable
-import           Test.LiquidCheck.Types
-import           Test.LiquidCheck.Util
+import           Test.Target.Targetable
+import           Test.Target.Targetable.Function  ()
+import           Test.Target.Gen
+import           Test.Target.Testable
+import           Test.Target.Types
+import           Test.Target.Util
 
 
 testModule :: FilePath -> [Gen Result] -> IO ()

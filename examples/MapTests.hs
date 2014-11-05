@@ -7,7 +7,7 @@ import Map
 import Control.Applicative
 import qualified Data.List as L
 
-import Test.LiquidCheck
+import Test.Target
 import qualified Test.QuickCheck as QC
 import qualified Test.SmallCheck as SC
 import qualified Test.SmallCheck.Series as SC
@@ -53,7 +53,7 @@ validsize t
 
 
 --------------------------------------------------------------------
--- LiquidCheck
+-- Target
 --------------------------------------------------------------------
 
 -- The values aren't interesting in terms of the properties we want to check,

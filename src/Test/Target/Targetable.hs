@@ -11,7 +11,7 @@
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ViewPatterns         #-}
-module Test.LiquidCheck.Constrain where
+module Test.Target.Targetable where
 
 import           Control.Applicative
 import           Control.Arrow                    (second)
@@ -41,12 +41,12 @@ import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Tidy     (tidySymbol)
 import           Language.Haskell.Liquid.Types    hiding (var)
 
--- import           Test.LiquidCheck.Driver
-import           Test.LiquidCheck.Expr
-import           Test.LiquidCheck.Eval
-import           Test.LiquidCheck.Gen
-import           Test.LiquidCheck.Types
-import           Test.LiquidCheck.Util
+-- import           Test.Target.Driver
+import           Test.Target.Expr
+import           Test.Target.Eval
+import           Test.Target.Gen
+import           Test.Target.Types
+import           Test.Target.Util
 
 import Text.Printf
 
@@ -55,7 +55,7 @@ import Debug.Trace
 --------------------------------------------------------------------------------
 --- Constrainable Data
 --------------------------------------------------------------------------------
-class Show a => Constrain a where
+class Show a => Targetable a where
   getType :: Proxy a -> Sort
   gen     :: Proxy a -> Int -> SpecType -> Gen Variable
   -- stitch  :: Symbol -> SpecType -> Gen a
@@ -64,19 +64,19 @@ class Show a => Constrain a where
   decode  :: Symbol -> SpecType -> Gen a
   encode  :: a -> SpecType -> Gen Variable
 
-  default getType :: (Generic a, GConstrain (Rep a))
+  default getType :: (Generic a, GTargetable (Rep a))
                   => Proxy a -> Sort
   getType p = gtype (reproxyRep p)
 
-  default gen :: (Generic a, GConstrain (Rep a))
+  default gen :: (Generic a, GTargetable (Rep a))
               => Proxy a -> Int -> SpecType -> Gen Variable
   gen p = ggen (reproxyRep p)
 
-  -- default stitch :: (Generic a, GConstrain (Rep a))
+  -- default stitch :: (Generic a, GTargetable (Rep a))
   --                => Symbol -> SpecType -> Gen a
   -- stitch d t = to <$> gstitch d
 
-  default toExpr :: (Generic a, GConstrain (Rep a))
+  default toExpr :: (Generic a, GTargetable (Rep a))
                  => a -> Expr
   toExpr = gtoExpr . from
 
@@ -106,7 +106,7 @@ reproxyElem = reproxy
 --------------------------------------------------------------------------------
 --- Instances
 --------------------------------------------------------------------------------
-instance Constrain () where
+instance Targetable () where
   getType _ = FObj "GHC.Tuple.()"
   gen _ _ _ = fresh (FObj "GHC.Tuple.()")
   -- this is super fiddly, but seemingly required since GHC.exprType chokes on "GHC.Tuple.()"
@@ -116,7 +116,7 @@ instance Constrain () where
   encode v t = fresh (FObj "GHC.Tuple.()")
 
 
-instance Constrain Int where
+instance Targetable Int where
   getType _ = FObj "GHC.Types.Int"
   gen _ d t = fresh FInt >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
@@ -134,7 +134,7 @@ instance Constrain Int where
        return v
 
 
-instance Constrain Integer where
+instance Targetable Integer where
   getType _ = FObj "GHC.Integer.Type.Integer"
   gen _ d t = gen (Proxy :: Proxy Int) d t
   toExpr  x = toExpr (fromIntegral x :: Int)
@@ -147,7 +147,7 @@ instance Constrain Integer where
        return v
 
 
-instance Constrain Char where
+instance Targetable Char where
   getType _ = FObj "GHC.Types.Char"
   gen _ d t = fresh FInt >>= \x ->
     do constrain $ var x `ge` 0
@@ -164,7 +164,7 @@ instance Constrain Char where
        return v
   
 
-instance Constrain Word8 where
+instance Targetable Word8 where
   getType _ = FObj "GHC.Word.Word8"
   gen _ d t = fresh FInt >>= \x ->
     do _ <- gets depth
@@ -182,7 +182,7 @@ instance Constrain Word8 where
        return v
 
 
-instance Constrain Bool where
+instance Targetable Bool where
   getType _ = FObj "GHC.Types.Bool"
   gen _ d t = fresh boolsort >>= \x ->
     do constrain $ ofReft x (toReft $ rt_reft t)
@@ -193,13 +193,13 @@ instance Constrain Bool where
     "false" -> return False
 
 
-instance Constrain a => Constrain [a]
-instance Constrain a => Constrain (Maybe a)
-instance (Constrain a, Constrain b) => Constrain (Either a b)
-instance (Constrain a, Constrain b) => Constrain (a,b)
-instance (Constrain a, Constrain b, Constrain c) => Constrain (a,b,c)
+instance Targetable a => Targetable [a]
+instance Targetable a => Targetable (Maybe a)
+instance (Targetable a, Targetable b) => Targetable (Either a b)
+instance (Targetable a, Targetable b) => Targetable (a,b)
+instance (Targetable a, Targetable b, Targetable c) => Targetable (a,b,c)
 
-instance (Num a, Integral a, Constrain a) => Constrain (Ratio a) where
+instance (Num a, Integral a, Targetable a) => Targetable (Ratio a) where
   getType _ = FObj "GHC.Real.Ratio"
   gen _ d t = gen (Proxy :: Proxy Int) d t
   decode v t= decode v t >>= \ (x::Int) -> return (fromIntegral x)
@@ -285,7 +285,7 @@ constrain p
          Just c  -> let p' = prop c `imp` p
                     in addConstraint p'
 
--- make2 :: forall a b. (Constrain a, Constrain b)
+-- make2 :: forall a b. (Constrain a, Targetable b)
 --       => TH.Name -> (Proxy a, Proxy b) -> SpecType -> Sort -> Int -> Gen String
 -- make2 c (pa,pb) t s d
 --   = do dcp <- lookupCtor c -- fromJust . lookup c <$> gets ctorEnv
@@ -297,7 +297,7 @@ constrain p
 --        x2 <- gen pb (d-1) (subst su $ snd t2)
 --        make c [x1,x2] s
 
--- -- make3 :: forall a b c. (Constrain a, Constrain b, Constrain c)
+-- -- make3 :: forall a b c. (Targetable a, Targetable b, Targetable c)
 -- --       => TH.Name -> (Proxy a, Proxy b, Proxy c) -> SpecType -> Sort -> Int -> Gen String
 -- make3 c (pa,pb,pc) t s d
 --   = do dcp <- lookupCtor c --fromJust . lookup c <$> gets ctorEnv
@@ -342,7 +342,7 @@ constrain p
 --        make c [x1,x2,x3,x4,x5] s
 
 
--- apply4 :: (Constrain a, Constrain b, Constrain c, Constrain d)
+-- apply4 :: (Targetable a, Targetable b, Targetable c, Targetable d)
 --        => (a -> b -> c -> d -> e) -> Int -> Gen e
 -- apply4 c d
 --   = do
@@ -352,7 +352,7 @@ constrain p
 --        v1 <- cons
 --        return $ c v1 v2 v3 v4
 --   where
---     cons :: Constrain a => Gen a
+--     cons :: Targetable a => Gen a
 --     cons = stitch (d-1)
 
 
@@ -369,7 +369,7 @@ reproxyRep = reproxy
 --------------------------------------------------------------------------------
 --- Sums of Products
 --------------------------------------------------------------------------------
-class GConstrain f where
+class GTargetable f where
   gtype        :: Proxy (f a) -> Sort
   ggen         :: Proxy (f a) -> Int    -> SpecType -> Gen Variable
   -- gstitch      :: Symbol -> Gen (f a)
@@ -386,7 +386,7 @@ class GEncode f where
 reproxyGElem :: Proxy (M1 d c f a) -> Proxy (f a)
 reproxyGElem = reproxy
 
-instance (Datatype c, GConstrainSum f) => GConstrain (D1 c f) where
+instance (Datatype c, GTargetableSum f) => GTargetable (D1 c f) where
   gtype p = FObj $ qualifiedDatatypeName (undefined :: D1 c f a)
 
   ggen p d t
@@ -420,7 +420,7 @@ instance (Datatype c, GEncode f) => GEncode (D1 c f) where
       sort = FObj $ qualifiedDatatypeName (undefined :: D1 c f a)
 
 
-instance (Constrain a) => GConstrain (K1 i a) where
+instance (Targetable a) => GTargetable (K1 i a) where
   gtype p    = getType (reproxy p :: Proxy a)
   ggen p d t = do let p' = reproxy p :: Proxy a
                   ty <- gets makingTy
@@ -441,12 +441,12 @@ instance (Constrain a) => GConstrain (K1 i a) where
   gtoExpr (K1 x) = toExpr x
 
 
-instance Constrain a => GDecodeFields (K1 i a) where
+instance Targetable a => GDecodeFields (K1 i a) where
   gdecodeFields (v:vs) = do
     x <- decode v undefined
     return (vs, K1 x)
 
-instance Constrain a => GEncodeFields (K1 i a) where
+instance Targetable a => GEncodeFields (K1 i a) where
   gencodeFields (K1 x) ((f,t):ts) = do
     v <- encode x t
     return ([v], subst (mkSubst [(f, var v)]) ts)
@@ -462,7 +462,7 @@ qualifiedDatatypeName d = symbol $ qualify d (datatypeName d)
 --------------------------------------------------------------------------------
 --- Sums
 --------------------------------------------------------------------------------
-class GConstrainSum f where
+class GTargetableSum f where
   ggenAlts      :: Proxy (f a) -> Variable -> Int -> SpecType -> Gen [Variable]
   -- gstitchAlts   :: Symbol -> Gen (f a, Bool)
   gtoExprAlts   :: f a -> Expr
@@ -473,7 +473,7 @@ reproxyLeft = reproxy
 reproxyRight :: Proxy ((c (f :: * -> *) (g :: * -> *)) a) -> Proxy (g a)
 reproxyRight = reproxy
 
-instance (GConstrainSum f, GConstrainSum g) => GConstrainSum (f :+: g) where
+instance (GTargetableSum f, GTargetableSum g) => GTargetableSum (f :+: g) where
   ggenAlts p v d t
     = do xs <- ggenAlts (reproxyLeft p) v d t
          ys <- ggenAlts (reproxyRight p) v d t
@@ -499,7 +499,7 @@ instance (GEncode f, GEncode g) => GEncode (f :+: g) where
   gencode (R1 x) t = gencode x t
 
 
-instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
+instance (Constructor c, GTargetableProd f) => GTargetableSum (C1 c f) where
   ggenAlts p v d t | d <= 0
     = do ty <- gets makingTy
          if gisRecursive p ty
@@ -519,7 +519,6 @@ instance (Constructor c, GConstrainProd f) => GConstrainSum (C1 c f) where
 
 instance (Constructor c, GDecodeFields f) => GDecode (C1 c f) where
   gdecode c vs
-    -- | trace (show (c, symbol (conName (undefined :: C1 c f a)))) False = undefined
     | c == symbol (conName (undefined :: C1 c f a))
     = M1 . snd <$> gdecodeFields vs
     | otherwise
@@ -539,12 +538,12 @@ instance (Constructor c, GEncodeFields f) => GEncode (C1 c f) where
     constrain $ ofReft v $ toReft $ rt_reft t'
     return v
 
-gisRecursive :: (Constructor c, GConstrainProd f)
+gisRecursive :: (Constructor c, GTargetableProd f)
              => Proxy (C1 c f a) -> Sort -> Bool
 gisRecursive (p :: Proxy (C1 c f a)) t
   = t `elem` gconArgTys (reproxyGElem p)
 
-ggenAlt :: (Constructor c, GConstrainProd f)
+ggenAlt :: (Constructor c, GTargetableProd f)
         => Proxy (C1 c f a) -> Variable -> Int -> SpecType -> Gen Variable
 ggenAlt (p :: Proxy (C1 c f a)) x d t
   = withFreshChoice cn $ \ch -> do
@@ -558,7 +557,7 @@ ggenAlt (p :: Proxy (C1 c f a)) x d t
   where
     cn = conName (undefined :: C1 c f a)
 
--- gstitchAlt :: GConstrainProd f => Symbol -> Gen (C1 c f a, Bool)
+-- gstitchAlt :: GTargetableProd f => Symbol -> Gen (C1 c f a, Bool)
 -- gstitchAlt v
 --   = do x <- gstitchArgs v
 --        c <- getValue v
@@ -567,7 +566,7 @@ ggenAlt (p :: Proxy (C1 c f a)) x d t
 --------------------------------------------------------------------------------
 --- Products
 --------------------------------------------------------------------------------
-class GConstrainProd f where
+class GTargetableProd f where
   gconArgTys  :: Proxy (f a) -> [Sort]
   ggenArgs    :: Proxy (f a) -> Int -> [(Symbol,SpecType)] -> Gen [Variable]
   -- gstitchArgs :: Int -> Gen (f a)
@@ -580,7 +579,7 @@ class GEncodeFields f where
   gencodeFields :: f a -> [(Symbol,SpecType)] -> Gen ([Variable], [(Symbol,SpecType)])
 
 
-instance (GConstrainProd f, GConstrainProd g) => GConstrainProd (f :*: g) where
+instance (GTargetableProd f, GTargetableProd g) => GTargetableProd (f :*: g) where
   gconArgTys p = gconArgTys (reproxyLeft p) ++ gconArgTys (reproxyRight p)
 
   ggenArgs p d ts
@@ -610,7 +609,7 @@ instance (GEncodeFields f, GEncodeFields g) => GEncodeFields (f :*: g) where
     return (fs ++ gs, ts'')
 
 
-instance (GConstrain f) => GConstrainProd (S1 c f) where
+instance (GTargetable f) => GTargetableProd (S1 c f) where
   gconArgTys p        = [gtype (reproxyGElem p)]
   ggenArgs p d (t:ts) = sequence [ggen (reproxyGElem p) (d-1) (snd t)]
   -- gstitchArgs d       = M1 <$> gstitch (d-1)
@@ -624,7 +623,7 @@ instance GDecodeFields f => GDecodeFields (S1 c f) where
 instance (GEncodeFields f) => GEncodeFields (S1 c f) where
   gencodeFields (M1 x) ts = gencodeFields x ts
 
-instance GConstrainProd U1 where
+instance GTargetableProd U1 where
   gconArgTys p    = []
   ggenArgs p d _  = return []
   -- gstitchArgs d   = return U1

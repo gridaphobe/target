@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-module Test.LiquidCheck.Driver where
+module Test.Target.Driver where
 
 import           Control.Applicative
 import           Control.Arrow
@@ -27,10 +27,10 @@ import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Types   hiding (Result (..), env, var)
 
-import           Test.LiquidCheck.Expr
-import           Test.LiquidCheck.Gen
-import           Test.LiquidCheck.Types
-import           Test.LiquidCheck.Util
+import           Test.Target.Expr
+import           Test.Target.Gen
+import           Test.Target.Types
+import           Test.Target.Util
 
 
 reaches :: Symbol
@@ -122,7 +122,7 @@ allSat roots = {-# SCC "allSat" #-} setup >>= io . go
     --   where
     --     realized = {-# SCC "realized" #-} V.concat $ map (\root -> reaches root model deps) roots
 
-generateDepGraph :: String -> V.Vector (Symbol,Symbol) -> Constraint -> IO ()
+generateDepGraph :: String -> V.Vector (Symbol,Symbol) -> Targetablet -> IO ()
 generateDepGraph name deps constraints = writeFile (name <.> "dot") digraph
   where
     digraph = unlines $ ["digraph G {"] ++ edges ++ ["}"]

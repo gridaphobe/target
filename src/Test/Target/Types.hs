@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-module Test.LiquidCheck.Types where
+module Test.Target.Types where
 
 import qualified Control.Monad.Catch           as Ex
 import           Data.Typeable
@@ -15,21 +15,21 @@ import           GHC
 
 import qualified Data.Text                     as T
 
-data LiquidException = SmtFailedToProduceOutput
+data TargetException = SmtFailedToProduceOutput
                      | SmtError String
                      | ExpectedValues Response
                      | PreconditionCheckFailed String
                      | EvalError String
                      deriving Typeable
 
-instance Show LiquidException where
+instance Show TargetException where
   show SmtFailedToProduceOutput = "The SMT solver was unable to produce an output value."
   show (SmtError s) = "Unexpected error from the solver: " ++ s
   show (ExpectedValues r) = "Expected a Values response from the solver, got: " ++ show r
   show (PreconditionCheckFailed e) = "The pre-condition check for a generated function failed: " ++ e
   show (EvalError s) = "Couldn't evaluate a concrete refinement: " ++ s
 
-instance Ex.Exception LiquidException
+instance Ex.Exception TargetException
 
 ensureValues x = do
   a <- x

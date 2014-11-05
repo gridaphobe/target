@@ -64,7 +64,7 @@ import qualified Map  as M (Map,insert,delete,empty)
 import qualified Data.Set
 import           GHC.Generics
 
-import Test.LiquidCheck
+import Test.Target
 
 -- $intro
 --
@@ -908,14 +908,14 @@ onWorkspace n f s = view (currentTag s) . f . view n $ s
   @-}
 
 
-instance (Ord a, Constrain i, Constrain l, Constrain a, Constrain s, Constrain sd)
-  => Constrain (StackSet i l a s sd)
+instance (Ord a, Targetable i, Targetable l, Targetable a, Targetable s, Targetable sd)
+  => Targetable (StackSet i l a s sd)
 
-instance (Constrain i, Constrain l, Constrain a, Constrain s, Constrain sd)
-  => Constrain (Screen i l a s sd)
+instance (Targetable i, Targetable l, Targetable a, Targetable s, Targetable sd)
+  => Targetable (Screen i l a s sd)
 
-instance (Constrain i, Constrain l, Constrain a) => Constrain (Workspace i l a)
+instance (Targetable i, Targetable l, Targetable a) => Targetable (Workspace i l a)
 
-instance Constrain a => Constrain (Stack a)
+instance Targetable a => Targetable (Stack a)
 
-instance Constrain RationalRect
+instance Targetable RationalRect

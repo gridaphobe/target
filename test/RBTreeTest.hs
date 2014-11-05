@@ -2,7 +2,7 @@ module RBTreeTest where
 
 import           RBTree
 
-import           Test.LiquidCheck
+import           Test.Target
 
 type E = Char
 type T = RBTree E

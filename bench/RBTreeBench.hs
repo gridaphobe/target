@@ -4,13 +4,13 @@ module RBTreeBench where
 
 import           RBTree
 
-import           Test.LiquidCheck
+import           Test.Target
 import qualified Test.QuickCheck        as QC
 import qualified Test.SmallCheck        as SC
 import qualified Test.SmallCheck.Series as SC
 import qualified LazySmallCheck         as LSC
 
-import           Test.LiquidCheck.Util
+import           Test.Target.Util
 
 import System.IO.Unsafe
 

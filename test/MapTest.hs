@@ -7,10 +7,10 @@ import           Map
 import           Control.Applicative
 import qualified Data.List           as L
 
-import           Test.LiquidCheck
+import           Test.Target
 
 --------------------------------------------------------------------
--- LiquidCheck
+-- Target
 --------------------------------------------------------------------
 
 -- The values aren't interesting in terms of the properties we want to check,

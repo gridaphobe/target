@@ -10,7 +10,7 @@ import           System.IO
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
-import           Test.LiquidCheck
+import           Test.Target
 
 -- import qualified Data.ByteString.Internal as ByteString
 import qualified HOFs

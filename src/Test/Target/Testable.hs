@@ -11,7 +11,7 @@
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE ParallelListComp     #-}
 {-# LANGUAGE ViewPatterns         #-}
-module Test.LiquidCheck.Testable where
+module Test.Target.Testable where
 
 import           Control.Applicative
 import           Control.Arrow              hiding (app)
@@ -33,17 +33,17 @@ import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Types hiding (Result (..), env, var)
 
-import           Test.LiquidCheck.Constrain hiding (apply)
--- import           Test.LiquidCheck.Driver
-import           Test.LiquidCheck.Eval
-import           Test.LiquidCheck.Expr
-import           Test.LiquidCheck.Gen
-import           Test.LiquidCheck.Types
-import           Test.LiquidCheck.Util
+import           Test.Target.Targetable hiding (apply)
+-- import           Test.Target.Driver
+import           Test.Target.Eval
+import           Test.Target.Expr
+import           Test.Target.Gen
+import           Test.Target.Types
+import           Test.Target.Util
 
 import Debug.Trace
 
-type CanTest f = (Testable f, Show (Args f), Constrain (Res f))
+type CanTest f = (Testable f, Show (Args f), Targetable (Res f))
 
 test :: CanTest f => f -> Int -> SpecType -> Gen Result
 test f d t
@@ -61,7 +61,7 @@ test f d t
        -- traceShowM to'
        ctx <- gets smtContext
        try (process d f ctx vs real cts (zip xs tis) to) >>= \case
-         Left  (e :: LiquidException) -> return $ Errored $ show e
+         Left  (e :: TargetException) -> return $ Errored $ show e
          Right r                      -> return r
 
 process :: CanTest f
@@ -114,7 +114,7 @@ class Testable f where
   apply      :: f -> Args f -> Res f
   mkExprs    :: f -> [Symbol] -> Args f -> [(Symbol,Expr)]
 
-instance ( Constrain a, Constrain b
+instance ( Targetable a, Targetable b
          , Args (a -> b) ~ a
          , Res (a -> b) ~ b)
   => Testable (a -> b) where
@@ -129,7 +129,7 @@ instance ( Constrain a, Constrain b
   mkExprs _ [x] a
     = [(x,toExpr a)]
 
-instance ( Constrain a, Constrain b, Constrain c
+instance ( Targetable a, Targetable b, Targetable c
          , Args (a -> b -> c) ~ (a,b)
          , Res (a -> b -> c) ~ c)
   => Testable (a -> b -> c) where
@@ -151,7 +151,7 @@ instance ( Constrain a, Constrain b, Constrain c
   mkExprs _ [xa,xb] (a,b)
     = [(xa,toExpr a), (xb,toExpr b)]
 
-instance ( Constrain a, Constrain b, Constrain c, Constrain d
+instance ( Targetable a, Targetable b, Targetable c, Targetable d
          , Args (a -> b -> c -> d) ~ (a,b,c)
          , Res (a -> b -> c -> d) ~ d)
   => Testable (a -> b -> c -> d) where
@@ -177,7 +177,7 @@ instance ( Constrain a, Constrain b, Constrain c, Constrain d
   mkExprs _ [xa,xb,xc] (a,b,c)
     = [(xa,toExpr a), (xb,toExpr b), (xc,toExpr c)]
 
-instance ( Constrain a, Constrain b, Constrain c, Constrain d, Constrain e
+instance ( Targetable a, Targetable b, Targetable c, Targetable d, Targetable e
          , Args (a -> b -> c -> d -> e) ~ (a,b,c,d)
          , Res (a -> b -> c -> d -> e) ~ e)
   => Testable (a -> b -> c -> d -> e) where
@@ -207,7 +207,7 @@ instance ( Constrain a, Constrain b, Constrain c, Constrain d, Constrain e
   mkExprs _ [xa,xb,xc,xd] (a,b,c,d)
     = [(xa,toExpr a), (xb,toExpr b), (xc,toExpr c), (xd,toExpr d)]
 
-instance ( Constrain a, Constrain b, Constrain c, Constrain d, Constrain e, Constrain f
+instance ( Targetable a, Targetable b, Targetable c, Targetable d, Targetable e, Targetable f
          , Args (a -> b -> c -> d -> e -> f) ~ (a,b,c,d,e)
          , Res (a -> b -> c -> d -> e -> f) ~ f)
   => Testable (a -> b -> c -> d -> e -> f) where
@@ -242,7 +242,7 @@ instance ( Constrain a, Constrain b, Constrain c, Constrain d, Constrain e, Cons
     = [(xa,toExpr a), (xb,toExpr b), (xc,toExpr c), (xd,toExpr d), (xe,toExpr e)]
 
 
--- check :: Constrain a => a -> SpecType -> Gen Bool
+-- check :: Targetable a => a -> SpecType -> Gen Bool
 -- check v t = do
 --   state' <- get
 --   let state = state' { variables = [], choices = [], constraints = []
