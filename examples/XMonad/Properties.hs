@@ -212,6 +212,7 @@ instance (Num a, Targetable a) => Targetable (NonNegative a) where
   gen p d t = gen (Proxy :: Proxy a) d t
   decode v t = decode v t >>= \ (x::a) -> return $ NonNegative $ abs x
   toExpr (NonNegative x) = toExpr x
+  check = undefined
   encode = undefined
 
 
