@@ -76,6 +76,7 @@ propPToProp (p, r) (RPropP _ (U _ (Pr [up]) _))
 propPToProp _ m = m
 
 
+stripQuals :: SpecType -> SpecType
 stripQuals = snd . bkClass . fourth4 . bkUniv
 
 fourth4 (_,_,_,d) = d

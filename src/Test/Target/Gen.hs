@@ -36,6 +36,8 @@ import qualified GHC
 import           Test.Target.Types
 import           Test.Target.Util
 
+import Debug.Trace
+
 
 instance Symbolic T.Text where
   symbol = symbol . T.toStrict
@@ -169,7 +171,11 @@ lookupCtor c
          Nothing -> do
            t <- io $ runGhc $ do
                   loadModule m
-                  ofType <$> GHC.exprType (printf "(%s)" (symbolString c))
+                  -- traceShowM c
+                  t <- GHC.exprType (printf "(%s)" (symbolString c))
+                  -- traceShowM $ showpp t
+                  return (ofType t)
+           -- traceShowM t
            modify $ \s@(GS {..}) -> s { ctorEnv = (c,t) : ctorEnv }
            return t
 

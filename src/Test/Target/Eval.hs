@@ -5,6 +5,7 @@ module Test.Target.Eval where
 import           Control.Applicative
 import           Control.Monad.Catch
 import           Control.Monad.State
+import           Data.Bifunctor
 import           Data.Function
 import qualified Data.HashMap.Strict             as M
 import           Data.List
@@ -24,7 +25,7 @@ import           Test.Target.Gen
 import           Test.Target.Types
 import           Test.Target.Util
 
-import Debug.Trace
+import           Debug.Trace
 
 -- evalType :: Env -> RApp -> Expr -> Gen Bool
 evalType :: M.HashMap Symbol Expr -> SpecType -> Expr -> Gen Bool
@@ -54,6 +55,10 @@ evalTypes m ((v,t):ts) (x:xs)
   where
     m' = M.insert v x m
 
+eval :: Expr -> Reft -> Gen Bool
+eval e r = do
+  cts <- gets freesyms
+  evalReft (M.fromList $ map (second (`app` [])) cts) r e
 
 evalReft :: M.HashMap Symbol Expr -> Reft -> Expr -> Gen Bool
 evalReft m r@(Reft (v, rs)) x

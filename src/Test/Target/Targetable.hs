@@ -62,6 +62,8 @@ class Show a => Targetable a where
   toExpr  :: a -> Expr
 
   decode  :: Symbol -> SpecType -> Gen a
+  check   :: a -> SpecType -> Gen (Bool, Expr)
+
   encode  :: a -> SpecType -> Gen Variable
 
   default getType :: (Generic a, GTargetable (Rep a))
@@ -89,6 +91,10 @@ class Show a => Targetable a where
     -- traceShowM (c,fs)
     to <$> gdecode c fs
 
+  default check :: (Generic a, GCheck (Rep a))
+                => a -> SpecType -> Gen (Bool, Expr)
+  check v t = gcheck (from v) t
+
   default encode :: (Generic a, GEncode (Rep a))
                  => a -> SpecType -> Gen Variable
   encode v t = gencode (from v) t
@@ -113,6 +119,10 @@ instance Targetable () where
   toExpr _   = app ("()" :: Symbol) []
 
   decode _ _ = return ()
+  check v t = do
+    let e = app ("()" :: Symbol) []
+    b <- eval e $ toReft $ rt_reft t
+    return (b,e)
   encode v t = fresh (FObj "GHC.Tuple.()")
 
 
@@ -127,6 +137,12 @@ instance Targetable Int where
   toExpr i = ECon $ I $ fromIntegral i
 
   decode v _ = read . T.unpack <$> getValue v
+
+  check v t = do
+    let e = fromIntegral v
+    b <- eval e $ toReft $ rt_reft t
+    return (b, e)
+
   encode i t =
     do v <- fresh FInt
        constrain $ var v `eq` fromIntegral i
@@ -140,6 +156,11 @@ instance Targetable Integer where
   toExpr  x = toExpr (fromIntegral x :: Int)
 
   decode v t = decode v t >>= \(x::Int) -> return . fromIntegral $ x
+  check v t = do
+    let e = fromIntegral v
+    b <- eval e $ toReft $ rt_reft t
+    return (b, e)
+
   encode i t =
     do v <- fresh FInt
        constrain $ var v `eq` fromIntegral i
@@ -157,6 +178,10 @@ instance Targetable Char where
   toExpr  c = ESym $ SL $ T.singleton c
 
   decode v t = decode v t >>= \(x::Int) -> return . chr $ x + ord 'a'
+  check v t = do
+    let e = ESym $ SL $ T.singleton v
+    b <- eval e $ toReft $ rt_reft t
+    return (b, e)
   encode c t =
     do v <- fresh FInt
        constrain $ var v `eq` fromIntegral (ord c - ord 'a')
@@ -175,6 +200,10 @@ instance Targetable Word8 where
   toExpr i   = ECon $ I $ fromIntegral i
 
   decode v t = decode v t >>= \(x::Int) -> return $ fromIntegral x
+  check v t = do
+    let e = fromIntegral v
+    b <- eval e $ toReft $ rt_reft t
+    return (b, e)
   encode w t =
     do v <- fresh FInt
        constrain $ var v `eq` fromIntegral w
@@ -214,6 +243,7 @@ instance (Num a, Integral a, Targetable a) => Targetable (Ratio a) where
   --                 let toA z = fromIntegral z :: a
   --                 return $ toA x % toA y
   toExpr x = EApp (dummyLoc "GHC.Real.:%") [toExpr (numerator x), toExpr (denominator x)]
+  check = undefined
   encode = undefined
 
 
@@ -379,6 +409,9 @@ class GTargetable f where
 class GDecode f where
   gdecode      :: Symbol -> [Symbol] -> Gen (f a)
 
+class GCheck f where
+  gcheck       :: f a -> SpecType -> Gen (Bool, Expr)
+
 class GEncode f where
   gencode      :: f a -> SpecType -> Gen Variable
 
@@ -413,6 +446,12 @@ instance (Datatype c, GDecode f) => GDecode (D1 c f) where
     where
       sort = FObj $ qualifiedDatatypeName (undefined :: D1 c f a)
 
+instance (Datatype c, GCheck f) => GCheck (D1 c f) where
+  gcheck (M1 x) t = inModule mod . making sort $ gcheck x t
+    where
+      mod  = symbol $ GHC.Generics.moduleName (undefined :: D1 c f a)
+      sort = FObj $ qualifiedDatatypeName (undefined :: D1 c f a)
+
 instance (Datatype c, GEncode f) => GEncode (D1 c f) where
   gencode (M1 x) t = inModule mod . making sort $ gencode x t
     where
@@ -445,6 +484,11 @@ instance Targetable a => GDecodeFields (K1 i a) where
   gdecodeFields (v:vs) = do
     x <- decode v undefined
     return (vs, K1 x)
+
+instance Targetable a => GCheckFields (K1 i a) where
+  gcheckFields (K1 x) ((f,t):ts) = do
+    (b, v) <- check x t
+    return (b, [v], subst (mkSubst [(f, v)]) ts)
 
 instance Targetable a => GEncodeFields (K1 i a) where
   gencodeFields (K1 x) ((f,t):ts) = do
@@ -494,6 +538,10 @@ instance (GDecode f, GDecode g) => GDecode (f :+: g) where
   gdecode c vs =  L1 <$> gdecode c vs
               <|> R1 <$> gdecode c vs
 
+instance (GCheck f, GCheck g) => GCheck (f :+: g) where
+  gcheck (L1 x) t = gcheck x t
+  gcheck (R1 x) t = gcheck x t
+
 instance (GEncode f, GEncode g) => GEncode (f :+: g) where
   gencode (L1 x) t = gencode x t
   gencode (R1 x) t = gencode x t
@@ -523,6 +571,25 @@ instance (Constructor c, GDecodeFields f) => GDecode (C1 c f) where
     = M1 . snd <$> gdecodeFields vs
     | otherwise
     = empty
+
+instance (Constructor c, GCheckFields f) => GCheck (C1 c f) where
+  gcheck c@(M1 x) t = do
+    mod <- symbolString <$> gets modName
+    let cn = symbol $ mod ++ "." ++ conName (undefined :: C1 c f a)
+    dcp <- lookupCtor cn
+    -- traceShowM (cn, dcp)
+    tyi <- gets tyconInfo
+    emb <- gets embEnv
+    let ts = applyPreds (addTyConInfo emb tyi t) dcp
+    -- traceShowM ts
+    (b, vs, _) <- gcheckFields x ts
+    let v = app cn vs
+    b'  <- eval v (toReft $ rt_reft t)
+    return (b && b', v)
+    -- v <- apply (symbol $ mod++"."++cn) vs
+    -- let t' = subst (mkSubst [(f, var v) | (f,t) <- ts | v <- vs]) t
+    -- constrain $ ofReft v $ toReft $ rt_reft t'
+    -- return v
 
 instance (Constructor c, GEncodeFields f) => GEncode (C1 c f) where
   gencode c@(M1 x) t = do
@@ -575,6 +642,10 @@ class GTargetableProd f where
 class GDecodeFields f where
   gdecodeFields :: [Symbol] -> Gen ([Symbol], f a)
 
+class GCheckFields f where
+  gcheckFields :: f a -> [(Symbol, SpecType)]
+               -> Gen (Bool, [Expr], [(Symbol, SpecType)])
+
 class GEncodeFields f where
   gencodeFields :: f a -> [(Symbol,SpecType)] -> Gen ([Variable], [(Symbol,SpecType)])
 
@@ -602,6 +673,12 @@ instance (GDecodeFields f, GDecodeFields g) => GDecodeFields (f :*: g) where
     (vs'', rs) <- gdecodeFields vs'
     return (vs'', ls :*: rs)
 
+instance (GCheckFields f, GCheckFields g) => GCheckFields (f :*: g) where
+  gcheckFields (f :*: g) ts = do
+    (bl,fs,ts')  <- gcheckFields f ts
+    (br,gs,ts'') <- gcheckFields g ts'
+    return (bl && br, fs ++ gs, ts'')
+
 instance (GEncodeFields f, GEncodeFields g) => GEncodeFields (f :*: g) where
   gencodeFields (f :*: g) ts = do
     (fs,ts')  <- gencodeFields f ts
@@ -620,6 +697,9 @@ instance GDecodeFields f => GDecodeFields (S1 c f) where
     (vs, x) <- gdecodeFields vs
     return (vs, M1 x)
 
+instance (GCheckFields f) => GCheckFields (S1 c f) where
+  gcheckFields (M1 x) ts = gcheckFields x ts
+
 instance (GEncodeFields f) => GEncodeFields (S1 c f) where
   gencodeFields (M1 x) ts = gencodeFields x ts
 
@@ -631,6 +711,9 @@ instance GTargetableProd U1 where
 
 instance GDecodeFields U1 where
   gdecodeFields vs = return (vs, U1)
+
+instance GCheckFields U1 where
+  gcheckFields _ ts = return (True, [], ts)
 
 instance GEncodeFields U1 where
   gencodeFields _ ts = return ([], ts)

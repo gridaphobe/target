@@ -90,9 +90,10 @@ process d f ctx vs real cts xts to = go 0 =<< io (command ctx CheckSat)
           modify $ \s@(GS {..}) -> s { realized = [] }
           io $ command ctx $ Assert Nothing $ PNot $ pAnd
             [ var x `eq` ESym (SL v) | (x,v) <- real ]
-          -- sat <- check r to
-          let env = map (second (`app` [])) cts ++ mkExprs f (map fst xts) xs
-          sat <- evalType (M.fromList env) to (toExpr r)
+          let su = mkSubst $ mkExprs f (map fst xts) xs
+          (sat, _) <- check r (subst su to)
+          -- let env = map (second (`app` [])) cts ++ mkExprs f (map fst xts) xs
+          -- sat <- evalType (M.fromList env) to (toExpr r)
           case sat of
             False -> mbKeepGoing xs n'
             True -> do

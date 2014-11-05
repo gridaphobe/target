@@ -124,6 +124,7 @@ instance (Targetable a, Targetable b, b ~ Res (a -> b))
     = do f <- stitchFun (Proxy :: Proxy (a -> b)) undefined t
          return $ \a -> f [toExpr a]
   toExpr  f = var ("FUNCTION" :: Symbol)
+  check _ _ = error "can't check a function!"
   encode _ _ = error "can't encode a function!"
 
 instance (Targetable a, Targetable b, Targetable c, c ~ Res (a -> b -> c))
@@ -135,6 +136,7 @@ instance (Targetable a, Targetable b, Targetable c, c ~ Res (a -> b -> c))
     = do f <- stitchFun (Proxy :: Proxy (a -> b -> c)) undefined t
          return $ \a b -> f [toExpr a, toExpr b]
   toExpr  f = var ("FUNCTION" :: Symbol)
+  check _ _ = error "can't check a function!"
   encode _ _ = error "can't encode a function!"
 
 instance (Targetable a, Targetable b, Targetable c, Targetable d, d ~ Res (a -> b -> c -> d))
@@ -146,4 +148,5 @@ instance (Targetable a, Targetable b, Targetable c, Targetable d, d ~ Res (a -> 
     = do f <- stitchFun (Proxy :: Proxy (a -> b -> c -> d)) undefined t
          return $ \a b c -> f [toExpr a, toExpr b, toExpr c]
   toExpr  f = var ("FUNCTION" :: Symbol)
+  check _ _ = error "can't check a function!"
   encode _ _ = error "can't encode a function!"
