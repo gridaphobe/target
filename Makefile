@@ -2,6 +2,7 @@
 
 bench:
 	rm -f bench/bench.log
+	cabal clean
 	cabal configure -O2 --enable-benchmarks
 	cabal build
 	cabal exec ./dist/build/bench/bench 2>&1 | tee bench/bench.log
