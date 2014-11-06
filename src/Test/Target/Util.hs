@@ -1,3 +1,9 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE BangPatterns #-}
@@ -17,6 +23,7 @@ import           System.IO
 import qualified DynFlags as GHC
 import qualified GhcMonad as GHC
 import qualified GHC
+import qualified GHC.Exts as GHC
 import qualified GHC.Paths
 import qualified HscTypes as GHC
 
@@ -33,19 +40,31 @@ io = liftIO
 myTrace :: Show a => String -> a -> a
 myTrace s x = trace (s ++ ": " ++ show x) x
 
+data HList (a :: [*]) where
+  Nil   :: HList '[]
+  (:::) :: a -> HList bs -> HList (a ': bs)
+
+instance AllHave Show as => Show (HList as) where
+  show Nil        = "Nil"
+  show (x ::: xs) = show x ++ " ::: " ++ show xs
+
+type family Map (f :: a -> b) (xs :: [a]) :: [b] where
+  Map f '[]       = '[]
+  Map f (x ': xs) = f x ': Map f xs
+
+type family Constraints (cs :: [GHC.Constraint]) :: GHC.Constraint
+type instance Constraints '[]       = ()
+type instance Constraints (c ': cs) = (c, Constraints cs)
+
+type AllHave (c :: k -> GHC.Constraint) (xs :: [k]) = Constraints (Map c xs)
+
 type family Args a where
-  Args (a -> b -> c -> d -> e -> f) = (a,b,c,d,e)
-  Args (a -> b -> c -> d -> e) = (a,b,c,d)
-  Args (a -> b -> c -> d) = (a,b,c)
-  Args (a -> b -> c) = (a,b)
-  Args (a -> b) = a
+  Args (a -> b) = a ': Args b
+  Args a        = '[]
 
 type family Res a where
-  Res (a -> b -> c -> d -> e -> f) = f
-  Res (a -> b -> c -> d -> e) = e
-  Res (a -> b -> c -> d) = d
-  Res (a -> b -> c) = c
-  Res (a -> b) = b
+  Res (a -> b) = Res b
+  Res a        = a
 
 safeFromJust :: String -> Maybe a -> a
 safeFromJust msg Nothing  = error $ "safeFromJust: " ++ msg
@@ -62,11 +81,6 @@ applyPreds sp' dc = zip xs (map tx ts)
     su    = [(tv, toRSort t, t) | tv <- as | t <- rt_args sp]
     sup   = [(p, r) | p <- ps | r <- rt_pargs sp]
     tx    = (\t -> replacePreds "applyPreds" t sup) . everywhere (mkT $ propPsToProp sup) . subsTyVars_meet su
-
--- deriving instance (Show a, Show b, Show c) => Show (Ref a b c)
-
--- onRefs f t@(RVar _ _) = t
--- onRefs f t = t { rt_pargs = f <$> rt_pargs t }
 
 propPsToProp su r = foldr propPToProp r su
 
