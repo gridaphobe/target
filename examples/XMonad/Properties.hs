@@ -209,11 +209,10 @@ noDuplicateScreens ss
 
 instance (Num a, Targetable a) => Targetable (NonNegative a) where
   getType p = getType (Proxy :: Proxy a)
-  gen p d t = gen (Proxy :: Proxy a) d t
+  query p d t = query (Proxy :: Proxy a) d t
   decode v t = decode v t >>= \ (x::a) -> return $ NonNegative $ abs x
   toExpr (NonNegative x) = toExpr x
   check = undefined
-  encode = undefined
 
 
 -- ---------------------------------------------------------------------

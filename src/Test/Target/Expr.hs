@@ -25,8 +25,9 @@ app f es = EApp (dummyLoc $ symbol f) es
 var :: Symbolic a => a -> Expr
 var = EVar . symbol
 
-prop :: Symbolic a => a -> Pred
-prop = PBexp . EVar . symbol
+-- prop :: Symbolic a => a -> Pred
+-- prop = PBexp . EVar . symbol
+prop = PBexp
 
 instance Num Expr where
   fromInteger = ECon . I . fromInteger

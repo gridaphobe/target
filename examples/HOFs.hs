@@ -1,6 +1,7 @@
 module HOFs where
 
 import           Test.Target
+import           Text.Show.Functions
 
 {-@ foo :: (x:Int -> {v:Int | v > x}) -> {v:Int | v > 0} @-}
 foo :: (Int -> Int) -> Int
@@ -21,3 +22,4 @@ list_foo_bad xs f = f []
 liquidTests, liquidTests_bad :: [(String,Test)]
 liquidTests     = [("HOFs.foo", T foo), ("HOFs.list_foo", T list_foo)]
 liquidTests_bad = [("HOFs.foo", T foo_bad), ("HOFs.list_foo", T list_foo_bad)]
+

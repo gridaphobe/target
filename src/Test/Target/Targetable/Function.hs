@@ -78,7 +78,7 @@ stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, to))
                  io $ command ctx Push
                  xes <- mapM genExpr es
                  let su = mkSubst $ zipWith (\v e -> (v, var e)) vs xes
-                 xo <- gen (Proxy :: Proxy (Res f)) d (subst su to)
+                 xo <- query (Proxy :: Proxy (Res f)) d (subst su to)
                  vs <- gets variables
                  mapM_ (\x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
                  cs <- gets constraints
@@ -87,20 +87,20 @@ stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, to))
                  resp <- io $ command ctx CheckSat
                  when (resp == Unsat) $ Ex.throwM SmtFailedToProduceOutput
 
-                 o <- decode (fst xo) to
-                 whenVerbose $ io $ printf "%s -> %s\n" (show es) (show o)
+                 o <- decode xo to
+                 -- whenVerbose $ io $ printf "%s -> %s\n" (show es) (show o)
                  io (modifyIORef' mref ((es,o):))
                  io $ command ctx Pop
                  return o
     
-genExpr :: Expr -> Gen Variable
+genExpr :: Expr -> Gen Symbol
 genExpr (EApp (val -> c) es)
   = do xes <- mapM genExpr es
        (xs, _, to) <- bkArrowDeep . stripQuals <$> lookupCtor c
-       let su  = mkSubst $ zip xs $ map (var . fst) xes
+       let su  = mkSubst $ zip xs $ map var xes
            to' = subst su to
        x <- fresh $ FObj $ symbol $ rtc_tc $ rt_tycon to'
-       addConstraint $ ofReft x (toReft $ rt_reft to')
+       addConstraint $ ofReft (var x) (toReft $ rt_reft to')
        return x
 genExpr (ECon (I i))
   = do x <- fresh FInt
@@ -117,34 +117,31 @@ genExpr e = error $ "genExpr: " ++ show e
 instance (Targetable a, Targetable b, b ~ Res (a -> b))
   => Targetable (a -> b) where
   getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)]
-  gen = genFun
+  query = genFun
   decode v t
     = do f <- stitchFun (Proxy :: Proxy (a -> b)) t
          return $ \a -> f [toExpr a]
   toExpr  f = var ("FUNCTION" :: Symbol)
   check _ _ = error "can't check a function!"
-  encode _ _ = error "can't encode a function!"
 
 instance (Targetable a, Targetable b, Targetable c, c ~ Res (a -> b -> c))
   => Targetable (a -> b -> c) where
   getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)
                       ,getType (Proxy :: Proxy c)]
-  gen = genFun
+  query = genFun
   decode _ t
     = do f <- stitchFun (Proxy :: Proxy (a -> b -> c)) t
          return $ \a b -> f [toExpr a, toExpr b]
   toExpr  f = var ("FUNCTION" :: Symbol)
   check _ _ = error "can't check a function!"
-  encode _ _ = error "can't encode a function!"
 
 instance (Targetable a, Targetable b, Targetable c, Targetable d, d ~ Res (a -> b -> c -> d))
   => Targetable (a -> b -> c -> d) where
   getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)
                       ,getType (Proxy :: Proxy c), getType (Proxy :: Proxy d)]
-  gen = genFun
+  query = genFun
   decode _ t
     = do f <- stitchFun (Proxy :: Proxy (a -> b -> c -> d)) t
          return $ \a b c -> f [toExpr a, toExpr b, toExpr c]
   toExpr  f = var ("FUNCTION" :: Symbol)
   check _ _ = error "can't check a function!"
-  encode _ _ = error "can't encode a function!"

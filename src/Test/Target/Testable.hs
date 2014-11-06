@@ -49,7 +49,7 @@ type CanTest f = (Testable f, AllHave Show (Args f), Targetable (Res f))
 
 test :: CanTest f => f -> Int -> SpecType -> Gen Result
 test f d t
-  = do vs <- genArgs f d t
+  = do vs <- queryArgs f d t
        setup
        let (xs, tis, to) = bkArrowDeep $ stripQuals t
        ctx <- gets smtContext
@@ -58,7 +58,7 @@ test f d t
          Right r                      -> return r
 
 process :: CanTest f
-        => f -> Context -> [Variable] -> [(Symbol,SpecType)] -> SpecType
+        => f -> Context -> [Symbol] -> [(Symbol,SpecType)] -> SpecType
         -> Gen Result
 process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
   where
@@ -67,10 +67,10 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
     go !n Sat      = do
       when (n `mod` 100 == 0) $ whenVerbose $ io $ printf "Checked %d inputs\n" n
       let n' = n + 1
-      xs <- decodeArgs f (map fst vs) (map snd xts)
+      xs <- decodeArgs f vs (map snd xts)
       whenVerbose $ io $ print xs
       er <- io $ try $ evaluate (apply f xs)
-      whenVerbose $ io $ print er
+      -- whenVerbose $ io $ print er
       case er of
         Left (e :: SomeException)
           -- DON'T catch AsyncExceptions since they are used by @timeout@
@@ -108,14 +108,14 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
         else return (Failed $ show xs)
 
 class Testable f where
-  genArgs    :: f -> Int -> SpecType -> Gen [Variable]
+  queryArgs  :: f -> Int -> SpecType -> Gen [Symbol]
   decodeArgs :: f -> [Symbol] -> [SpecType] -> Gen (HList (Args f))
   apply      :: f -> HList (Args f) -> Res f
   mkExprs    :: f -> [Symbol] -> HList (Args f) -> [(Symbol,Expr)]
 
 instance (Targetable a, Testable b) => Testable (a -> b) where
-  genArgs f d (stripQuals -> (RFun _ i o _))
-    = liftM2 (:) (gen (Proxy :: Proxy a) d i) (genArgs (f undefined) d o)
+  queryArgs f d (stripQuals -> (RFun _ i o _))
+    = liftM2 (:) (query (Proxy :: Proxy a) d i) (queryArgs (f undefined) d o)
   decodeArgs f (v:vs) (t:ts)
     = liftM2 (:::) (decode v t) (decodeArgs (f undefined) vs ts)
   apply f (x ::: xs)
@@ -124,7 +124,7 @@ instance (Targetable a, Testable b) => Testable (a -> b) where
     = (v, toExpr x) : mkExprs (f undefined) vs xs
 
 instance (Targetable a, Args a ~ '[], Res a ~ a) => Testable a where
-  genArgs _ _ _    = return []
+  queryArgs _ _ _  = return []
   decodeArgs _ _ _ = return Nil
   apply f Nil      = f
   mkExprs _ _ _    = []

@@ -6,19 +6,15 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ParallelListComp #-}
-{-# LANGUAGE BangPatterns #-}
 module Test.Target.Util where
 
 import           Control.Applicative
-import           Control.Monad.Catch
 import           Control.Monad.IO.Class
 import           Data.List
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Generics                    (everywhere, mkT)
 import           Debug.Trace
-import           GHC.IO.Handle
-import           System.IO
 
 import qualified DynFlags as GHC
 import qualified GhcMonad as GHC
@@ -34,6 +30,8 @@ import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Types    hiding (var)
 
+type Depth = Int
+
 io ::  MonadIO m => IO a -> m a
 io = liftIO
 
@@ -45,8 +43,9 @@ data HList (a :: [*]) where
   (:::) :: a -> HList bs -> HList (a ': bs)
 
 instance AllHave Show as => Show (HList as) where
-  show Nil        = "Nil"
-  show (x ::: xs) = show x ++ " ::: " ++ show xs
+  show Nil         = "()"
+  show (x ::: Nil) = show x
+  show (x ::: xs)  = show x ++ ", " ++ show xs
 
 type family Map (f :: a -> b) (xs :: [a]) :: [b] where
   Map f '[]       = '[]

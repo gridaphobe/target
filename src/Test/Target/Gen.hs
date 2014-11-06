@@ -89,7 +89,7 @@ data GenState
        , constructors :: ![Variable] -- (S.HashSet Variable)  --[(String, String)]
        , sigs         :: ![(Symbol, SpecType)]
        , depth        :: !Int
-       , chosen       :: !(Maybe Variable)
+       , chosen       :: !(Maybe Symbol)
        , sorts        :: !(S.HashSet Sort)
        , modName      :: !Symbol
        , filePath     :: !FilePath
@@ -149,8 +149,11 @@ noteUsed (v,x) = modify $ \s@(GS {..}) -> s { realized = (v,x) : realized }
 
 setMaxSuccess m = modify $ \s@(GS {..}) -> s { maxSuccess = Just m }
 
-addDep from to = modify $ \s@(GS {..}) ->
-  s { deps = M.insertWith (flip (++)) (fst from) [fst to] deps }
+-- TODO: does this type make sense? should it be Symbol -> Symbol -> Gen ()?
+addDep :: Symbol -> Expr -> Gen ()
+addDep from (EVar to) = modify $ \s@(GS {..}) ->
+  s { deps = M.insertWith (flip (++)) from [to] deps }
+addDep _ _ = return ()
 
 addConstraint p = modify $ \s@(GS {..}) -> s { constraints = p:constraints }
 
@@ -181,35 +184,40 @@ lookupCtor c
          Nothing -> do
            t <- io $ runGhc $ do
                   loadModule m
-                  -- traceShowM c
                   t <- GHC.exprType (printf "(%s)" (symbolString c))
-                  -- traceShowM $ showpp t
                   return (ofType t)
-           -- traceShowM t
            modify $ \s@(GS {..}) -> s { ctorEnv = (c,t) : ctorEnv }
            return t
 
-withFreshChoice :: String -> (Variable -> Gen ()) -> Gen Variable
-withFreshChoice cn act
+unfold :: Symbol -> SpecType -> Gen [(Symbol, SpecType)]
+unfold cn t = do
+  dcp <- lookupCtor cn
+  tyi <- gets tyconInfo
+  emb <- gets embEnv
+  let ts = applyPreds (addTyConInfo emb tyi t) dcp
+  return ts
+
+guarded :: String -> Gen Expr -> Gen (Expr, Expr)
+guarded cn act
   = do c  <- freshChoice cn []
        mc <- gets chosen
        modify $ \s -> s { chosen = Just c }
-       act c
+       x <- act
        modify $ \s -> s { chosen = mc }
-       return c
+       return (x, EVar c)
 
 -- | `fresh` generates a fresh variable and encodes the reachability
 -- relation between variables, e.g. `fresh xs sort` will return a new
 -- variable `x`, from which everything in `xs` is reachable.
-fresh :: Sort -> Gen Variable
+fresh :: Sort -> Gen Symbol
 fresh sort
   = do n <- freshInt
        let sorts' = sortTys sort
        -- io $ print sorts'
        modify $ \s@(GS {..}) -> s { sorts = S.union (S.fromList (arrowize sort : sorts')) sorts }
-       let x = (symbol $ T.unpack (T.intercalate "->" $ map (T.fromStrict.symbolText.unObj) sorts') ++ show n, sort)
+       let x = symbol $ T.unpack (T.intercalate "->" $ map (T.fromStrict.symbolText.unObj) sorts') ++ show n
        -- io $ print x
-       modify $ \s@(GS {..}) -> s { variables = x : variables }
+       modify $ \s@(GS {..}) -> s { variables = (x,sort) : variables }
        -- mapM_ (addDep x) xs
        return x
 
@@ -224,14 +232,12 @@ unObj FInt     = "Int"
 unObj (FObj s) = s
 unObj s        = error $ "unObj: " ++ show s
 
-freshChoice :: String -> [Variable] -> Gen Variable
+freshChoice :: String -> [Expr] -> Gen Symbol
 freshChoice cn xs
   = do n <- freshInt
        modify $ \s@(GS {..}) -> s { sorts = S.insert choicesort sorts }
-       let x = (symbol $ T.unpack (smt2 choicesort) ++ "-" ++ cn ++ "-" ++ show n, choicesort)
-       -- io $ print x
-       modify $ \s@(GS {..}) -> s { variables = x : variables }
-       -- mapM_ (addDep x) xs
+       let x = symbol $ T.unpack (smt2 choicesort) ++ "-" ++ cn ++ "-" ++ show n
+       modify $ \s@(GS {..}) -> s { variables = (x,choicesort) : variables }
        return x
 
 
@@ -245,8 +251,6 @@ getValue v = do
 whichOf :: Symbol -> Gen Symbol
 whichOf v = do
   deps <- gets deps
-  -- io $ print deps
-  -- io $ print v
   let Just cs = M.lookup v deps
   [c]  <- catMaybes <$> forM cs (\c -> do
     val <- getValue c
@@ -254,27 +258,3 @@ whichOf v = do
       then return (Just c)
       else return Nothing)
   return c
-  -- return $ head $ deps M.! c
-
-
--- pop :: Gen Value
--- pop = do (v:vs) <- gets values
---          modify $ \s@(GS {..}) -> s { values = vs }
---          return v
-
--- popN :: Int -> Gen [Value]
--- popN d = replicateM d pop
-
--- popChoice :: Gen Bool
--- popChoice = read <$> pop
---   where
---     read "true"  = True
---     read "false" = False
---     read e       = error $ "popChoice: " ++ show e
-
--- popChoices :: Int -> Gen [Bool]
--- popChoices n = fmap read <$> popN n
---   where
---     read "true"  = True
---     read "false" = False
---     read e       = error $ "popChoices: " ++ show e
