@@ -53,7 +53,7 @@ class Targetable a where
               => Proxy a -> Int -> SpecType -> Gen Symbol
   query p = gquery (reproxyRep p)
 
-  default toExpr :: (Generic a, GTargetable (Rep a))
+  default toExpr :: (Generic a, GToExpr (Rep a))
                  => a -> Expr
   toExpr = gtoExpr . from
 
@@ -240,7 +240,7 @@ reproxyRep = reproxy
 --------------------------------------------------------------------------------
 --- Sums of Products
 --------------------------------------------------------------------------------
-class GTargetable f where
+class GToExpr f where
   gtoExpr      :: f a -> Expr
 
 class GQuery f where
@@ -255,11 +255,11 @@ class GCheck f where
 reproxyGElem :: Proxy (M1 d c f a) -> Proxy (f a)
 reproxyGElem = reproxy
 
-instance (Datatype c, GTargetableSum f) => GTargetable (D1 c f) where
+instance (Datatype c, GToExprCtor f) => GToExpr (D1 c f) where
   gtoExpr c@(M1 x) = app (qualify mod (symbolString $ val d)) xs
     where
       mod  = GHC.Generics.moduleName (undefined :: D1 c f a)
-      (EApp d xs) = gtoExprAlts x
+      (EApp d xs) = gtoExprCtor x
 
 instance (Datatype c, GQueryCtors f) => GQuery (D1 c f) where
   gquery p d t = inModule mod . making sort $ do
@@ -284,7 +284,7 @@ instance (Datatype c, GCheck f) => GCheck (D1 c f) where
       sort = FObj $ qualifiedDatatypeName (undefined :: D1 c f a)
 
 
-instance (Targetable a) => GTargetable (K1 i a) where
+instance (Targetable a) => GToExpr (K1 i a) where
   gtoExpr (K1 x) = toExpr x
 
 instance (Targetable a) => GQuery (K1 i a) where
@@ -320,8 +320,8 @@ qualifiedDatatypeName d = symbol $ qualify m (datatypeName d)
 --------------------------------------------------------------------------------
 --- Sums
 --------------------------------------------------------------------------------
-class GTargetableSum f where
-  gtoExprAlts   :: f a -> Expr
+class GToExprCtor f where
+  gtoExprCtor   :: f a -> Expr
 
 class GQueryCtors f where
   gqueryCtors :: Proxy (f a) -> Int -> SpecType -> Gen [(Expr, Expr)]
@@ -332,9 +332,9 @@ reproxyLeft = reproxy
 reproxyRight :: Proxy ((c (f :: * -> *) (g :: * -> *)) a) -> Proxy (g a)
 reproxyRight = reproxy
 
-instance (GTargetableSum f, GTargetableSum g) => GTargetableSum (f :+: g) where
-  gtoExprAlts (L1 x) = gtoExprAlts x
-  gtoExprAlts (R1 x) = gtoExprAlts x
+instance (GToExprCtor f, GToExprCtor g) => GToExprCtor (f :+: g) where
+  gtoExprCtor (L1 x) = gtoExprCtor x
+  gtoExprCtor (R1 x) = gtoExprCtor x
 
 instance (GQueryCtors f, GQueryCtors g) => GQueryCtors (f :+: g) where
   gqueryCtors p d t = do 
@@ -351,8 +351,8 @@ instance (GCheck f, GCheck g) => GCheck (f :+: g) where
   gcheck (R1 x) t = gcheck x t
 
 
-instance (Constructor c, GRecursive f, GTargetableProd f) => GTargetableSum (C1 c f) where
-  gtoExprAlts c@(M1 x)  = app (symbol $ conName c) (gtoExprs x)
+instance (Constructor c, GToExprFields f) => GToExprCtor (C1 c f) where
+  gtoExprCtor c@(M1 x)  = app (symbol $ conName c) (gtoExprFields x)
 
 instance (Constructor c, GRecursive f, GQueryFields f) => GQueryCtors (C1 c f) where
   gqueryCtors p d t | d <= 0
@@ -398,8 +398,8 @@ gqueryCtor (p :: Proxy (C1 c f a)) d t
 --------------------------------------------------------------------------------
 --- Products
 --------------------------------------------------------------------------------
-class GTargetableProd f where
-  gtoExprs    :: f a -> [Expr]
+class GToExprFields f where
+  gtoExprFields :: f a -> [Expr]
 
 class GRecursive f where
   gconArgTys  :: Proxy (f a) -> [Sort]
@@ -415,8 +415,8 @@ class GCheckFields f where
                -> Gen (Bool, [Expr], [(Symbol, SpecType)])
 
 
-instance (GTargetableProd f, GTargetableProd g) => GTargetableProd (f :*: g) where
-  gtoExprs (f :*: g) = gtoExprs f ++ gtoExprs g
+instance (GToExprFields f, GToExprFields g) => GToExprFields (f :*: g) where
+  gtoExprFields (f :*: g) = gtoExprFields f ++ gtoExprFields g
 
 instance (GRecursive f, GRecursive g) => GRecursive (f :*: g) where
   gconArgTys p = gconArgTys (reproxyLeft p) ++ gconArgTys (reproxyRight p)
@@ -442,8 +442,8 @@ instance (GCheckFields f, GCheckFields g) => GCheckFields (f :*: g) where
     return (bl && br, fs ++ gs, ts'')
 
 
-instance (GTargetable f) => GTargetableProd (S1 c f) where
-  gtoExprs (M1 x)     = [gtoExpr x]
+instance (GToExpr f) => GToExprFields (S1 c f) where
+  gtoExprFields (M1 x)     = [gtoExpr x]
 
 instance Targetable a => GRecursive (S1 c (K1 i a)) where
   gconArgTys _ = [getType (Proxy :: Proxy a)]
@@ -459,8 +459,8 @@ instance GDecodeFields f => GDecodeFields (S1 c f) where
 instance (GCheckFields f) => GCheckFields (S1 c f) where
   gcheckFields (M1 x) ts = gcheckFields x ts
 
-instance GTargetableProd U1 where
-  gtoExprs _      = []
+instance GToExprFields U1 where
+  gtoExprFields _ = []
 
 instance GRecursive U1 where
   gconArgTys _    = []
