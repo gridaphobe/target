@@ -18,7 +18,7 @@ import           Text.Printf
 
 import           Language.Haskell.Liquid.Types (GhcSpec)
 import           Test.Target
-import           Test.Target.Gen
+import           Test.Target.Monad
 import           Test.Target.Util
 
 main :: IO ()

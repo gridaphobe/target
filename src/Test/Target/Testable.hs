@@ -11,12 +11,10 @@
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeFamilies         #-}
-{-# LANGUAGE ParallelListComp     #-}
 {-# LANGUAGE ViewPatterns         #-}
 module Test.Target.Testable where
 
 import           Control.Applicative
-import           Control.Arrow              hiding (app)
 import           Control.Exception          (AsyncException, evaluate)
 import           Control.Monad
 import           Control.Monad.Catch
@@ -27,7 +25,6 @@ import           Data.Proxy
 import qualified Data.Text                  as T
 import           Data.Text.Format           hiding (print)
 import qualified Data.Text.Lazy             as LT
-import qualified Data.Vector                     as V
 import           Text.Printf
 
 import           Language.Fixpoint.SmtLib2
@@ -36,14 +33,13 @@ import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Types hiding (Result (..), env, var)
 
 import           Test.Target.Targetable hiding (apply)
--- import           Test.Target.Driver
-import           Test.Target.Eval
+-- import           Test.Target.Eval
 import           Test.Target.Expr
-import           Test.Target.Gen
+import           Test.Target.Monad
 import           Test.Target.Types
 import           Test.Target.Util
 
-import Debug.Trace
+-- import Debug.Trace
 
 type CanTest f = (Testable f, AllHave Show (Args f), Targetable (Res f))
 
@@ -95,9 +91,8 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
           -- sat <- evalType (M.fromList env) to (toExpr r)
           case sat of
             False -> mbKeepGoing xs n'
-            True -> do
-              max <- gets maxSuccess
-              case max of
+            True ->
+              gets maxSuccess >>= \case
                 Nothing -> go n' =<< io (command ctx CheckSat)
                 Just m | m == n' -> return $ Passed m
                        | otherwise -> go n' =<< io (command ctx CheckSat)

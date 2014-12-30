@@ -51,7 +51,7 @@ import           Language.Fixpoint.Types          (Sort (..))
 import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.Types    (RType (..))
 import           Test.Target
-import           Test.Target.Gen             (GenState (..))
+import           Test.Target.Monad               (GenState (..))
 import           Test.Target.Util
 import qualified Test.QuickCheck                  as QC
 import qualified Test.SmallCheck                  as SC

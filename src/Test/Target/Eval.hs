@@ -21,7 +21,7 @@ import           Language.Haskell.Liquid.Types   hiding (var)
 
 -- import           Test.Target.Targetable
 import           Test.Target.Expr
-import           Test.Target.Gen
+import           Test.Target.Monad
 import           Test.Target.Types
 import           Test.Target.Util
 

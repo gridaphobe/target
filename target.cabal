@@ -21,10 +21,9 @@ library
   exposed-modules:     Test.Target,
                        Test.Target.Targetable,
                        Test.Target.Targetable.Function,
-                       -- Test.Target.Driver,
                        Test.Target.Eval,
                        Test.Target.Expr,
-                       Test.Target.Gen,
+                       Test.Target.Monad,
                        Test.Target.Testable,
                        Test.Target.Types,
                        Test.Target.Util

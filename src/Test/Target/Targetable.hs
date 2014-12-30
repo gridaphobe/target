@@ -8,7 +8,14 @@
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-module Test.Target.Targetable where
+module Test.Target.Targetable
+  ( Targetable(..)
+  , apply
+  , oneOf
+  , unapply
+  , constrain
+  , ofReft
+  ) where
 
 import           Control.Applicative
 import           Control.Arrow                    (second)
@@ -29,7 +36,7 @@ import           Language.Haskell.Liquid.Types    hiding (var)
 
 import           Test.Target.Expr
 import           Test.Target.Eval
-import           Test.Target.Gen
+import           Test.Target.Monad
 import           Test.Target.Types
 
 -- import Debug.Trace
@@ -190,6 +197,8 @@ instance (Num a, Integral a, Targetable a) => Targetable (Ratio a) where
   toExpr x = EApp (dummyLoc "GHC.Real.:%") [toExpr (numerator x), toExpr (denominator x)]
   check = undefined
 
+-- | Given a data constructor @d@ and a list of expressions @xs@, construct a
+-- new expression corresponding to @d xs@.
 apply :: Symbol -> [Expr] -> Gen Expr
 apply c vs = do 
   mc <- gets chosen
@@ -204,6 +213,9 @@ apply c vs = do
   constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
   return x
 
+-- | Given a symbolic variable and a list of @(choice, var)@ pairs,
+-- @oneOf x choices@ asserts that @x@ must equal one of the @var@s in
+-- @choices@.
 oneOf :: Symbol -> [(Expr,Expr)] -> Gen ()
 oneOf x cs
   = do cs <- forM cs $ \(y,c) -> do
@@ -214,12 +226,15 @@ oneOf x cs
        constrain $ pAnd [ PNot $ pAnd [x, y]
                         | [x, y] <- filter ((==2) . length) $ subsequences cs ]
 
+-- | Split a symbolic variable representing the application of a data
+-- constructor into a pair of the data constructor and the sub-variables.
 unapply :: Symbol -> Gen (Symbol, [Symbol])
 unapply c = do
   let [_,cn,_] = T.splitOn "-" $ symbolText c
   deps <- gets deps
   return (symbol cn, M.lookupDefault [] c deps)
 
+-- | Assert a logical predicate, guarded by the current choice variable.
 constrain :: Pred -> Gen ()
 constrain p = do
   mc <- gets chosen
@@ -228,6 +243,8 @@ constrain p = do
     Just c  -> let p' = prop (var c) `imp` p
                in addConstraint p'
 
+-- | Given an expression @e@ and a refinement @{v | p}@, construct
+-- the predicate @p[e/v]@.
 ofReft :: Expr -> Reft -> Pred
 ofReft e (Reft (v, rs))
   = let x = mkSubst [(v, e)]
@@ -370,7 +387,7 @@ instance (Constructor c, GDecodeFields f) => GDecode (C1 c f) where
     = empty
 
 instance (Constructor c, GCheckFields f) => GCheck (C1 c f) where
-  gcheck c@(M1 x) t = do
+  gcheck (M1 x) t = do
     mod <- symbolString <$> gets modName
     let cn = symbol $ qualify mod (conName (undefined :: C1 c f a))
     ts <- unfold cn t

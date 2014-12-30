@@ -31,7 +31,7 @@ import           Text.Printf
 import           Test.Target.Targetable
 import           Test.Target.Eval
 import           Test.Target.Expr
-import           Test.Target.Gen
+import           Test.Target.Monad
 import           Test.Target.Types
 import           Test.Target.Util
 

@@ -7,24 +7,16 @@ module Test.Target
   where
 
 import           Control.Applicative
-import           Control.Arrow                        (first)
 import           Control.Monad
 import           Control.Monad.State
-import           Data.Maybe
-import           Data.Monoid
 import           Text.Printf                          (printf)
 
 import           Language.Fixpoint.Names
-import           Language.Fixpoint.Types              (Located (..), symbol)
-import           Language.Haskell.Liquid.CmdLine      (mkOpts)
-import           Language.Haskell.Liquid.GhcInterface (getGhcInfo)
 import           Language.Haskell.Liquid.Tidy         (tidySymbol)
-import           Language.Haskell.Liquid.Types        (GhcInfo (..),
-                                                       GhcSpec (..), showpp)
 
 import           Test.Target.Targetable
 import           Test.Target.Targetable.Function  ()
-import           Test.Target.Gen
+import           Test.Target.Monad
 import           Test.Target.Testable
 import           Test.Target.Types
 import           Test.Target.Util
@@ -73,4 +65,4 @@ testFunIgnoringFailure f name d
   = do modify $ \s -> s { keepGoing = True }
        testFun f name d
 
-data Test = forall t. CanTest t => T t
+data Test = forall t. CanTest t => Test t
