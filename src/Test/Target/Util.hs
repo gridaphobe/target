@@ -73,16 +73,22 @@ applyPreds :: SpecType -> SpecType -> [(Symbol,SpecType)]
 applyPreds sp' dc = zip xs (map tx ts)
   where
     sp = removePreds <$> sp'
-    removePreds (U r _ _) = (U r mempty mempty)
+    removePreds (U r _ _) = U r mempty mempty
     (as, ps, _, t) = bkUniv dc
-    (xs, ts, rt)   = bkArrow . snd $ bkClass t
+    (xs, ts, _)    = bkArrow . snd $ bkClass t
     -- args  = reverse tyArgs
     su    = [(tv, toRSort t, t) | tv <- as | t <- rt_args sp]
     sup   = [(p, r) | p <- ps | r <- rt_pargs sp]
     tx    = (\t -> replacePreds "applyPreds" t sup) . everywhere (mkT $ propPsToProp sup) . subsTyVars_meet su
 
+propPsToProp
+  :: [(PVar t3, Ref t (UReft t2) t1)]
+     -> Ref t (UReft t2) t1 -> Ref t (UReft t2) t1
 propPsToProp su r = foldr propPToProp r su
 
+propPToProp
+  :: (PVar t3, Ref t (UReft t2) t1)
+     -> Ref t (UReft t2) t1 -> Ref t (UReft t2) t1
 propPToProp (p, r) (RPropP _ (U _ (Pr [up]) _))
   | pname p == pname up
   = r
@@ -92,6 +98,7 @@ propPToProp _ m = m
 stripQuals :: SpecType -> SpecType
 stripQuals = snd . bkClass . fourth4 . bkUniv
 
+fourth4 :: (t, t1, t2, t3) -> t3
 fourth4 (_,_,_,d) = d
 
 getSpec :: FilePath -> IO GhcSpec
@@ -102,6 +109,7 @@ getSpec target
          Left err -> error $ show err
          Right i  -> return $ spec i
 
+runGhc :: GHC.Ghc a -> IO a
 runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
              df <- GHC.getSessionDynFlags
              let df' = df { GHC.ghcMode   = GHC.CompManager
@@ -109,7 +117,7 @@ runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
                           , GHC.hscTarget = GHC.HscNothing --GHC.HscInterpreted
                           -- , GHC.optLevel  = 0 --2
                           , GHC.log_action = \_ _ _ _ _ -> return ()
-                          , GHC.importPaths = (GHC.importPaths df)
+                          , GHC.importPaths = GHC.importPaths df
                           } `GHC.gopt_set` GHC.Opt_ImplicitImportQualified
                             `GHC.xopt_set` GHC.Opt_MagicHash
              GHC.setSessionDynFlags df'

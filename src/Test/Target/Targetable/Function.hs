@@ -11,6 +11,7 @@ import           Control.Applicative
 import           Control.Arrow                   (first, second)
 import           Control.Monad
 import qualified Control.Monad.Catch             as Ex
+import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Char
 import qualified Data.HashMap.Strict             as M
@@ -46,7 +47,8 @@ getCtors t              = error $ "getCtors: " ++ showpp t
 dataConSymbol_noUnique :: GHC.DataCon -> Symbol
 dataConSymbol_noUnique = qualifiedNameSymbol . GHC.getName
 
-genFun p d (stripQuals -> t)
+genFun :: Targetable a => Proxy a -> t -> SpecType -> Gen Symbol
+genFun p _ (stripQuals -> t)
   = do forM_ (getCtors t) $ \dc -> do
          let c = dataConSymbol_noUnique dc
          t <- lookupCtor c
@@ -57,11 +59,12 @@ stitchFun :: forall f. (Targetable (Res f))
           => Proxy f -> SpecType -> Gen ([Expr] -> Res f)
 stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, to))
   = do mref <- io $ newIORef []
-       d <- gets depth
+       d <- asks depth
        state' <- get
+       opts   <- ask
        let st = state' { variables = [], choices = [], constraints = []
                        , deps = mempty, constructors = [] }
-       return $ \es -> unsafePerformIO $ evalGen st $ do
+       return $ \es -> unsafePerformIO $ evalGen opts st $ do
          -- let es = map toExpr xs
          mv <- lookup es <$> io (readIORef mref)
          case mv of
@@ -118,10 +121,10 @@ instance (Targetable a, Targetable b, b ~ Res (a -> b))
   => Targetable (a -> b) where
   getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)]
   query = genFun
-  decode v t
+  decode _ t
     = do f <- stitchFun (Proxy :: Proxy (a -> b)) t
          return $ \a -> f [toExpr a]
-  toExpr  f = var ("FUNCTION" :: Symbol)
+  toExpr  _ = var ("FUNCTION" :: Symbol)
   check _ _ = error "can't check a function!"
 
 instance (Targetable a, Targetable b, Targetable c, c ~ Res (a -> b -> c))
@@ -132,7 +135,7 @@ instance (Targetable a, Targetable b, Targetable c, c ~ Res (a -> b -> c))
   decode _ t
     = do f <- stitchFun (Proxy :: Proxy (a -> b -> c)) t
          return $ \a b -> f [toExpr a, toExpr b]
-  toExpr  f = var ("FUNCTION" :: Symbol)
+  toExpr  _ = var ("FUNCTION" :: Symbol)
   check _ _ = error "can't check a function!"
 
 instance (Targetable a, Targetable b, Targetable c, Targetable d, d ~ Res (a -> b -> c -> d))
@@ -143,5 +146,5 @@ instance (Targetable a, Targetable b, Targetable c, Targetable d, d ~ Res (a -> 
   decode _ t
     = do f <- stitchFun (Proxy :: Proxy (a -> b -> c -> d)) t
          return $ \a b c -> f [toExpr a, toExpr b, toExpr c]
-  toExpr  f = var ("FUNCTION" :: Symbol)
+  toExpr  _ = var ("FUNCTION" :: Symbol)
   check _ _ = error "can't check a function!"

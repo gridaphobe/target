@@ -162,7 +162,9 @@ timed x = do start <- getTime
 
 -- checkTarget :: CanTest f => f -> String -> FilePath -> IO [(Int,Double,Outcome)]
 checkTarget f n m = checkMany (n++"/Target")
-                              (\d max -> resultPassed <$> testOneMaxSC f n d max m)
+                              (\d max -> resultPassed <$>
+                                         targetResultWith f n m (mkOpts d max))
+  where mkOpts d max = defaultOpts { depth = d, maxSuccess = Just max, scDepth = True }
 
 checkSmall p n = checkMany (n++"/SmallCheck")
                            (\d n -> fromIntegral.fst.fst <$> runTestWithStats d n (p d))

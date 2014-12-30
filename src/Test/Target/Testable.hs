@@ -15,24 +15,25 @@
 module Test.Target.Testable where
 
 import           Control.Applicative
-import           Control.Exception          (AsyncException, evaluate)
+import           Control.Exception               (AsyncException, evaluate)
 import           Control.Monad
 import           Control.Monad.Catch
+import           Control.Monad.Reader
 import           Control.Monad.State
-import qualified Data.HashMap.Strict        as M
-import qualified Data.HashSet               as S
+import qualified Data.HashMap.Strict             as M
+import qualified Data.HashSet                    as S
 import           Data.Proxy
-import qualified Data.Text                  as T
-import           Data.Text.Format           hiding (print)
-import qualified Data.Text.Lazy             as LT
+import qualified Data.Text                       as T
+import           Data.Text.Format                hiding (print)
+import qualified Data.Text.Lazy                  as LT
 import           Text.Printf
 
 import           Language.Fixpoint.SmtLib2
 import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.RefType
-import           Language.Haskell.Liquid.Types hiding (Result (..), env, var)
+import           Language.Haskell.Liquid.Types   hiding (Result (..), env, var)
 
-import           Test.Target.Targetable hiding (apply)
+import           Test.Target.Targetable          hiding (apply)
 -- import           Test.Target.Eval
 import           Test.Target.Expr
 import           Test.Target.Monad
@@ -92,12 +93,12 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
           case sat of
             False -> mbKeepGoing xs n'
             True ->
-              gets maxSuccess >>= \case
+              asks maxSuccess >>= \case
                 Nothing -> go n' =<< io (command ctx CheckSat)
                 Just m | m == n' -> return $ Passed m
                        | otherwise -> go n' =<< io (command ctx CheckSat)
     mbKeepGoing xs n = do
-      kg <- gets keepGoing
+      kg <- asks keepGoing
       if kg
         then go n =<< io (command ctx CheckSat)
         else return (Failed $ show xs)
@@ -131,6 +132,7 @@ makeDecl x _ | x `M.member` smt_set_funs = Assert Nothing PTrue
 makeDecl x (FFunc _ ts) = Declare x (init ts) (last ts)
 makeDecl x t            = Declare x []        t
 
+func :: Sort -> Bool
 func (FFunc _ _) = True
 func _           = False
 

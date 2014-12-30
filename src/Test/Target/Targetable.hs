@@ -18,21 +18,22 @@ module Test.Target.Targetable
   ) where
 
 import           Control.Applicative
-import           Control.Arrow                    (second)
+import           Control.Arrow                   (second)
+import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Char
-import qualified Data.HashMap.Strict              as M
+import qualified Data.HashMap.Strict             as M
 import           Data.List
 import           Data.Monoid
 import           Data.Proxy
 import           Data.Ratio
-import qualified Data.Text                        as T
-import           Data.Word (Word8)
+import qualified Data.Text                       as T
+import           Data.Word                       (Word8)
 import           GHC.Generics
 
-import           Language.Fixpoint.Types          hiding (prop, ofReft)
+import           Language.Fixpoint.Types         hiding (prop, ofReft)
 import           Language.Haskell.Liquid.RefType
-import           Language.Haskell.Liquid.Types    hiding (var)
+import           Language.Haskell.Liquid.Types   hiding (var)
 
 import           Test.Target.Expr
 import           Test.Target.Eval
@@ -148,7 +149,7 @@ instance Targetable Char where
 instance Targetable Word8 where
   getType _ = FObj "GHC.Word.Word8"
   query _ d t = fresh FInt >>= \x ->
-    do _ <- gets depth
+    do _ <- asks depth
        constrain $ var x `ge` 0
        constrain $ var x `le` fromIntegral d
        constrain $ ofReft (var x) (toReft $ rt_reft t)
@@ -273,7 +274,7 @@ reproxyGElem :: Proxy (M1 d c f a) -> Proxy (f a)
 reproxyGElem = reproxy
 
 instance (Datatype c, GToExprCtor f) => GToExpr (D1 c f) where
-  gtoExpr c@(M1 x) = app (qualify mod (symbolString $ val d)) xs
+  gtoExpr (M1 x) = app (qualify mod (symbolString $ val d)) xs
     where
       mod  = GHC.Generics.moduleName (undefined :: D1 c f a)
       (EApp d xs) = gtoExprCtor x
@@ -308,8 +309,8 @@ instance (Targetable a) => GQuery (K1 i a) where
   gquery p d t = do 
     let p' = reproxy p :: Proxy a
     ty <- gets makingTy
-    depth <- gets depth
-    sc <- gets scDepth
+    depth <- asks depth
+    sc <- asks scDepth
     let d' = if getType p' == ty || sc
                 then d
                 else depth

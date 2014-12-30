@@ -9,6 +9,7 @@ import           Control.Arrow
 import qualified Control.Exception                as Ex
 import           Control.Monad
 import           Control.Monad.Catch
+import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Generics                    (Data, everywhere, mkT)
 import qualified Data.HashMap.Strict              as M
@@ -42,22 +43,23 @@ import           Test.Target.Util
 instance Symbolic T.Text where
   symbol = symbol . T.toStrict
 
-newtype Gen a = Gen (StateT GenState IO a)
+newtype Gen a = Gen (StateT GenState (ReaderT TargetOpts IO) a)
   deriving ( Functor, Applicative, Monad, MonadIO, Alternative
-           , MonadState GenState, MonadCatch )
+           , MonadState GenState, MonadCatch, MonadReader TargetOpts )
 instance MonadThrow Gen where
   throwM = Ex.throw
 
-runGen :: GhcSpec -> FilePath -> Gen a -> IO a
-runGen e f (Gen x)
-  = do ctx <- makeContext Z3
-       evalStateT x (initGS f e ctx) `finally` killContext ctx
+runGen :: TargetOpts -> GhcSpec -> FilePath -> Gen a -> IO a
+runGen opts sp f (Gen x)
+  = do ctx <- mkContext Z3
+       runReaderT (evalStateT x (initGS f sp ctx)) opts
+         `finally` killContext ctx
   where
-    mkContext = {-if logging then makeContext else-} makeContextNoLog
+    mkContext = if logging opts then makeContext else makeContextNoLog
     killContext ctx = terminateProcess (pId ctx) >> cleanupContext ctx
 
-evalGen :: GenState -> Gen a -> IO a
-evalGen s (Gen x) = evalStateT x s
+evalGen :: TargetOpts -> GenState -> Gen a -> IO a
+evalGen o s (Gen x) = runReaderT (evalStateT x s) o
 
 -- execGen :: GhcSpec -> Gen a -> IO GenState
 -- execGen e (Gen x) = execStateT x (initGS e)
@@ -71,6 +73,30 @@ freshInt = liftIO $ do
   n <- readIORef seed
   modifyIORef' seed (+1)
   return n
+
+data TargetOpts = TargetOpts
+  { depth      :: !Int
+  , solver     :: !SMTSolver
+  , verbose    :: !Bool
+  , logging    :: !Bool
+  , keepGoing  :: !Bool
+    -- ^ whether to keep going after finding a counter-example, useful for
+    -- checking coverage
+  , maxSuccess :: !(Maybe Int)
+  , scDepth    :: !Bool
+    -- ^ whether to use SmallCheck's notion of depth
+  }
+
+defaultOpts :: TargetOpts
+defaultOpts = TargetOpts
+  { depth = 5
+  , solver = Z3
+  , verbose = False
+  , logging = True
+  , keepGoing = False
+  , maxSuccess = Nothing
+  , scDepth = False
+  }
 
 data GenState
   = GS { variables    :: ![Variable]
@@ -86,22 +112,15 @@ data GenState
        , freesyms     :: ![(Symbol,Symbol)]
        , constructors :: ![Variable] -- (S.HashSet Variable)  --[(String, String)]
        , sigs         :: ![(Symbol, SpecType)]
-       , depth        :: !Int
        , chosen       :: !(Maybe Symbol)
        , sorts        :: !(S.HashSet Sort)
        , modName      :: !Symbol
        , filePath     :: !FilePath
        , makingTy     :: !Sort
-       , verbose      :: !Bool
-       , logging      :: !Bool
-       , keepGoing    :: !Bool -- ^ whether to keep going after finding a
-                               --   counter-example, useful for checking
-                               --   coverage
-       , maxSuccess   :: !(Maybe Int)
-       , scDepth      :: !Bool -- ^ whether to use SmallCheck's notion of depth
        , smtContext   :: !Context
        }
 
+initGS :: FilePath -> GhcSpec -> Context -> GenState
 initGS fp sp ctx
   = GS { variables    = []
        , choices      = []
@@ -116,17 +135,11 @@ initGS fp sp ctx
        , freesyms     = free
        , constructors = []
        , sigs         = sigs
-       , depth        = 0
        , chosen       = Nothing
        , sorts        = S.empty
        , modName      = ""
        , filePath     = fp
        , makingTy     = FObj ""
-       , verbose      = False
-       , logging      = False
-       , keepGoing    = False
-       , maxSuccess   = Nothing
-       , scDepth      = False
        , smtContext   = ctx
        }
   where
@@ -139,13 +152,13 @@ initGS fp sp ctx
     tidy :: forall a. Data a => a -> a
     tidy  = everywhere (mkT tidySymbol)
 
+whenVerbose :: Gen () -> Gen ()
 whenVerbose x
-  = do v <- gets verbose
+  = do v <- asks verbose
        when v x
 
+noteUsed :: (Symbol, Value) -> Gen ()
 noteUsed (v,x) = modify $ \s@(GS {..}) -> s { realized = (v,x) : realized }
-
-setMaxSuccess m = modify $ \s@(GS {..}) -> s { maxSuccess = Just m }
 
 -- TODO: does this type make sense? should it be Symbol -> Symbol -> Gen ()?
 addDep :: Symbol -> Expr -> Gen ()
@@ -153,12 +166,15 @@ addDep from (EVar to) = modify $ \s@(GS {..}) ->
   s { deps = M.insertWith (flip (++)) from [to] deps }
 addDep _ _ = return ()
 
+addConstraint :: Pred -> Gen ()
 addConstraint p = modify $ \s@(GS {..}) -> s { constraints = p:constraints }
 
+addConstructor :: Variable -> Gen ()
 addConstructor c
   = do -- modify $ \s@(GS {..}) -> s { constructors = S.insert c constructors }
        modify $ \s@(GS {..}) -> s { constructors = nub $ c:constructors }
 
+inModule :: Symbol -> Gen a -> Gen a
 inModule m act
   = do m' <- gets modName
        modify $ \s -> s { modName = m }
@@ -166,6 +182,7 @@ inModule m act
        modify $ \s -> s { modName = m' }
        return r
 
+making :: Sort -> Gen a -> Gen a
 making ty act
   = do ty' <- gets makingTy
        modify $ \s -> s { makingTy = ty }
@@ -228,6 +245,7 @@ sortTys t            = [t]
 arrowize :: Sort -> Sort
 arrowize = FObj . symbol . T.intercalate "->" . map (T.fromStrict . symbolText . unObj) . sortTys
 
+unObj :: Sort -> Symbol
 unObj FInt     = "Int"
 unObj (FObj s) = s
 unObj s        = error $ "unObj: " ++ show s

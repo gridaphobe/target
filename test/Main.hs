@@ -1,6 +1,5 @@
 {-# LANGUAGE ConstraintKinds  #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TemplateHaskell  #-}
 module Main where
 
 import           Control.Exception
@@ -56,14 +55,14 @@ mkFailure f n fp d
   = testCase (n ++ "/" ++ show d) $ shouldFail d f n fp
 
 shouldSucceed d f name file
-  = do r <- testOne f name d file
+  = do r <- targetResultWith f name file (defaultOpts {depth = d})
        assertString $ case r of
                        Passed _ -> ""
                        Failed s -> "Unexpected counter-example: " ++ s
                        Errored s -> "Unexpected error: " ++ s
 
 shouldFail d f name file
-  = do r <- testOne f name d file
+  = do r <- targetResultWith f name file (defaultOpts {depth = d})
        assertBool "Expected counter-example" $ case r of
                                                Passed _ -> False
                                                _        -> True

@@ -3,20 +3,33 @@ module Test.Target.Expr where
 import Language.Fixpoint.Types
 
 
-infix 4 `eq`
+eq :: Expr -> Expr -> Pred
 eq  = PAtom Eq
-infix 5 `ge`
+infix 4 `eq`
+
+ge :: Expr -> Expr -> Pred
 ge  = PAtom Ge
-infix 5 `le`
+infix 5 `ge`
+
+le :: Expr -> Expr -> Pred
 le  = PAtom Le
-infix 5 `gt`
+infix 5 `le`
+
+gt :: Expr -> Expr -> Pred
 gt  = PAtom Gt
-infix 5 `lt`
+infix 5 `gt`
+
+lt :: Expr -> Expr -> Pred
 lt  = PAtom Lt
-infix 3 `iff`
+infix 5 `lt`
+
+iff :: Pred -> Pred -> Pred
 iff = PIff
-infix 3 `imp`
+infix 3 `iff`
+
+imp :: Pred -> Pred -> Pred
 imp = PImp
+infix 3 `imp`
 
 
 app :: Symbolic a => a -> [Expr] -> Expr
@@ -27,6 +40,7 @@ var = EVar . symbol
 
 -- prop :: Symbolic a => a -> Pred
 -- prop = PBexp . EVar . symbol
+prop :: Expr -> Pred
 prop = PBexp
 
 instance Num Expr where

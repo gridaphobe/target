@@ -5,6 +5,7 @@
 module Test.Target.Types where
 
 import qualified Control.Monad.Catch           as Ex
+import qualified Data.Text                     as T
 import           Data.Typeable
 
 import           Language.Fixpoint.SmtLib2
@@ -13,24 +14,30 @@ import           Language.Haskell.Liquid.Types
 
 import           GHC
 
-import qualified Data.Text                     as T
 
-data TargetException = SmtFailedToProduceOutput
-                     | SmtError String
-                     | ExpectedValues Response
-                     | PreconditionCheckFailed String
-                     | EvalError String
-                     deriving Typeable
+data TargetException
+  = SmtFailedToProduceOutput
+  | SmtError String
+  | ExpectedValues Response
+  | PreconditionCheckFailed String
+  | EvalError String
+  deriving Typeable
 
 instance Show TargetException where
-  show SmtFailedToProduceOutput = "The SMT solver was unable to produce an output value."
-  show (SmtError s) = "Unexpected error from the solver: " ++ s
-  show (ExpectedValues r) = "Expected a Values response from the solver, got: " ++ show r
-  show (PreconditionCheckFailed e) = "The pre-condition check for a generated function failed: " ++ e
-  show (EvalError s) = "Couldn't evaluate a concrete refinement: " ++ s
+  show SmtFailedToProduceOutput
+    = "The SMT solver was unable to produce an output value."
+  show (SmtError s)
+    = "Unexpected error from the solver: " ++ s
+  show (ExpectedValues r)
+    = "Expected a Values response from the solver, got: " ++ show r
+  show (PreconditionCheckFailed e)
+    = "The pre-condition check for a generated function failed: " ++ e
+  show (EvalError s)
+    = "Couldn't evaluate a concrete refinement: " ++ s
 
 instance Ex.Exception TargetException
 
+ensureValues :: Ex.MonadThrow m => m Response -> m Response
 ensureValues x = do
   a <- x
   case a of

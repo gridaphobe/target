@@ -1,7 +1,7 @@
 module HOFs where
 
 import           Test.Target
-import           Text.Show.Functions
+import           Text.Show.Functions ()
 
 {-@ foo :: (x:Int -> {v:Int | v > x}) -> {v:Int | v > 0} @-}
 foo :: (Int -> Int) -> Int
