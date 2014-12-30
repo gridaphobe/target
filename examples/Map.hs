@@ -287,7 +287,7 @@ import           Text.Read
 import           Data.Set             (Set)
 import           GHC.Generics
 import           Test.Target
-import           Test.Target.Gen (Gen)
+import           Test.Target.Monad (Gen)
 #endif
 
 -- Use macros to define strictness of functions.

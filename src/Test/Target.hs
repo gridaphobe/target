@@ -65,4 +65,4 @@ testFunIgnoringFailure f name d
   = do modify $ \s -> s { keepGoing = True }
        testFun f name d
 
-data Test = forall t. CanTest t => Test t
+data Test = forall t. CanTest t => T t
