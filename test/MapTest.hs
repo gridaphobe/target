@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell     #-}
 module MapTest where
 
 import           Map
@@ -25,21 +26,21 @@ prop_difference_lc = difference
 prop_delete_lc :: K -> M -> M
 prop_delete_lc = delete
 
-liquidTests :: [(String, Test)]
-liquidTests = [ ("insert",       T (insert :: K -> V -> M -> M))
-              , ("delete",       T (delete :: K -> M -> M))
-              , ("union",        T (union :: M -> M -> M))
-              , ("difference",   T (difference :: M -> M -> M))
-              , ("intersection", T (intersection :: M -> M -> M))
+-- liquidTests :: [(String, Test)]
+liquidTests = [ ('insert,       T (insert :: K -> V -> M -> M))
+              , ('delete,       T (delete :: K -> M -> M))
+              , ('union,        T (union :: M -> M -> M))
+              , ('difference,   T (difference :: M -> M -> M))
+              , ('intersection, T (intersection :: M -> M -> M))
               ]
 
 
-liquidTests_bad :: [(String, Test)]
-liquidTests_bad = [ ("insert",       T (insert_bad :: K -> V -> M -> M))
-                  , ("delete",       T (delete_bad :: K -> M -> M))
-                  , ("union",        T (union_bad :: M -> M -> M))
-                  , ("difference",   T (difference_bad :: M -> M -> M))
-                  , ("intersection", T (intersection_bad :: M -> M -> M))
+-- liquidTests_bad :: [(String, Test)]
+liquidTests_bad = [ ('insert,       T (insert_bad :: K -> V -> M -> M))
+                  , ('delete,       T (delete_bad :: K -> M -> M))
+                  , ('union,        T (union_bad :: M -> M -> M))
+                  , ('difference,   T (difference_bad :: M -> M -> M))
+                  , ('intersection, T (intersection_bad :: M -> M -> M))
                   ]
 
 

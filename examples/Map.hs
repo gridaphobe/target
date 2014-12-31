@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RankNTypes    #-}
+{-# LANGUAGE TemplateHaskell    #-}
 {-@ LIQUID "--totality" @-}
 {-# LANGUAGE CPP           #-}
 #if __GLASGOW_HASKELL__

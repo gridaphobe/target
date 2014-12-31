@@ -43,6 +43,7 @@ library
                      , process
                      , syb >= 0.4.2
                      , tagged >= 0.7
+                     , template-haskell
                      , text >= 1.0
                      , text-format
                      , transformers >= 0.3
@@ -80,6 +81,7 @@ benchmark bench
                        --statistics,
                        time,
                        target,
+                       template-haskell,
                        liquidhaskell >= 0.2,
                        liquid-fixpoint,
                        QuickCheck >= 2.6,
@@ -97,7 +99,6 @@ test-suite test
   build-depends:       base,
                        target,
                        ghc,
-                       liquidhaskell >= 0.2,
                        tasty >= 0.8,
                        tasty-hunit >= 0.8,
                        -- for Data.Map
@@ -110,6 +111,7 @@ test-suite test
                        ghc-prim,
                        liquid-fixpoint,
                        liquidhaskell,
+                       template-haskell,
                        unordered-containers
 
 -- executable liquid-check

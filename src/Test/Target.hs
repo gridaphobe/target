@@ -1,6 +1,8 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE ViewPatterns #-}
 module Test.Target
   ( target, targetResult, targetWith, targetResultWith
+  -- , targetTH
   , Result(..), Testable
   , TargetOpts(..), defaultOpts
   , Test(..)
@@ -10,7 +12,7 @@ import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.State
--- import qualified Language.Haskell.TH             as TH
+import qualified Language.Haskell.TH             as TH
 import           System.Process                  (terminateProcess)
 import           Text.Printf                     (printf)
 
@@ -28,29 +30,34 @@ import           Test.Target.Util
 -- inputs and calling the function.
 target :: Testable f
        => f -- ^ the function
-       -> String -- ^ the name of the function
+       -> TH.Name -- ^ the name of the function
        -> FilePath -- ^ the path to the module that defines the function
        -> IO ()
 target f name path
   = targetWith f name path defaultOpts
 
+-- targetTH :: TH.ExpQ -- (TH.TExp (Testable f => f -> TH.Name -> IO ()))
+-- targetTH = TH.location >>= \TH.Loc {..} ->
+--   [| \ f n -> target f (show n) loc_filename |]
+
 -- | Like 'target', but returns the 'Result' instead of printing to standard out.
-targetResult :: Testable f => f -> String -> FilePath -> IO Result
+targetResult :: Testable f => f -> TH.Name -> FilePath -> IO Result
 targetResult f name path
   = targetResultWith f name path defaultOpts
 
 -- | Like 'target', but accepts options to control the enumeration depth,
 -- solver, and verbosity.
-targetWith :: Testable f => f -> String -> FilePath -> TargetOpts -> IO ()
+targetWith :: Testable f => f -> TH.Name -> FilePath -> TargetOpts -> IO ()
 targetWith f name path opts
   = do res <- targetResultWith f name path opts
        case res of
          Passed n -> printf "OK. Passed %d tests\n\n" n
          Failed x -> printf "Found counter-example: %s\n\n" x
+         Errored x -> printf "Error! %s\n\n" x
 
 -- | Like 'targetWith', but returns the 'Result' instead of printing to standard out.
-targetResultWith :: Testable f => f -> String -> FilePath -> TargetOpts -> IO Result
-targetResultWith f name path opts
+targetResultWith :: Testable f => f -> TH.Name -> FilePath -> TargetOpts -> IO Result
+targetResultWith f (show -> name) path opts
   = do when (verbose opts) $
          printf "Testing %s\n" name
        sp  <- getSpec path

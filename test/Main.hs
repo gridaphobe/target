@@ -1,8 +1,9 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Main where
 
 import           Control.Exception
 import           GHC.IO.Handle
--- import qualified Language.Haskell.TH as TH
+import qualified Language.Haskell.TH as TH
 import           System.IO
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -26,31 +27,31 @@ tests = testGroup "Tests" [pos, neg]
 
 pos = testGroup "Pos" $
   [ mkSuccess (List.insert :: Int -> List Int -> List Int)
-      "List.insert" "test/List.hs" 3
+      'List.insert "test/List.hs" 3
   -- FIXME: doesn't work with SMT-based checking of post-condition
-  , mkSuccess List.mymap "List.mymap" "test/List.hs" 3
+  , mkSuccess List.mymap 'List.mymap "test/List.hs" 3
   ]
-  ++ [ mkSuccess f name "test/HOFs.hs" 3 | (name, T f) <- HOFs.liquidTests]
-  ++ [ mkSuccess f ("RBTree."++name) "test/RBTree.hs" 5 | (name, T f) <- RBTree.liquidTests]
-  ++ [ mkSuccess f ("Map."++name) "test/Map.hs" 4 | (name, T f) <- Map.liquidTests]
+  ++ [ mkSuccess f name "test/HOFs.hs" 3   | (name, T f) <- HOFs.liquidTests]
+  ++ [ mkSuccess f name "test/RBTree.hs" 5 | (name, T f) <- RBTree.liquidTests]
+  ++ [ mkSuccess f name "test/Map.hs" 4    | (name, T f) <- Map.liquidTests]
   --FIXME: need a better solution for checking equality that respects custom Eq instances
   -- ++ [ mkSuccess f ("Data.ByteString.Internal."++name) "test/Data/ByteString/Internal.hs" 4 | (name, T f) <- ByteString.liquidTests]
 
 neg = testGroup "Neg" $
   [ mkFailure (List.insert_bad :: Int -> List Int -> List Int)
-      "List.insert" "test/List.hs" 3
+      'List.insert "test/List.hs" 3
   ]
-  ++ [ mkFailure f name "test/HOFs.hs" 3 | (name, T f) <- HOFs.liquidTests_bad]
-  ++ [ mkFailure f ("RBTree."++name) "test/RBTree.hs" 5 | (name, T f) <- RBTree.liquidTests_bad]
-  ++ [ mkFailure f ("Map."++name) "test/Map.hs" 4 | (name, T f) <- Map.liquidTests_bad]
+  ++ [ mkFailure f name "test/HOFs.hs" 3   | (name, T f) <- HOFs.liquidTests_bad]
+  ++ [ mkFailure f name "test/RBTree.hs" 5 | (name, T f) <- RBTree.liquidTests_bad]
+  ++ [ mkFailure f name "test/Map.hs" 4    | (name, T f) <- Map.liquidTests_bad]
 
-mkSuccess :: Testable f => f -> String -> String -> Int -> TestTree
+mkSuccess :: Testable f => f -> TH.Name -> String -> Int -> TestTree
 mkSuccess f n fp d
-  = testCase (n ++ "/" ++ show d) $ shouldSucceed d f n fp
+  = testCase (show n ++ "/" ++ show d) $ shouldSucceed d f n fp
 
-mkFailure :: Testable f => f -> String -> String -> Int -> TestTree
+mkFailure :: Testable f => f -> TH.Name -> String -> Int -> TestTree
 mkFailure f n fp d
-  = testCase (n ++ "/" ++ show d) $ shouldFail d f n fp
+  = testCase (show n ++ "/" ++ show d) $ shouldFail d f n fp
 
 shouldSucceed d f name file
   = do r <- targetResultWith f name file (defaultOpts {depth = d})

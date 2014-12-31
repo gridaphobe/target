@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 module RBTreeTest where
 
 import           RBTree
@@ -7,14 +8,14 @@ import           Test.Target
 type E = Char
 type T = RBTree E
 
-liquidTests :: [(String, Test)]
-liquidTests = [ ("add",    T (add :: E -> T -> T))
-              , ("remove", T (remove :: E -> T -> T))
+-- liquidTests :: [(String, Test)]
+liquidTests = [ ('add,    T (add :: E -> T -> T))
+              , ('remove, T (remove :: E -> T -> T))
               ]
 
-liquidTests_bad :: [(String, Test)]
-liquidTests_bad = [ ("add",    T (add_bad :: E -> T -> T))
-                  , ("remove", T (remove_bad :: E -> T -> T))
+-- liquidTests_bad :: [(String, Test)]
+liquidTests_bad = [ ('add,    T (add_bad :: E -> T -> T))
+                  , ('remove, T (remove_bad :: E -> T -> T))
                   ]
 
 remove_bad x t = makeBlack (del_bad x t)

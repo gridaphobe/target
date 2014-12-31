@@ -4,6 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 module Main where
 
@@ -33,6 +34,7 @@ import           Text.Printf
 -- import qualified ExprBench                  as Expr
 import qualified List
 import qualified ListBench                  as List
+import qualified Map                        as Map
 import qualified MapBench                   as Map
 import qualified RBTree
 import qualified RBTreeBench                as RBTree
@@ -101,19 +103,21 @@ main = do
   print =<< logCsv "bench/XMonad.focus_left.csv" =<< xmonadFocusLeftTests
 
 listInsertTests = do
-  l <- checkTarget List.insert         "List.insert" "examples/List.hs"
-  s <- checkSmall  List.prop_insert_sc "List.insert"
-  ls <- checkLazySmall  List.prop_insert_lsc "List.insert"
-  q <- checkQuick  List.prop_insert_qc "List.insert"
-  return $ TestResult "List.insert" l s ls Nothing q
+  let n = 'List.insert
+  l <- checkTarget List.insert         n "examples/List.hs"
+  s <- checkSmall  List.prop_insert_sc n
+  ls <- checkLazySmall  List.prop_insert_lsc n
+  q <- checkQuick  List.prop_insert_qc n
+  return $ TestResult (show n) l s ls Nothing q
 
 rbTreeAddTests = do
-  l <- checkTarget RBTree.prop_add_lc "RBTree.add" "examples/RBTree.hs"
-  s <- checkSmall  RBTree.prop_add_sc "RBTree.add"
-  ls <- checkLazySmall  RBTree.prop_add_lsc "RBTree.add"
-  lss <- checkLazySmall  RBTree.prop_add_lsc_slow "RBTree.add"
-  q <- checkQuick  RBTree.prop_add_qc "RBTree.add"
-  return $ TestResult "RBTree.add" l s ls (Just lss) q
+  let n = 'RBTree.add
+  l <- checkTarget RBTree.prop_add_lc n "examples/RBTree.hs"
+  s <- checkSmall  RBTree.prop_add_sc n
+  ls <- checkLazySmall  RBTree.prop_add_lsc n
+  lss <- checkLazySmall  RBTree.prop_add_lsc_slow n
+  q <- checkQuick  RBTree.prop_add_qc n
+  return $ TestResult (show n) l s ls (Just lss) q
 
 -- exprSubstTests = do
 --   l <- checkTarget Expr.subst         "Expr.subst" "examples/Expr.hs"
@@ -123,28 +127,30 @@ rbTreeAddTests = do
 --   return $ TestResult "Expr.subst" l s ls Nothing q
 
 mapDeleteTests = do
-  l <- checkTarget Map.prop_delete_lc "Map.delete" "examples/Map.hs"
-  s <- checkSmall  Map.prop_delete_sc "Map.delete"
-  ls <- checkLazySmall  Map.prop_delete_lsc "Map.delete"
-  lss <- checkLazySmall  Map.prop_delete_lsc_slow "Map.delete"
-  q <- checkQuick  Map.prop_delete_qc "Map.delete"
-  return $ TestResult "Map.delete" l s ls (Just lss) q
+  let n = 'Map.delete
+  l <- checkTarget Map.prop_delete_lc n "examples/Map.hs"
+  s <- checkSmall  Map.prop_delete_sc n
+  ls <- checkLazySmall  Map.prop_delete_lsc n
+  lss <- checkLazySmall  Map.prop_delete_lsc_slow n
+  q <- checkQuick  Map.prop_delete_qc n
+  return $ TestResult (show n) l s ls (Just lss) q
 
 mapDifferenceTests = do
-  l <- checkTarget Map.prop_difference_lc "Map.difference" "examples/Map.hs"
-  s <- checkSmall  Map.prop_difference_sc "Map.difference"
-  ls <- checkLazySmall  Map.prop_difference_lsc "Map.difference"
-  lss <- checkLazySmall  Map.prop_difference_lsc_slow "Map.difference"
-  q <- checkQuick  Map.prop_difference_qc "Map.difference"
-  return $ TestResult "Map.difference" l s ls (Just lss) q
+  let n = 'Map.difference
+  l <- checkTarget Map.prop_difference_lc n "examples/Map.hs"
+  s <- checkSmall  Map.prop_difference_sc n
+  ls <- checkLazySmall  Map.prop_difference_lsc n
+  lss <- checkLazySmall  Map.prop_difference_lsc_slow n
+  q <- checkQuick  Map.prop_difference_qc n
+  return $ TestResult (show n) l s ls (Just lss) q
 
 xmonadFocusLeftTests = do
-  l <- checkTarget XMonad.prop_focus_left_master_lc "XMonad.Properties.prop_focus_left_master_lc"
-                                                    "examples/XMonad/Properties.hs"
-  s <- checkSmall  XMonad.prop_focus_left_master_sc "XMonad.Properties.prop_focus_left_master"
-  ls <- checkLazySmall  XMonad.prop_focus_left_master_lsc "XMonad.Properties.prop_focus_left_master"
-  q <- checkQuick  XMonad.prop_focus_left_master_qc "XMonad.Properties.prop_focus_left_master"
-  return $ TestResult "XMonad.focus_left_master" l s ls Nothing q
+  let n = 'XMonad.prop_focus_left_master_lc
+  l <- checkTarget XMonad.prop_focus_left_master_lc n "examples/XMonad/Properties.hs"
+  s <- checkSmall  XMonad.prop_focus_left_master_sc n
+  ls <- checkLazySmall  XMonad.prop_focus_left_master_lsc n
+  q <- checkQuick  XMonad.prop_focus_left_master_qc n
+  return $ TestResult (show n) l s ls Nothing q
 
 
 myTimeout :: IO a -> IO (Maybe a)
@@ -161,20 +167,20 @@ timed x = do start <- getTime
 resultPassed (Passed i) = i
 
 -- checkTarget :: CanTest f => f -> String -> FilePath -> IO [(Int,Double,Outcome)]
-checkTarget f n m = checkMany (n++"/Target")
+checkTarget f n m = checkMany (show n++"/Target")
                               (\d max -> resultPassed <$>
                                          targetResultWith f n m (mkOpts d max))
   where mkOpts d max = defaultOpts { depth = d, maxSuccess = Just max, scDepth = True }
 
-checkSmall p n = checkMany (n++"/SmallCheck")
+checkSmall p n = checkMany (show n++"/SmallCheck")
                            (\d n -> fromIntegral.fst.fst <$> runTestWithStats d n (p d))
 
-checkLazySmall p n = checkMany (n++"/LazySmallCheck")
+checkLazySmall p n = checkMany (show n++"/LazySmallCheck")
                                (\d n -> LSC.depthCheckResult d n (p d))
 
-checkQuick :: QC.Testable f => f -> String -> IO (Double,Outcome)
+-- checkQuick :: QC.Testable f => f -> String -> IO (Double,Outcome)
 checkQuick p n = timed $ do
-  putStrNow $ printf "Testing %s/QuickCheck.. " n
+  putStrNow $ printf "Testing %s/QuickCheck.. " (show n)
   r <- QC.quickCheckWithResult (QC.stdArgs {QC.chatty = False}) p
   putStrNow "done!\n"
   return $ case r of
