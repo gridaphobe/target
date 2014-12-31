@@ -84,17 +84,17 @@ freshInt = liftIO $ do
   return n
 
 data TargetOpts = TargetOpts
-  { depth      :: {-# UNPACK #-} !Int
-  , solver     :: {-# UNPACK #-} !SMTSolver
-  , verbose    :: {-# UNPACK #-} !Bool
-  , logging    :: {-# UNPACK #-} !Bool
-  , keepGoing  :: {-# UNPACK #-} !Bool
+  { depth      :: !Int
+  , solver     :: !SMTSolver
+  , verbose    :: !Bool
+  , logging    :: !Bool
+  , keepGoing  :: !Bool
     -- ^ whether to keep going after finding a counter-example, useful for
     -- checking coverage
-  , maxSuccess :: {-# UNPACK #-} !(Maybe Int)
+  , maxSuccess :: !(Maybe Int)
     -- ^ whether to stop after a certain number of successful tests, or
     -- enumerate the whole input space
-  , scDepth    :: {-# UNPACK #-} !Bool
+  , scDepth    :: !Bool
     -- ^ whether to use SmallCheck's notion of depth
   }
 
