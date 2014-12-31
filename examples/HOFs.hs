@@ -20,7 +20,3 @@ list_foo xs f = f xs
 list_foo_bad :: [Int] -> ([Int] -> [Int]) -> [Int]
 list_foo_bad xs f = f []
 
--- liquidTests, liquidTests_bad :: [(String,Test)]
-liquidTests     = [('foo, T foo), ('list_foo, T list_foo)]
-liquidTests_bad = [('foo, T foo_bad), ('list_foo, T list_foo_bad)]
-

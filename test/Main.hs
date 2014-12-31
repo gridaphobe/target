@@ -31,7 +31,7 @@ pos = testGroup "Pos" $
   -- FIXME: doesn't work with SMT-based checking of post-condition
   , mkSuccess List.mymap 'List.mymap "test/List.hs" 3
   ]
-  ++ [ mkSuccess f name "test/HOFs.hs" 3   | (name, T f) <- HOFs.liquidTests]
+  ++ [ mkSuccess f name "test/HOFs.hs" 3   | (name, T f) <- hofsTests]
   ++ [ mkSuccess f name "test/RBTree.hs" 5 | (name, T f) <- RBTree.liquidTests]
   ++ [ mkSuccess f name "test/Map.hs" 4    | (name, T f) <- Map.liquidTests]
   --FIXME: need a better solution for checking equality that respects custom Eq instances
@@ -41,9 +41,13 @@ neg = testGroup "Neg" $
   [ mkFailure (List.insert_bad :: Int -> List Int -> List Int)
       'List.insert "test/List.hs" 3
   ]
-  ++ [ mkFailure f name "test/HOFs.hs" 3   | (name, T f) <- HOFs.liquidTests_bad]
+  ++ [ mkFailure f name "test/HOFs.hs" 3   | (name, T f) <- hofsTests_bad]
   ++ [ mkFailure f name "test/RBTree.hs" 5 | (name, T f) <- RBTree.liquidTests_bad]
   ++ [ mkFailure f name "test/Map.hs" 4    | (name, T f) <- Map.liquidTests_bad]
+
+-- liquidTests, liquidTests_bad :: [(String,Test)]
+hofsTests     = [('HOFs.foo, T HOFs.foo), ('HOFs.list_foo, T HOFs.list_foo)]
+hofsTests_bad = [('HOFs.foo, T HOFs.foo_bad), ('HOFs.list_foo, T HOFs.list_foo_bad)]
 
 mkSuccess :: Testable f => f -> TH.Name -> String -> Int -> TestTree
 mkSuccess f n fp d
