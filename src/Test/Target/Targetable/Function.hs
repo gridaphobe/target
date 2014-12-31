@@ -64,7 +64,7 @@ stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, to))
        opts   <- ask
        let st = state' { variables = [], choices = [], constraints = []
                        , deps = mempty, constructors = [] }
-       return $ \es -> unsafePerformIO $ evalTarget opts st $ do
+       return $ \es -> unsafePerformIO $ runTarget opts st $ do
          -- let es = map toExpr xs
          mv <- lookup es <$> io (readIORef mref)
          case mv of

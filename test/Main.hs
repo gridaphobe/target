@@ -1,5 +1,3 @@
-{-# LANGUAGE ConstraintKinds  #-}
-{-# LANGUAGE FlexibleContexts #-}
 module Main where
 
 import           Control.Exception
@@ -46,11 +44,11 @@ neg = testGroup "Neg" $
   ++ [ mkFailure f ("RBTree."++name) "test/RBTree.hs" 5 | (name, T f) <- RBTree.liquidTests_bad]
   ++ [ mkFailure f ("Map."++name) "test/Map.hs" 4 | (name, T f) <- Map.liquidTests_bad]
 
-mkSuccess :: CanTest f => f -> String -> String -> Int -> TestTree
+mkSuccess :: Testable f => f -> String -> String -> Int -> TestTree
 mkSuccess f n fp d
   = testCase (n ++ "/" ++ show d) $ shouldSucceed d f n fp
 
-mkFailure :: CanTest f => f -> String -> String -> Int -> TestTree
+mkFailure :: Testable f => f -> String -> String -> Int -> TestTree
 mkFailure f n fp d
   = testCase (n ++ "/" ++ show d) $ shouldFail d f n fp
 

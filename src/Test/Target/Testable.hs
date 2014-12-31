@@ -42,9 +42,7 @@ import           Test.Target.Util
 
 -- import Debug.Trace
 
-type CanTest f = (Testable f, AllHave Show (Args f), Targetable (Res f))
-
-test :: CanTest f => f -> Int -> SpecType -> Target Result
+test :: Testable f => f -> Int -> SpecType -> Target Result
 test f d t
   = do vs <- queryArgs f d t
        setup
@@ -54,7 +52,7 @@ test f d t
          Left  (e :: TargetException) -> return $ Errored $ show e
          Right r                      -> return r
 
-process :: CanTest f
+process :: Testable f
         => f -> Context -> [Symbol] -> [(Symbol,SpecType)] -> SpecType
         -> Target Result
 process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
@@ -103,13 +101,14 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
         then go n =<< io (command ctx CheckSat)
         else return (Failed $ show xs)
 
-class Testable f where
+class (AllHave Targetable (Args f), Targetable (Res f)
+      ,AllHave Show (Args f)) => Testable f where
   queryArgs  :: f -> Int -> SpecType -> Target [Symbol]
   decodeArgs :: f -> [Symbol] -> [SpecType] -> Target (HList (Args f))
   apply      :: f -> HList (Args f) -> Res f
   mkExprs    :: f -> [Symbol] -> HList (Args f) -> [(Symbol,Expr)]
 
-instance (Targetable a, Testable b) => Testable (a -> b) where
+instance (Show a, Targetable a, Testable b) => Testable (a -> b) where
   queryArgs f d (stripQuals -> (RFun _ i o _))
     = liftM2 (:) (query (Proxy :: Proxy a) d i) (queryArgs (f undefined) d o)
   decodeArgs f (v:vs) (t:ts)

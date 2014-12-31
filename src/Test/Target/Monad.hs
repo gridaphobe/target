@@ -16,8 +16,8 @@ module Test.Target.Monad
   , freshChoice
   , freshInt
   , getValue
-  , Target, runTarget, evalTarget
-  , TargetState(..)
+  , Target, runTarget
+  , TargetState(..), initState
   , TargetOpts(..), defaultOpts
   ) where
 
@@ -36,7 +36,6 @@ import           Data.List                        hiding (sort)
 import           Data.Monoid
 import qualified Data.Text.Lazy                   as LT
 import           System.IO.Unsafe
-import           System.Process                   (terminateProcess)
 import           Text.Printf
 
 import           Language.Fixpoint.Config         (SMTSolver (..))
@@ -65,17 +64,11 @@ newtype Target a = Target (StateT TargetState (ReaderT TargetOpts IO) a)
 instance MonadThrow Target where
   throwM = Ex.throw
 
-runTarget :: TargetOpts -> GhcSpec -> FilePath -> Target a -> IO a
-runTarget opts sp f (Target x)
-  = do ctx <- mkContext Z3
-       runReaderT (evalStateT x (initTargetState f sp ctx)) opts
-         `finally` killContext ctx
-  where
-    mkContext = if logging opts then makeContext else makeContextNoLog
-    killContext ctx = terminateProcess (pId ctx) >> cleanupContext ctx
+runTarget :: TargetOpts -> TargetState -> Target a -> IO a
+runTarget opts st (Target x) = runReaderT (evalStateT x st) opts
 
-evalTarget :: TargetOpts -> TargetState -> Target a -> IO a
-evalTarget o s (Target x) = runReaderT (evalStateT x s) o
+-- evalTarget :: TargetOpts -> TargetState -> Target a -> IO a
+-- evalTarget o s (Target x) = runReaderT (evalStateT x s) o
 
 -- execTarget :: GhcSpec -> Target a -> IO TargetState
 -- execTarget e (Target x) = execStateT x (initGS e)
@@ -91,15 +84,17 @@ freshInt = liftIO $ do
   return n
 
 data TargetOpts = TargetOpts
-  { depth      :: !Int
-  , solver     :: !SMTSolver
-  , verbose    :: !Bool
-  , logging    :: !Bool
-  , keepGoing  :: !Bool
+  { depth      :: {-# UNPACK #-} !Int
+  , solver     :: {-# UNPACK #-} !SMTSolver
+  , verbose    :: {-# UNPACK #-} !Bool
+  , logging    :: {-# UNPACK #-} !Bool
+  , keepGoing  :: {-# UNPACK #-} !Bool
     -- ^ whether to keep going after finding a counter-example, useful for
     -- checking coverage
-  , maxSuccess :: !(Maybe Int)
-  , scDepth    :: !Bool
+  , maxSuccess :: {-# UNPACK #-} !(Maybe Int)
+    -- ^ whether to stop after a certain number of successful tests, or
+    -- enumerate the whole input space
+  , scDepth    :: {-# UNPACK #-} !Bool
     -- ^ whether to use SmallCheck's notion of depth
   }
 
@@ -136,8 +131,8 @@ data TargetState = TargetState
   , smtContext   :: !Context
   }
 
-initTargetState :: FilePath -> GhcSpec -> Context -> TargetState
-initTargetState fp sp ctx = TargetState
+initState :: FilePath -> GhcSpec -> Context -> TargetState
+initState fp sp ctx = TargetState
   { variables    = []
   , choices      = []
   , constraints  = []
