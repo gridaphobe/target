@@ -5,10 +5,12 @@
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE ViewPatterns         #-}
-module Test.Target.Targetable.Function where
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+module Test.Target.Targetable.Function () where
 
 import           Control.Applicative
-import           Control.Arrow                   (first, second)
+import           Control.Arrow                   (second)
 import           Control.Monad
 import qualified Control.Monad.Catch             as Ex
 import           Control.Monad.Reader
@@ -23,11 +25,9 @@ import qualified GHC
 import           Language.Fixpoint.SmtLib2
 import           Language.Fixpoint.Types         hiding (ofReft)
 import           Language.Haskell.Liquid.GhcMisc (qualifiedNameSymbol)
-import           Language.Haskell.Liquid.RefType (rTypeSort)
-import           Language.Haskell.Liquid.Tidy    (tidySymbol)
+import           Language.Haskell.Liquid.RefType (addTyConInfo, rTypeSort)
 import           Language.Haskell.Liquid.Types   hiding (var)
 import           System.IO.Unsafe
-import           Text.Printf
 
 import           Test.Target.Targetable
 import           Test.Target.Eval
@@ -47,7 +47,7 @@ getCtors t              = error $ "getCtors: " ++ showpp t
 dataConSymbol_noUnique :: GHC.DataCon -> Symbol
 dataConSymbol_noUnique = qualifiedNameSymbol . GHC.getName
 
-genFun :: Targetable a => Proxy a -> t -> SpecType -> Gen Symbol
+genFun :: Targetable a => Proxy a -> t -> SpecType -> Target Symbol
 genFun p _ (stripQuals -> t)
   = do forM_ (getCtors t) $ \dc -> do
          let c = dataConSymbol_noUnique dc
@@ -56,7 +56,7 @@ genFun p _ (stripQuals -> t)
        fresh (getType p)
 
 stitchFun :: forall f. (Targetable (Res f))
-          => Proxy f -> SpecType -> Gen ([Expr] -> Res f)
+          => Proxy f -> SpecType -> Target ([Expr] -> Res f)
 stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, to))
   = do mref <- io $ newIORef []
        d <- asks depth
@@ -64,7 +64,7 @@ stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, to))
        opts   <- ask
        let st = state' { variables = [], choices = [], constraints = []
                        , deps = mempty, constructors = [] }
-       return $ \es -> unsafePerformIO $ evalGen opts st $ do
+       return $ \es -> unsafePerformIO $ evalTarget opts st $ do
          -- let es = map toExpr xs
          mv <- lookup es <$> io (readIORef mref)
          case mv of
@@ -72,7 +72,7 @@ stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, to))
            Nothing -> do
              cts <- gets freesyms
              let env = map (second (`app` [])) cts
-             bs <- zipWithM (\e t -> evalType (M.fromList env) t e) es tis
+             bs <- zipWithM (evalType (M.fromList env)) tis es
              case and bs of
                --FIXME: better error message
                False -> Ex.throwM $ PreconditionCheckFailed $ show $ zip es tis
@@ -96,14 +96,14 @@ stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, to))
                  io $ command ctx Pop
                  return o
     
-genExpr :: Expr -> Gen Symbol
+genExpr :: Expr -> Target Symbol
 genExpr (EApp (val -> c) es)
   = do xes <- mapM genExpr es
        (xs, _, to) <- bkArrowDeep . stripQuals <$> lookupCtor c
        let su  = mkSubst $ zip xs $ map var xes
            to' = subst su to
        x <- fresh $ FObj $ symbol $ rtc_tc $ rt_tycon to'
-       addConstraint $ ofReft (var x) (toReft $ rt_reft to')
+       addConstraint $ ofReft (reft to') (var x)
        return x
 genExpr (ECon (I i))
   = do x <- fresh FInt
@@ -116,6 +116,33 @@ genExpr (ESym (SL s)) | T.length s == 1
        return x
 genExpr e = error $ "genExpr: " ++ show e
 
+evalType :: M.HashMap Symbol Expr -> SpecType -> Expr -> Target Bool
+evalType m t e@(EApp c xs)
+  = do dcp <- lookupCtor (val c)
+       tyi <- gets tyconInfo
+       vts <- freshen $ applyPreds (addTyConInfo M.empty tyi t) dcp
+       liftM2 (&&) (evalWith m (toReft $ rt_reft t) e) (evalTypes m vts xs)
+evalType m t e
+  = evalWith m (toReft $ rt_reft t) e
+
+freshen :: [(Symbol, SpecType)] -> Target [(Symbol, SpecType)]
+freshen [] = return []
+freshen ((v,t):vts)
+  = do n <- freshInt
+       let v' = symbol . (++show n) . symbolString $ v
+           su = mkSubst [(v,var v')]
+           t' = subst su t
+       vts' <- freshen $ subst su vts
+       return ((v',t'):vts')
+
+evalTypes
+  :: M.HashMap Symbol Expr
+     -> [(Symbol, SpecType)] -> [Expr] -> Target Bool
+evalTypes _ []         []     = return True
+evalTypes m ((v,t):ts) (x:xs)
+  = liftM2 (&&) (evalType m' t x) (evalTypes m' ts xs)
+  where
+    m' = M.insert v x m
 
 instance (Targetable a, Targetable b, b ~ Res (a -> b))
   => Targetable (a -> b) where

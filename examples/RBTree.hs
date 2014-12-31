@@ -18,6 +18,7 @@ import           Debug.Trace
 
 import           GHC.Generics
 import           Test.Target
+import           Test.Target.Targetable
 
 import           Language.Haskell.Liquid.Prelude
 

@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Test.Target.Eval where
+module Test.Target.Eval ( eval, evalWith ) where
 
 import           Control.Applicative
 import           Control.Monad.Catch
@@ -11,57 +11,31 @@ import           Data.List
 import           Data.Maybe
 import           Text.Printf
 
-import           GHC
+import qualified GHC
 import           Language.Fixpoint.SmtLib2
 import           Language.Fixpoint.Types         hiding (R)
-import           Language.Haskell.Liquid.RefType (addTyConInfo)
 import           Language.Haskell.Liquid.Types   hiding (var)
 
 import           Test.Target.Expr
 import           Test.Target.Monad
 import           Test.Target.Types
-import           Test.Target.Util
 
 -- import           Debug.Trace
 
-evalType :: M.HashMap Symbol Expr -> SpecType -> Expr -> Gen Bool
-evalType m t e@(EApp c xs)
-  = do dcp <- lookupCtor (val c)
-       tyi <- gets tyconInfo
-       vts <- freshen $ applyPreds (addTyConInfo M.empty tyi t) dcp
-       liftM2 (&&) (evalReft m (toReft $ rt_reft t) e) (evalTypes m vts xs)
-evalType m t e
-  = evalReft m (toReft $ rt_reft t) e
-
-freshen :: [(Symbol, SpecType)] -> Gen [(Symbol, SpecType)]
-freshen [] = return []
-freshen ((v,t):vts)
-  = do n <- freshInt
-       let v' = symbol . (++show n) . symbolString $ v
-           su = mkSubst [(v,var v')]
-           t' = subst su t
-       vts' <- freshen $ subst su vts
-       return ((v',t'):vts')
-
-evalTypes
-  :: M.HashMap Symbol Expr
-     -> [(Symbol, SpecType)] -> [Expr] -> Gen Bool
-evalTypes _ []         []     = return True
-evalTypes m ((v,t):ts) (x:xs)
-  = liftM2 (&&) (evalType m' t x) (evalTypes m' ts xs)
-  where
-    m' = M.insert v x m
-
-eval :: Expr -> Reft -> Gen Bool
-eval e r = do
+-- | Evaluate a refinement with the given expression substituted for the value
+-- variable.
+eval :: Reft -> Expr -> Target Bool
+eval r e = do
   cts <- gets freesyms
-  evalReft (M.fromList $ map (second (`app` [])) cts) r e
+  evalWith (M.fromList $ map (second (`app` [])) cts) r e
 
-evalReft :: M.HashMap Symbol Expr -> Reft -> Expr -> Gen Bool
-evalReft m (Reft (v, rs)) x
+-- | Evaluate a refinement with the given expression substituted for the value
+-- variable, in the given environment of free symbols.
+evalWith :: M.HashMap Symbol Expr -> Reft -> Expr -> Target Bool
+evalWith m (Reft (v, rs)) x
   = and <$> sequence [ evalPred p (M.insert v x m) | RConc p <- rs ]
 
-evalPred :: Pred -> M.HashMap Symbol Expr -> Gen Bool
+evalPred :: Pred -> M.HashMap Symbol Expr -> Target Bool
 evalPred PTrue           _ = return True
 evalPred PFalse          _ = return False
 evalPred (PAnd ps)       m = and <$> sequence [evalPred p m | p <- ps]
@@ -88,7 +62,7 @@ evalBrel Ge = (>=)
 evalBrel Lt = (<)
 evalBrel Le = (<=)
 
-applyMeasure :: Measure SpecType DataCon -> Expr -> M.HashMap Symbol Expr -> Gen Expr
+applyMeasure :: Measure SpecType GHC.DataCon -> Expr -> M.HashMap Symbol Expr -> Target Expr
 applyMeasure m (EApp c xs) env
   = meq >>= \eq -> evalBody eq xs env
   where
@@ -116,7 +90,7 @@ nubSort = nub . Data.List.sort
 mkSet :: [Expr] -> Expr
 mkSet = app setSym . nubSort
 
-evalSet :: Symbol -> [Expr] -> Gen Expr
+evalSet :: Symbol -> [Expr] -> Target Expr
 evalSet "Set_emp" [e]
   = return $ if e == app setSym [] then 0 else 1
 evalSet "Set_sng" [e]
@@ -137,7 +111,7 @@ evalSet f es = throwM $ EvalError $ printf "evalSet(%s, %s)" (show f) (show es)
 
 evalBody
   :: Language.Haskell.Liquid.Types.Def ctor
-     -> [Expr] -> M.HashMap Symbol Expr -> Gen Expr
+     -> [Expr] -> M.HashMap Symbol Expr -> Target Expr
 evalBody eq xs env = go $ body eq
   where
     go (E e) = evalExpr (subst su e) env
@@ -151,7 +125,7 @@ evalBody eq xs env = go $ body eq
     --go (R v p) = return (ECon (I 0))
     su = mkSubst $ zip (binds eq) xs
 
-evalRel :: Symbol -> Pred -> M.HashMap Symbol Expr -> Gen (Maybe Expr)
+evalRel :: Symbol -> Pred -> M.HashMap Symbol Expr -> Target (Maybe Expr)
 evalRel v (PAnd ps)       m = Just . head . catMaybes <$> sequence [evalRel v p m | p <- ps]
 evalRel v (PImp p q)      m = do pv <- evalPred p m
                                  if pv
@@ -166,7 +140,7 @@ evalRel v (PBexp (EApp f [EVar v'])) _
 evalRel _ p               _
   = throwM $ EvalError $ "evalRel: " ++ show p
 
-evalExpr :: Expr -> M.HashMap Symbol Expr -> Gen Expr
+evalExpr :: Expr -> M.HashMap Symbol Expr -> Target Expr
 evalExpr (ECon i)       _ = return $ ECon i
 evalExpr (EVar x)       m = return $ m M.! x
 evalExpr (ESym s)       _ = return $ ESym s

@@ -10,11 +10,9 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 module Test.Target.Targetable
   ( Targetable(..)
-  , apply
-  , oneOf
-  , unapply
-  , constrain
-  , ofReft
+  , unfold, apply, unapply
+  , oneOf, whichOf
+  , constrain, ofReft
   ) where
 
 import           Control.Applicative
@@ -24,6 +22,7 @@ import           Control.Monad.State
 import           Data.Char
 import qualified Data.HashMap.Strict             as M
 import           Data.List
+import           Data.Maybe
 import           Data.Monoid
 import           Data.Proxy
 import           Data.Ratio
@@ -39,6 +38,7 @@ import           Test.Target.Expr
 import           Test.Target.Eval
 import           Test.Target.Monad
 import           Test.Target.Types
+import           Test.Target.Util
 
 -- import Debug.Trace
 
@@ -47,18 +47,18 @@ import           Test.Target.Types
 --------------------------------------------------------------------------------
 class Targetable a where
   getType :: Proxy a -> Sort
-  query   :: Proxy a -> Int -> SpecType -> Gen Symbol
+  query   :: Proxy a -> Int -> SpecType -> Target Symbol
   toExpr  :: a -> Expr
 
-  decode  :: Symbol -> SpecType -> Gen a
-  check   :: a -> SpecType -> Gen (Bool, Expr)
+  decode  :: Symbol -> SpecType -> Target a
+  check   :: a -> SpecType -> Target (Bool, Expr)
 
   default getType :: (Generic a, Rep a ~ D1 d f, Datatype d)
                   => Proxy a -> Sort
   getType _ = FObj $ qualifiedDatatypeName (undefined :: Rep a a)
 
   default query :: (Generic a, GQuery (Rep a))
-              => Proxy a -> Int -> SpecType -> Gen Symbol
+              => Proxy a -> Int -> SpecType -> Target Symbol
   query p = gquery (reproxyRep p)
 
   default toExpr :: (Generic a, GToExpr (Rep a))
@@ -66,14 +66,14 @@ class Targetable a where
   toExpr = gtoExpr . from
 
   default decode :: (Generic a, GDecode (Rep a))
-                 => Symbol -> SpecType -> Gen a
+                 => Symbol -> SpecType -> Target a
   decode v _ = do
     x <- whichOf v
     (c, fs) <- unapply x
     to <$> gdecode c fs
 
   default check :: (Generic a, GCheck (Rep a))
-                => a -> SpecType -> Gen (Bool, Expr)
+                => a -> SpecType -> Target (Bool, Expr)
   check v t = gcheck (from v) t
 
 reproxy :: proxy a -> Proxy b
@@ -84,7 +84,82 @@ reproxyElem :: proxy (f a) -> Proxy a
 reproxyElem = reproxy
 {-# INLINE reproxyElem #-}
 
+-- | Given a data constuctor @d@ and a refined type for @d@s output,
+-- return a list of 'Variable's representing suitable arguments for @d@.
+unfold :: Symbol -> SpecType -> Target [(Symbol, SpecType)]
+unfold cn t = do
+  dcp <- lookupCtor cn
+  tyi <- gets tyconInfo
+  emb <- gets embEnv
+  let ts = applyPreds (addTyConInfo emb tyi t) dcp
+  return ts
 
+-- | Given a data constructor @d@ and a list of expressions @xs@, construct a
+-- new expression corresponding to @d xs@.
+apply :: Symbol -> [Expr] -> Target Expr
+apply c vs = do 
+  mc <- gets chosen
+  case mc of
+    Just ch -> mapM_ (addDep ch) vs
+    Nothing -> return ()
+  let x = app c vs
+  t <- lookupCtor c
+  let (xs, _, rt) = bkArrowDeep t
+      su          = mkSubst $ zip (map symbol xs) vs
+  addConstructor (c, rTypeSort mempty t)
+  constrain $ ofReft (subst su $ reft rt) x
+  return x
+
+-- | Split a symbolic variable representing the application of a data
+-- constructor into a pair of the data constructor and the sub-variables.
+unapply :: Symbol -> Target (Symbol, [Symbol])
+unapply c = do
+  let [_,cn,_] = T.splitOn "-" $ symbolText c
+  deps <- gets deps
+  return (symbol cn, M.lookupDefault [] c deps)
+
+-- | Given a symbolic variable and a list of @(choice, var)@ pairs,
+-- @oneOf x choices@ asserts that @x@ must equal one of the @var@s in
+-- @choices@.
+oneOf :: Symbol -> [(Expr,Expr)] -> Target ()
+oneOf x cs
+  = do cs <- forM cs $ \(y,c) -> do
+               addDep x c
+               constrain $ prop c `imp` (var x `eq` y)
+               return $ prop c
+       constrain $ pOr cs
+       constrain $ pAnd [ PNot $ pAnd [x, y]
+                        | [x, y] <- filter ((==2) . length) $ subsequences cs ]
+
+-- | Given a symbolic variable @x@, figure out which of @x@s choice varaibles
+-- was picked and return it.
+whichOf :: Symbol -> Target Symbol
+whichOf v = do
+  deps <- gets deps
+  let Just cs = M.lookup v deps
+  [c]  <- catMaybes <$> forM cs (\c -> do
+    val <- getValue c
+    if val == "true"
+      then return (Just c)
+      else return Nothing)
+  return c
+
+
+-- | Assert a logical predicate, guarded by the current choice variable.
+constrain :: Pred -> Target ()
+constrain p = do
+  mc <- gets chosen
+  case mc of
+    Nothing -> addConstraint p
+    Just c  -> let p' = prop (var c) `imp` p
+               in addConstraint p'
+
+-- | Given a refinement @{v | p}@ and an expression @e@, construct
+-- the predicate @p[e/v]@.
+ofReft :: Reft -> Expr -> Pred
+ofReft (Reft (v, rs)) e
+  = let x = mkSubst [(v, e)]
+    in pAnd [subst x p | RConc p <- rs]
 
 --------------------------------------------------------------------------------
 --- Instances
@@ -98,13 +173,13 @@ instance Targetable () where
   decode _ _ = return ()
   check _ t = do
     let e = app ("()" :: Symbol) []
-    b <- eval e $ toReft $ rt_reft t
+    b <- eval (reft t) e
     return (b,e)
 
 instance Targetable Int where
   getType _ = FObj "GHC.Types.Int"
   query _ d t = fresh FInt >>= \x ->
-    do constrain $ ofReft (var x) (toReft $ rt_reft t)
+    do constrain $ ofReft (reft t) (var x)
        -- use the unfolding depth to constrain the range of Ints, like QuickCheck
        constrain $ var x `ge` fromIntegral (negate d)
        constrain $ var x `le` fromIntegral d
@@ -115,7 +190,7 @@ instance Targetable Int where
 
   check v t = do
     let e = fromIntegral v
-    b <- eval e $ toReft $ rt_reft t
+    b <- eval (reft t) e
     return (b, e)
 
 instance Targetable Integer where
@@ -127,7 +202,7 @@ instance Targetable Integer where
 
   check v t = do
     let e = fromIntegral v
-    b <- eval e $ toReft $ rt_reft t
+    b <- eval (reft t) e
     return (b, e)
 
 instance Targetable Char where
@@ -135,7 +210,7 @@ instance Targetable Char where
   query _ d t = fresh FInt >>= \x ->
     do constrain $ var x `ge` 0
        constrain $ var x `le` fromIntegral d
-       constrain $ ofReft (var x) (toReft $ rt_reft t)
+       constrain $ ofReft (reft t) (var x)
        return x
   toExpr  c = ESym $ SL $ T.singleton c
 
@@ -143,7 +218,7 @@ instance Targetable Char where
 
   check v t = do
     let e = ESym $ SL $ T.singleton v
-    b <- eval e $ toReft $ rt_reft t
+    b <- eval (reft t) e
     return (b, e)
 
 instance Targetable Word8 where
@@ -152,7 +227,7 @@ instance Targetable Word8 where
     do _ <- asks depth
        constrain $ var x `ge` 0
        constrain $ var x `le` fromIntegral d
-       constrain $ ofReft (var x) (toReft $ rt_reft t)
+       constrain $ ofReft (reft t) (var x)
        return x
   toExpr i   = ECon $ I $ fromIntegral i
 
@@ -160,13 +235,13 @@ instance Targetable Word8 where
 
   check v t = do
     let e = fromIntegral v
-    b <- eval e $ toReft $ rt_reft t
+    b <- eval (reft t) e
     return (b, e)
 
 instance Targetable Bool where
   getType _ = FObj "GHC.Types.Bool"
   query _ _ t = fresh boolsort >>= \x ->
-    do constrain $ ofReft (var x) (toReft $ rt_reft t)
+    do constrain $ ofReft (reft t) (var x)
        return x
 
   decode v _ = getValue v >>= \case
@@ -179,77 +254,26 @@ instance Targetable a => Targetable (Maybe a)
 instance (Targetable a, Targetable b) => Targetable (Either a b)
 instance (Targetable a, Targetable b) => Targetable (a,b)
 instance (Targetable a, Targetable b, Targetable c) => Targetable (a,b,c)
+instance (Targetable a, Targetable b, Targetable c, Targetable d) => Targetable (a,b,c,d)
 
 
-instance (Num a, Integral a, Targetable a) => Targetable (Ratio a) where
-  getType _ = FObj "GHC.Real.Ratio"
-  query _ d t = query (Proxy :: Proxy Int) d t
-  decode v t= decode v t >>= \ (x::Int) -> return (fromIntegral x)
-  -- query _ d t = fresh (FObj "GHC.Real.Ratio") >>= \x ->
-  --   do query (Proxy :: Proxy Int) d t
-  --      query (Proxy :: Proxy Int) d t
-  --      return x
-  -- stitch d t = do x :: Int <- stitch d t
-  --                 y' :: Int <- stitch d t
-  --                 -- we should really modify `t' above to have Z3 generate non-zero denoms
-  --                 let y = if y' == 0 then 1 else y'
-  --                 let toA z = fromIntegral z :: a
-  --                 return $ toA x % toA y
-  toExpr x = EApp (dummyLoc "GHC.Real.:%") [toExpr (numerator x), toExpr (denominator x)]
-  check = undefined
+-- instance (Num a, Integral a, Targetable a) => Targetable (Ratio a) where
+--   getType _ = FObj "GHC.Real.Ratio"
+--   query _ d t = query (Proxy :: Proxy Int) d t
+--   decode v t= decode v t >>= \ (x::Int) -> return (fromIntegral x)
+--   -- query _ d t = fresh (FObj "GHC.Real.Ratio") >>= \x ->
+--   --   do query (Proxy :: Proxy Int) d t
+--   --      query (Proxy :: Proxy Int) d t
+--   --      return x
+--   -- stitch d t = do x :: Int <- stitch d t
+--   --                 y' :: Int <- stitch d t
+--   --                 -- we should really modify `t' above to have Z3 generate non-zero denoms
+--   --                 let y = if y' == 0 then 1 else y'
+--   --                 let toA z = fromIntegral z :: a
+--   --                 return $ toA x % toA y
+--   toExpr x = EApp (dummyLoc "GHC.Real.:%") [toExpr (numerator x), toExpr (denominator x)]
+--   check = undefined
 
--- | Given a data constructor @d@ and a list of expressions @xs@, construct a
--- new expression corresponding to @d xs@.
-apply :: Symbol -> [Expr] -> Gen Expr
-apply c vs = do 
-  mc <- gets chosen
-  case mc of
-    Just ch -> mapM_ (addDep ch) vs
-    Nothing -> return ()
-  let x = app c vs
-  t <- lookupCtor c
-  let (xs, _, rt) = bkArrowDeep t
-      su          = mkSubst $ zip (map symbol xs) vs
-  addConstructor (c, rTypeSort mempty t)
-  constrain $ ofReft x $ subst su $ toReft $ rt_reft rt
-  return x
-
--- | Given a symbolic variable and a list of @(choice, var)@ pairs,
--- @oneOf x choices@ asserts that @x@ must equal one of the @var@s in
--- @choices@.
-oneOf :: Symbol -> [(Expr,Expr)] -> Gen ()
-oneOf x cs
-  = do cs <- forM cs $ \(y,c) -> do
-               addDep x c
-               constrain $ prop c `imp` (var x `eq` y)
-               return $ prop c
-       constrain $ pOr cs
-       constrain $ pAnd [ PNot $ pAnd [x, y]
-                        | [x, y] <- filter ((==2) . length) $ subsequences cs ]
-
--- | Split a symbolic variable representing the application of a data
--- constructor into a pair of the data constructor and the sub-variables.
-unapply :: Symbol -> Gen (Symbol, [Symbol])
-unapply c = do
-  let [_,cn,_] = T.splitOn "-" $ symbolText c
-  deps <- gets deps
-  return (symbol cn, M.lookupDefault [] c deps)
-
--- | Assert a logical predicate, guarded by the current choice variable.
-constrain :: Pred -> Gen ()
-constrain p = do
-  mc <- gets chosen
-  case mc of
-    Nothing -> addConstraint p
-    Just c  -> let p' = prop (var c) `imp` p
-               in addConstraint p'
-
--- | Given an expression @e@ and a refinement @{v | p}@, construct
--- the predicate @p[e/v]@.
-ofReft :: Expr -> Reft -> Pred
-ofReft e (Reft (v, rs))
-  = let x = mkSubst [(v, e)]
-    in pAnd [subst x p | RConc p <- rs]
 
 reproxyRep :: Proxy a -> Proxy (Rep a a)
 reproxyRep = reproxy
@@ -262,13 +286,13 @@ class GToExpr f where
   gtoExpr      :: f a -> Expr
 
 class GQuery f where
-  gquery       :: Proxy (f a) -> Int -> SpecType -> Gen Symbol
+  gquery       :: Proxy (f a) -> Int -> SpecType -> Target Symbol
 
 class GDecode f where
-  gdecode      :: Symbol -> [Symbol] -> Gen (f a)
+  gdecode      :: Symbol -> [Symbol] -> Target (f a)
 
 class GCheck f where
-  gcheck       :: f a -> SpecType -> Gen (Bool, Expr)
+  gcheck       :: f a -> SpecType -> Target (Bool, Expr)
 
 reproxyGElem :: Proxy (M1 d c f a) -> Proxy (f a)
 reproxyGElem = reproxy
@@ -284,7 +308,7 @@ instance (Datatype c, GQueryCtors f) => GQuery (D1 c f) where
     xs <- gqueryCtors (reproxyGElem p) d t
     x  <- fresh sort
     oneOf x xs
-    constrain $ ofReft (var x) $ toReft $ rt_reft t
+    constrain $ ofReft (reft t) (var x)
     return x
    where
      mod  = symbol $ GHC.Generics.moduleName (undefined :: D1 c f a)
@@ -342,7 +366,7 @@ class GToExprCtor f where
   gtoExprCtor   :: f a -> Expr
 
 class GQueryCtors f where
-  gqueryCtors :: Proxy (f a) -> Int -> SpecType -> Gen [(Expr, Expr)]
+  gqueryCtors :: Proxy (f a) -> Int -> SpecType -> Target [(Expr, Expr)]
 
 reproxyLeft :: Proxy ((c (f :: * -> *) (g :: * -> *)) a) -> Proxy (f a)
 reproxyLeft = reproxy
@@ -394,7 +418,7 @@ instance (Constructor c, GCheckFields f) => GCheck (C1 c f) where
     ts <- unfold cn t
     (b, vs, _) <- gcheckFields x ts
     let v = app cn vs
-    b'  <- eval v (toReft $ rt_reft t)
+    b'  <- eval (reft t) v
     return (b && b', v)
 
 gisRecursive :: (Constructor c, GRecursive f)
@@ -403,7 +427,7 @@ gisRecursive (p :: Proxy (C1 c f a)) t
   = t `elem` gconArgTys (reproxyGElem p)
 
 gqueryCtor :: (Constructor c, GQueryFields f)
-           => Proxy (C1 c f a) -> Int -> SpecType -> Gen (Expr, Expr)
+           => Proxy (C1 c f a) -> Int -> SpecType -> Target (Expr, Expr)
 gqueryCtor (p :: Proxy (C1 c f a)) d t
   = guarded cn $ do
       mod <- symbolString <$> gets modName
@@ -423,14 +447,14 @@ class GRecursive f where
   gconArgTys  :: Proxy (f a) -> [Sort]
 
 class GQueryFields f where
-  gqueryFields  :: Proxy (f a) -> Int -> [(Symbol,SpecType)] -> Gen [Expr]
+  gqueryFields  :: Proxy (f a) -> Int -> [(Symbol,SpecType)] -> Target [Expr]
 
 class GDecodeFields f where
-  gdecodeFields :: [Symbol] -> Gen ([Symbol], f a)
+  gdecodeFields :: [Symbol] -> Target ([Symbol], f a)
 
 class GCheckFields f where
   gcheckFields :: f a -> [(Symbol, SpecType)]
-               -> Gen (Bool, [Expr], [(Symbol, SpecType)])
+               -> Target (Bool, [Expr], [(Symbol, SpecType)])
 
 
 instance (GToExprFields f, GToExprFields g) => GToExprFields (f :*: g) where

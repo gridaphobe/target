@@ -38,6 +38,9 @@ io = liftIO
 myTrace :: Show a => String -> a -> a
 myTrace s x = trace (s ++ ": " ++ show x) x
 
+reft :: SpecType -> Reft
+reft = toReft . rt_reft
+
 data HList (a :: [*]) where
   Nil   :: HList '[]
   (:::) :: a -> HList bs -> HList (a ': bs)

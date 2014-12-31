@@ -20,13 +20,14 @@ library
   ghc-prof-options:    -fprof-auto
   exposed-modules:     Test.Target,
                        Test.Target.Targetable,
-                       Test.Target.Targetable.Function,
                        Test.Target.Eval,
                        Test.Target.Expr,
                        Test.Target.Monad,
                        Test.Target.Testable,
                        Test.Target.Types,
                        Test.Target.Util
+  other-modules:       Test.Target.Targetable.Function
+
 
   build-depends:       base >=4.6 && <5
                      , bifunctors >= 4.1

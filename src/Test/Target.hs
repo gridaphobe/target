@@ -3,10 +3,9 @@
 {-# LANGUAGE FlexibleContexts          #-}
 module Test.Target
   ( target, targetResult, targetWith, targetResultWith
-  , Targetable(..)
+  , Result(..), CanTest
   , TargetOpts(..), defaultOpts
-  , Result(..), Testable(..)
-  , Test(..), CanTest
+  , Test(..)
   ) where
 
 import           Control.Applicative
@@ -18,7 +17,7 @@ import           Text.Printf                     (printf)
 import           Language.Fixpoint.Names
 
 import           Test.Target.Monad
-import           Test.Target.Targetable
+import           Test.Target.Targetable ()
 import           Test.Target.Targetable.Function ()
 import           Test.Target.Testable
 import           Test.Target.Types
@@ -45,7 +44,7 @@ targetResultWith f name path opts
   = do when (verbose opts) $
          printf "Testing %s\n" name
        sp <- getSpec path
-       runGen opts sp path $ do
+       runTarget opts sp path $ do
          ty <- safeFromJust "targetResultWith" . lookup (symbol name) <$> gets sigs
          test f (depth opts) ty
 

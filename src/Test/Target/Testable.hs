@@ -44,7 +44,7 @@ import           Test.Target.Util
 
 type CanTest f = (Testable f, AllHave Show (Args f), Targetable (Res f))
 
-test :: CanTest f => f -> Int -> SpecType -> Gen Result
+test :: CanTest f => f -> Int -> SpecType -> Target Result
 test f d t
   = do vs <- queryArgs f d t
        setup
@@ -56,7 +56,7 @@ test f d t
 
 process :: CanTest f
         => f -> Context -> [Symbol] -> [(Symbol,SpecType)] -> SpecType
-        -> Gen Result
+        -> Target Result
 process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
   where
     go !n Unsat    = return $ Passed n
@@ -77,7 +77,7 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
           | otherwise -> mbKeepGoing xs n
         Right r -> do
           real <- gets realized
-          modify $ \s@(GS {..}) -> s { realized = [] }
+          modify $ \s@(TargetState {..}) -> s { realized = [] }
           let su = mkSubst $ mkExprs f (map fst xts) xs
           (sat, _) <- check r (subst su to)
 
@@ -104,8 +104,8 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
         else return (Failed $ show xs)
 
 class Testable f where
-  queryArgs  :: f -> Int -> SpecType -> Gen [Symbol]
-  decodeArgs :: f -> [Symbol] -> [SpecType] -> Gen (HList (Args f))
+  queryArgs  :: f -> Int -> SpecType -> Target [Symbol]
+  decodeArgs :: f -> [Symbol] -> [SpecType] -> Target (HList (Args f))
   apply      :: f -> HList (Args f) -> Res f
   mkExprs    :: f -> [Symbol] -> HList (Args f) -> [(Symbol,Expr)]
 
@@ -136,7 +136,7 @@ func :: Sort -> Bool
 func (FFunc _ _) = True
 func _           = False
 
-setup :: Gen ()
+setup :: Target ()
 setup = {-# SCC "setup" #-} do
    ctx <- gets smtContext
    emb <- gets embEnv
@@ -171,3 +171,15 @@ setup = {-# SCC "setup" #-} do
    -- deps <- V.fromList . map (symbol *** symbol) <$> gets deps
    -- io $ generateDepGraph "deps" deps cs
    -- return (ctx,vs,deps)
+
+sortTys :: Sort -> [Sort]
+sortTys (FFunc _ ts) = concatMap sortTys ts
+sortTys t            = [t]
+
+arrowize :: Sort -> Sort
+arrowize = FObj . symbol . LT.intercalate "->" . map (LT.fromStrict . symbolText . unObj) . sortTys
+
+unObj :: Sort -> Symbol
+unObj FInt     = "Int"
+unObj (FObj s) = s
+unObj s        = error $ "unObj: " ++ show s

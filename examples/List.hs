@@ -7,6 +7,7 @@ module List where
 
 import           GHC.Generics
 import           Test.Target
+import           Test.Target.Targetable
 
 --------------------------------------------------------------------------------
 --- Code
