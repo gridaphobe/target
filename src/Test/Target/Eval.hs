@@ -2,10 +2,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Test.Target.Eval ( eval, evalWith ) where
 
+import           Control.Arrow                   (second)
 import           Control.Applicative
 import           Control.Monad.Catch
 import           Control.Monad.State
-import           Data.Bifunctor
 import qualified Data.HashMap.Strict             as M
 import           Data.List
 import           Data.Maybe
