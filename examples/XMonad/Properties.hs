@@ -52,7 +52,6 @@ import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.Types    (RType (..))
 import           Test.Target
 import           Test.Target.Targetable
-import           Test.Target.Util
 import qualified Test.QuickCheck                  as QC
 import qualified Test.SmallCheck                  as SC
 import qualified Test.SmallCheck.Series           as SC

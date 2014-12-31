@@ -12,7 +12,7 @@
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE ViewPatterns         #-}
-module Test.Target.Testable where
+module Test.Target.Testable (test, Testable) where
 
 import           Control.Applicative
 import           Control.Exception               (AsyncException, evaluate)
@@ -42,9 +42,12 @@ import           Test.Target.Util
 
 -- import Debug.Trace
 
-test :: Testable f => f -> Int -> SpecType -> Target Result
-test f d t
-  = do vs <- queryArgs f d t
+-- | Test that a function inhabits the given refinement type by enumerating
+-- valid inputs and calling the function on the inputs.
+test :: Testable f => f -> SpecType -> Target Result
+test f t
+  = do d <- asks depth
+       vs <- queryArgs f d t
        setup
        let (xs, tis, to) = bkArrowDeep $ stripQuals t
        ctx <- gets smtContext
@@ -101,6 +104,9 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
         then go n =<< io (command ctx CheckSat)
         else return (Failed $ show xs)
 
+-- | A class of functions that Target can test. A function is @Testable@ /iff/
+-- all of its component types are 'Targetable' and all of its argument types are
+-- 'Show'able.
 class (AllHave Targetable (Args f), Targetable (Res f)
       ,AllHave Show (Args f)) => Testable f where
   queryArgs  :: f -> Int -> SpecType -> Target [Symbol]

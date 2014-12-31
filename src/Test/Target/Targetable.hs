@@ -45,6 +45,19 @@ import           Test.Target.Util
 --------------------------------------------------------------------------------
 --- Constrainable Data
 --------------------------------------------------------------------------------
+-- | A class of datatypes for which we can efficiently generate constrained
+-- values by querying an SMT solver.
+--
+-- If possible, instances should not be written by hand, but rather by using the
+-- default implementations via @GHC.Generics@, e.g.
+--
+-- > import GHC.Generics
+-- > import Test.Target.Targetable
+-- >
+-- > data Foo = ... deriving Generic
+-- > instance Targetable Foo
+--
+-- 
 class Targetable a where
   getType :: Proxy a -> Sort
   query   :: Proxy a -> Int -> SpecType -> Target Symbol
@@ -58,7 +71,7 @@ class Targetable a where
   getType _ = FObj $ qualifiedDatatypeName (undefined :: Rep a a)
 
   default query :: (Generic a, GQuery (Rep a))
-              => Proxy a -> Int -> SpecType -> Target Symbol
+                => Proxy a -> Int -> SpecType -> Target Symbol
   query p = gquery (reproxyRep p)
 
   default toExpr :: (Generic a, GToExpr (Rep a))
@@ -85,7 +98,7 @@ reproxyElem = reproxy
 {-# INLINE reproxyElem #-}
 
 -- | Given a data constuctor @d@ and a refined type for @d@s output,
--- return a list of 'Variable's representing suitable arguments for @d@.
+-- return a list of types representing suitable arguments for @d@.
 unfold :: Symbol -> SpecType -> Target [(Symbol, SpecType)]
 unfold cn t = do
   dcp <- lookupCtor cn

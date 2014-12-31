@@ -68,4 +68,4 @@ data Result = Passed !Int
             | Errored !String
             deriving (Show)
 
-resultPassed (Passed i) = i
+-- resultPassed (Passed i) = i

@@ -24,15 +24,23 @@ import           Test.Target.Testable
 import           Test.Target.Types
 import           Test.Target.Util
 
-
-target :: Testable f => f -> String -> FilePath -> IO ()
+-- | Test whether a function inhabits its refinement type by enumerating valid
+-- inputs and calling the function.
+target :: Testable f
+       => f -- ^ the function
+       -> String -- ^ the name of the function
+       -> FilePath -- ^ the path to the module that defines the function
+       -> IO ()
 target f name path
   = targetWith f name path defaultOpts
 
+-- | Like 'target', but returns the 'Result' instead of printing to standard out.
 targetResult :: Testable f => f -> String -> FilePath -> IO Result
 targetResult f name path
   = targetResultWith f name path defaultOpts
 
+-- | Like 'target', but accepts options to control the enumeration depth,
+-- solver, and verbosity.
 targetWith :: Testable f => f -> String -> FilePath -> TargetOpts -> IO ()
 targetWith f name path opts
   = do res <- targetResultWith f name path opts
@@ -40,6 +48,7 @@ targetWith f name path opts
          Passed n -> printf "OK. Passed %d tests\n\n" n
          Failed x -> printf "Found counter-example: %s\n\n" x
 
+-- | Like 'targetWith', but returns the 'Result' instead of printing to standard out.
 targetResultWith :: Testable f => f -> String -> FilePath -> TargetOpts -> IO Result
 targetResultWith f name path opts
   = do when (verbose opts) $
@@ -48,7 +57,7 @@ targetResultWith f name path opts
        ctx <- mkContext (solver opts)
        runTarget opts (initState path sp ctx) (do
          ty <- safeFromJust "targetResultWith" . lookup (symbol name) <$> gets sigs
-         test f (depth opts) ty)
+         test f ty)
         `finally` killContext ctx
   where
     mkContext = if logging opts then makeContext else makeContextNoLog

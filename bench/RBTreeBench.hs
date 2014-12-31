@@ -10,8 +10,6 @@ import qualified Test.SmallCheck        as SC
 import qualified Test.SmallCheck.Series as SC
 import qualified LazySmallCheck         as LSC
 
-import           Test.Target.Util
-
 import System.IO.Unsafe
 
 import Debug.Trace

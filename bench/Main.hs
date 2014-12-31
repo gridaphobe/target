@@ -8,7 +8,6 @@
 module Main where
 
 import           Test.Target
-import           Test.Target.Types
 import qualified Test.QuickCheck            as QC
 import qualified Test.SmallCheck            as SC
 import qualified Test.SmallCheck.Drivers    as SC
@@ -158,6 +157,8 @@ timed x = do start <- getTime
              v     <- x
              end   <- getTime
              return (end-start, v)
+
+resultPassed (Passed i) = i
 
 -- checkTarget :: CanTest f => f -> String -> FilePath -> IO [(Int,Double,Outcome)]
 checkTarget f n m = checkMany (n++"/Target")
