@@ -87,8 +87,8 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
           -- refuting the current model forces the solver to return unsat next
           -- time, the solver will return unsat when the HOF queries for an output,
           -- causing us to return a spurious error
-          io $ command ctx $ Assert Nothing $ PNot $ pAnd
-            [ ESym (SL $ symbolText x) `eq` ESym (SL v) | (x,v) <- real ]
+          _ <- io $ command ctx $ Assert Nothing $ PNot $ pAnd
+                [ ESym (SL $ symbolText x) `eq` ESym (SL v) | (x,v) <- real ]
           -- let env = map (second (`app` [])) cts ++ mkExprs f (map fst xts) xs
           -- sat <- evalType (M.fromList env) to (toExpr r)
           case sat of
@@ -98,6 +98,7 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
                 Nothing -> go n' =<< io (command ctx CheckSat)
                 Just m | m == n' -> return $ Passed m
                        | otherwise -> go n' =<< io (command ctx CheckSat)
+    go _ r = error $ "go _ " ++ show r
     mbKeepGoing xs n = do
       kg <- asks keepGoing
       if kg
@@ -117,17 +118,21 @@ class (AllHave Targetable (Args f), Targetable (Res f)
 instance (Show a, Targetable a, Testable b) => Testable (a -> b) where
   queryArgs f d (stripQuals -> (RFun _ i o _))
     = liftM2 (:) (query (Proxy :: Proxy a) d i) (queryArgs (f undefined) d o)
+  queryArgs _ _ t = error $ "queryArgs called with non-function type: " ++ show t
   decodeArgs f (v:vs) (t:ts)
     = liftM2 (:::) (decode v t) (decodeArgs (f undefined) vs ts)
+  decodeArgs _ _ _ = error "decodeArgs called with empty list"
   apply f (x ::: xs)
     = apply (f x) xs
+  apply _ _ = error "apply called with empty list"
   mkExprs f (v:vs) (x ::: xs)
     = (v, toExpr x) : mkExprs (f undefined) vs xs
+  mkExprs _ _ _ = error "mkExprs called with empty list"
 
 instance (Targetable a, Args a ~ '[], Res a ~ a) => Testable a where
   queryArgs _ _ _  = return []
   decodeArgs _ _ _ = return Nil
-  apply f Nil      = f
+  apply f _        = f
   mkExprs _ _ _    = []
 
 

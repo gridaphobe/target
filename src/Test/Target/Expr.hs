@@ -53,13 +53,16 @@ instance Num Expr where
 
 instance Real Expr where
   toRational (ECon (I i)) = fromIntegral i
+  toRational x            = error $ "toRational: " ++ show x
 
 instance Enum Expr where
   toEnum = ECon . I . fromIntegral
   fromEnum (ECon (I i)) = fromInteger i
+  fromEnum x            = error $ "fromEnum: " ++ show x
 
 instance Integral Expr where
   div = EBin Div
   mod = EBin Mod
   quotRem x y = (x `div` y, x `mod` y)
   toInteger (ECon (I i)) = i
+  toInteger x            = error $ "toInteger: " ++ show x

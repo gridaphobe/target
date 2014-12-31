@@ -123,14 +123,14 @@ runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
                           , GHC.importPaths = GHC.importPaths df
                           } `GHC.gopt_set` GHC.Opt_ImplicitImportQualified
                             `GHC.xopt_set` GHC.Opt_MagicHash
-             GHC.setSessionDynFlags df'
+             _ <- GHC.setSessionDynFlags df'
              x
 
 loadModule :: FilePath -> GHC.Ghc GHC.ModSummary
 loadModule f = do target <- GHC.guessTarget f Nothing
                   --lcheck <- GHC.guessTarget "src/Test/Target.hs" Nothing
                   GHC.setTargets [target] -- [target,lcheck]
-                  GHC.load GHC.LoadAllTargets
+                  _ <- GHC.load GHC.LoadAllTargets
                   modGraph <- GHC.getModuleGraph
                   let m = fromJust $ find ((==f) . GHC.msHsFilePath) modGraph
                   GHC.setContext [ GHC.IIModule (GHC.ms_mod_name m)

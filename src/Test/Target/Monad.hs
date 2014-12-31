@@ -210,7 +210,7 @@ lookupCtor c
          Just t -> return t
          Nothing -> do
            t <- io $ runGhc $ do
-                  loadModule m
+                  _ <- loadModule m
                   t <- GHC.exprType (printf "(%s)" (symbolString c))
                   return (ofType t)
            modify $ \s@(TargetState {..}) -> s { ctorEnv = (c,t) : ctorEnv }

@@ -17,6 +17,7 @@ module Test.Target.Targetable
 
 import           Control.Applicative
 import           Control.Arrow                   (second)
+import qualified Control.Monad.Catch           as Ex
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Char
@@ -25,7 +26,6 @@ import           Data.List
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Proxy
-import           Data.Ratio
 import qualified Data.Text                       as T
 import           Data.Word                       (Word8)
 import           GHC.Generics
@@ -92,10 +92,6 @@ class Targetable a where
 reproxy :: proxy a -> Proxy b
 reproxy _ = Proxy
 {-# INLINE reproxy #-}
-
-reproxyElem :: proxy (f a) -> Proxy a
-reproxyElem = reproxy
-{-# INLINE reproxyElem #-}
 
 -- | Given a data constuctor @d@ and a refined type for @d@s output,
 -- return a list of types representing suitable arguments for @d@.
@@ -260,6 +256,7 @@ instance Targetable Bool where
   decode v _ = getValue v >>= \case
     "true"  -> return True
     "false" -> return False
+    x       -> Ex.throwM (SmtError $ "expected boolean, got: " ++ T.unpack x)
 
 
 instance Targetable a => Targetable [a]
@@ -357,11 +354,13 @@ instance Targetable a => GDecodeFields (K1 i a) where
   gdecodeFields (v:vs) = do
     x <- decode v undefined
     return (vs, K1 x)
+  gdecodeFields _ = error "gdecodeFields []"
 
 instance Targetable a => GCheckFields (K1 i a) where
   gcheckFields (K1 x) ((f,t):ts) = do
     (b, v) <- check x t
     return (b, [v], subst (mkSubst [(f, v)]) ts)
+  gcheckFields _ _ = error "gcheckFields _ []"
 
 qualify :: String -> String -> String
 qualify m x = m ++ ('.':x)
@@ -505,6 +504,7 @@ instance Targetable a => GRecursive (S1 c (K1 i a)) where
 
 instance (GQuery f) => GQueryFields (S1 c f) where
   gqueryFields p d (t:_) = sequence [var <$> gquery (reproxyGElem p) (d-1) (snd t)]
+  gqueryFields _ _ _     = error "gqueryfields _ _ []"
 
 instance GDecodeFields f => GDecodeFields (S1 c f) where
   gdecodeFields vs = do

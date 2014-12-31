@@ -57,6 +57,8 @@ evalPred p               _ = throwM $ EvalError $ "evalPred: " ++ show p
 evalBrel :: Brel -> Expr -> Expr -> Bool
 evalBrel Eq = (==)
 evalBrel Ne = (/=)
+evalBrel Ueq = (==)
+evalBrel Une = (/=)
 evalBrel Gt = (>)
 evalBrel Ge = (>=)
 evalBrel Lt = (<)

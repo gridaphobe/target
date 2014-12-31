@@ -6,7 +6,6 @@
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE ViewPatterns         #-}
 
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Test.Target.Targetable.Function () where
 
 import           Control.Applicative
@@ -78,7 +77,7 @@ stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, to))
                False -> Ex.throwM $ PreconditionCheckFailed $ show $ zip es tis
                True  -> do
                  ctx <- gets smtContext
-                 io $ command ctx Push
+                 _ <- io $ command ctx Push
                  xes <- mapM genExpr es
                  let su = mkSubst $ zipWith (\v e -> (v, var e)) vs xes
                  xo <- query (Proxy :: Proxy (Res f)) d (subst su to)
@@ -93,7 +92,7 @@ stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, to))
                  o <- decode xo to
                  -- whenVerbose $ io $ printf "%s -> %s\n" (show es) (show o)
                  io (modifyIORef' mref ((es,o):))
-                 io $ command ctx Pop
+                 _ <- io $ command ctx Pop
                  return o
     
 genExpr :: Expr -> Target Symbol
@@ -143,6 +142,7 @@ evalTypes m ((v,t):ts) (x:xs)
   = liftM2 (&&) (evalType m' t x) (evalTypes m' ts xs)
   where
     m' = M.insert v x m
+evalTypes _ _ _ = error "evalTypes called with lists of unequal length!"
 
 instance (Targetable a, Targetable b, b ~ Res (a -> b))
   => Targetable (a -> b) where
