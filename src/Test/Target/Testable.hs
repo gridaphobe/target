@@ -108,6 +108,8 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
 -- | A class of functions that Target can test. A function is @Testable@ /iff/
 -- all of its component types are 'Targetable' and all of its argument types are
 -- 'Show'able.
+--
+-- You should __never__ have to define a new 'Testable' instance.
 class (AllHave Targetable (Args f), Targetable (Res f)
       ,AllHave Show (Args f)) => Testable f where
   queryArgs  :: f -> Int -> SpecType -> Target [Symbol]

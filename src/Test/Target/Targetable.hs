@@ -49,22 +49,35 @@ import           Test.Target.Util
 -- values by querying an SMT solver.
 --
 -- If possible, instances should not be written by hand, but rather by using the
--- default implementations via @GHC.Generics@, e.g.
+-- default implementations via "GHC.Generics", e.g.
 --
 -- > import GHC.Generics
 -- > import Test.Target.Targetable
 -- >
 -- > data Foo = ... deriving Generic
 -- > instance Targetable Foo
---
--- 
 class Targetable a where
-  getType :: Proxy a -> Sort
-  query   :: Proxy a -> Int -> SpecType -> Target Symbol
+  -- | Construct an SMT query describing all values of the given type up to the
+  -- given 'Depth'.
+  query   :: Proxy a -> Depth -> SpecType -> Target Symbol
+
+  -- | Reconstruct a Haskell value from the SMT model.
+  decode  :: Symbol
+             -- ^ the symbolic variable corresponding to the root of the value
+          -> SpecType
+             -- ^ the type of values we're generating (you can probably ignore this)
+          -> Target a
+
+  -- | Check whether a Haskell value inhabits the given type. Also returns a
+  -- logical expression corresponding to the Haskell value.
+  check   :: a -> SpecType -> Target (Bool, Expr)
+
+  -- | Translate a Haskell value into a logical expression.
   toExpr  :: a -> Expr
 
-  decode  :: Symbol -> SpecType -> Target a
-  check   :: a -> SpecType -> Target (Bool, Expr)
+  -- | What is the Haskell type? (Mainly used to make the SMT queries more
+  -- readable).
+  getType :: Proxy a -> Sort
 
   default getType :: (Generic a, Rep a ~ D1 d f, Datatype d)
                   => Proxy a -> Sort
