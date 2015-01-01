@@ -26,6 +26,10 @@ description:         Target is a library for testing Haskell functions based on
                      <http://github.com/ucsd-progsys/liquidhaskell/tree/master/docs/tutorial evolving tutorial>.
                      Target uses the same specification language as LiquidHaskell,
                      so the examples should carry over.
+                     .
+                     Finally, Target requires either <https://z3.codeplex.com/ Z3> 
+                     (@>=4.3@) or <http://cvc4.cs.nyu.edu/web/ CVC4> (@>=1.4@) to 
+                     be present in your @PATH@.
 
 license:             MIT
 license-file:        LICENSE
