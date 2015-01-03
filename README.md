@@ -221,6 +221,7 @@ thereby burdening the user with custom generators.
 
 ### Moving On
 You can specify a lot of interesting properties with refinement
-types and we've only scratched the surface here; check out the
+types and we've only scratched the surface here. Check out the
 [LiquidHaskell blog](http://goto.ucsd.edu/~rjhala/liquid/haskell/blog/blog/)
-for more examples.
+for more examples; Target uses the same specification language as
+LiquidHaskell so the examples should all be testable.
