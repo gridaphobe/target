@@ -16,6 +16,21 @@ or [CVC4](http://cvc4.cs.nyu.edu/web/).
 To get acquainted with refinement types and Target, let's examine
 a small grading library called `Scores`.
 
+### First Steps
+
+We'll need to import two modules from Target. `Test.Target` exports
+the main testing API, and `Test.Target.Targetable` exports the
+`Targetable` type-class, which represents types for which we can
+generate constrained values. We'll need the latter module for one of
+the later examples when we define our own datatype.
+
+```haskell
+module Scores where
+
+import Test.Target
+import Test.Target.Targetable
+```
+
 ### Refinement Types
 A refinement type decorates the basic Haskell types
 with logical predicates drawn from an efficiently decidable
@@ -45,10 +60,33 @@ Here's a first attempt at `rescale`
 rescale r1 r2 s = s * (r2 `div` r1)
 ```
 
-When we run Target, it immediately reports
+Let's load our code into GHCi and test it!
 
 ```haskell
+ghci> :set -XTemplateHaskell
+ghci> :l Scores.hs
 ghci> target rescale 'rescale "Scores.hs"
+```
+
+The main function Target exports is
+
+```haskell
+target :: Testable f => f -> TH.Name -> FilePath -> IO ()
+```
+
+which drives the entire testing process. It also provides
+`targetWith` to customize some of the options, and `targetResult`
+which returns the test outcome instead of printing it.
+
+(Since the refinement type specifications are given in special
+comments, we use Template Haskell to give target the exact name
+of the function we want to test. Unfortunately we can't extract
+the path to the module from the Template Haskell name, so we
+have to provide it separately..)
+
+Unfortunately, target quickly responds with
+
+```haskell
 Found counter-example: (1, 0, 0)
 ```
 
