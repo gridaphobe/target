@@ -22,7 +22,9 @@ We'll need to import two modules from Target.
 [`Test.Target`](http://hackage.haskell.org/package/target/docs/Test-Target.html)
 exports the main testing API, and
 [`Test.Target.Targetable`](http://hackage.haskell.org/package/target/docs/Test-Target-Targetable.html)
-exports the `Targetable` type-class, which represents types for which we can
+exports the
+[`Targetable`](http://hackage.haskell.org/package/target/docs/Test-Target-Targetable.html#t:Targetable)
+type-class, which represents types for which we can
 generate constrained values. We'll need the latter module for one of
 the later examples when we define our own datatype.
 
@@ -71,6 +73,7 @@ ghci> target rescale 'rescale "Scores.hs"
 ```
 
 The main function Target exports is
+[`target`](http://hackage.haskell.org/package/target/docs/Test-Target.html#v:target)
 
 ```haskell
 target :: Testable f => f -> TH.Name -> FilePath -> IO ()
