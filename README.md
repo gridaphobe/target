@@ -18,9 +18,11 @@ a small grading library called `Scores`.
 
 ### First Steps
 
-We'll need to import two modules from Target. `Test.Target` exports
-the main testing API, and `Test.Target.Targetable` exports the
-`Targetable` type-class, which represents types for which we can
+We'll need to import two modules from Target.
+[`Test.Target`](http://hackage.haskell.org/package/target/docs/Test-Target.html)
+exports the main testing API, and
+[`Test.Target.Targetable`](http://hackage.haskell.org/package/target/docs/Test-Target-Targetable.html)
+exports the `Targetable` type-class, which represents types for which we can
 generate constrained values. We'll need the latter module for one of
 the later examples when we define our own datatype.
 
@@ -75,7 +77,9 @@ target :: Testable f => f -> TH.Name -> FilePath -> IO ()
 ```
 
 which drives the entire testing process. It also provides
-`targetWith` to customize some of the options, and `targetResult`
+[`targetWith`](http://hackage.haskell.org/package/target/docs/Test-Target.html#v:targetWith)
+to customize some of the options, and
+[`targetResult`](http://hackage.haskell.org/package/target/docs/Test-Target.html#v:targetResult)
 which returns the test outcome instead of printing it.
 
 (Since the refinement type specifications are given in special
