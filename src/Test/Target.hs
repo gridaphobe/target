@@ -1,7 +1,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE ViewPatterns #-}
 module Test.Target
-  ( target, targetResult, targetWith, targetResultWith
+  ( target, targetResult, targetWith, targetResultWith, targetResultWithStr
   -- , targetTH
   , Result(..), Testable
   , TargetOpts(..), defaultOpts
@@ -57,7 +57,10 @@ targetWith f name path opts
 
 -- | Like 'targetWith', but returns the 'Result' instead of printing to standard out.
 targetResultWith :: Testable f => f -> TH.Name -> FilePath -> TargetOpts -> IO Result
-targetResultWith f (show -> name) path opts
+targetResultWith f (show -> name) path opts = targetResultWithStr f name path opts
+
+targetResultWithStr :: Testable f => f -> String -> FilePath -> TargetOpts -> IO Result
+targetResultWithStr f name path opts
   = do when (verbose opts) $
          printf "Testing %s\n" name
        sp  <- getSpec path

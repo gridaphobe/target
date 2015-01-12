@@ -20,13 +20,15 @@ import           Language.Haskell.Liquid.Types (GhcSpec)
 import           Test.Target
 import           Test.Target.Monad
 
+instance Show (a -> b) where
+  show _ = "<function>"
+
 main :: IO ()
 main = do
   [t]  <- getArgs
-  spec <- getSpec "bench/XMonad/StackSet.hs"
   withFile ("_results/XMonad.StackSet-" ++ t ++ ".tsv") WriteMode $ \h -> do
     hPutStrLn h "Function\tDepth\tTime(s)\tResult"
-    mapPool 8 (checkMany spec h (read t # Minute)) funs
+    mapPool 8 (checkMany h (read t # Minute)) funs
   putStrLn "done"
   putStrLn ""
 
@@ -36,10 +38,10 @@ mapPool max f xs = do
 
 
 -- checkMany :: GhcSpec -> Handle -> IO [(Int, Double, Outcome)]
-checkMany spec h time (T f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
+checkMany h time (f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
   where
     go 21     = return []
-    go n      = checkAt n >>= \case
+    go n      = checkAt f sp n time >>= \case
                   (d,Nothing) -> do let s = printf "%s\t%d\t%.2f\t%s" sp n d (show TimeOut)
                                     putStrLn s >> hFlush stdout
                                     hPutStrLn h s >> hFlush h
@@ -59,11 +61,13 @@ checkMany spec h time (T f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
                                     putStrLn s >> hFlush stdout
                                     hPutStrLn h s >> hFlush h
                                     ((n,d,Complete r):) <$> go (n+1)
-    checkAt n = timed $ do
-      r <- try $ timeout time $ runGen spec "bench/XMonad/StackSet.hs" $ testFunIgnoringFailure f sp n
-      case r of
-        Left (e :: SomeException) -> return $ Just $ Errored $ show e
-        Right r                   -> return r
+
+checkAt :: Test -> String -> Int -> Timeout -> IO (Double, Maybe Result)
+checkAt (T f) sp n time = timed $ do
+  r <- try $ timeout time $ targetResultWithStr f sp "bench/XMonad/StackSet.hs" (defaultOpts {depth=n, keepGoing=True})
+  case r of
+    Left (e :: SomeException) -> return $ Just $ Errored $ show e
+    Right r                   -> return r
 
 -- time = 5 # Minute
 
