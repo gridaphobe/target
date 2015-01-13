@@ -15,7 +15,7 @@ map-coverage:
 	    cabal exec ./bench/MapCoverage -- $$t +RTS -N12 -RTS 2>&1 | tee _results/MapCoverage-$$t.log; \
 	    mv MapCoverage.tix _results/MapCoverage-$$t.tix; \
 	done
-	cabal exec runghc -- bench/PlotCoverage.hs MapCoverage
+	cabal exec runghc -- bench/PlotCoverage.hs MapCoverage Map
 
 
 rbtree-coverage:
@@ -26,7 +26,7 @@ rbtree-coverage:
 	    cabal exec ./bench/RBTreeCoverage -- $$t +RTS -N4 -RTS 2>&1 | tee _results/RBTreeCoverage-$$t.log; \
 	    mv RBTreeCoverage.tix _results/RBTreeCoverage-$$t.tix; \
 	done
-	cabal exec runghc -- bench/PlotCoverage.hs RBTreeCoverage
+	cabal exec runghc -- bench/PlotCoverage.hs RBTreeCoverage RBTree
 
 xmonad-coverage:
 	rm -f StackSetCoverage.tix _results/StackSetCoverage-*.tix _results/Xmonad.StackSet-*.tsv _results/XMonad.StackSetCoverage-*.log
@@ -36,4 +36,4 @@ xmonad-coverage:
 	    cabal exec ./bench/XMonad/StackSetCoverage -- $$t +RTS -N8 -RTS 2>&1 | tee _results/XMonad.StackSetCoverage-$$t.log; \
 	    mv StackSetCoverage.tix _results/StackSetCoverage-$$t.tix; \
 	done
-	cabal exec runghc -- bench/PlotCoverage.hs StackSetCoverage
+	cabal exec runghc -- bench/PlotCoverage.hs StackSetCoverage XMonad.StackSet

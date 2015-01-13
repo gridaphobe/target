@@ -23,8 +23,8 @@ import System.IO hiding (readFile)
 import System.Process
 
 main = do
-  [fn] <- getArgs
-  sts  <- getStats fn
+  [fn, m] <- getArgs
+  sts  <- getStats fn m
   withFile (printf "bench/%s.csv" fn) WriteMode $ \h ->
     LB.hPutStr h $ C.encodeByName hpcHeader $ map C.toNamedRecord sts
 
@@ -33,10 +33,10 @@ main = do
 -- depths :: [Int]
 -- depths = [2..20]
 
-getStats :: String -> IO [HpcStats]
-getStats m = forM ["1", "5", "10", "15", "20", "25", "30"] $ \d -> do
-               system $ printf "hpc report --exclude=Main --xml-output --hpcdir=_results _results/%s-%s.tix > %s-%s.xml" m d m d
-               readHpc $ fromString $ printf "%s-%s.xml" m (d::String)
+getStats :: String -> String -> IO [HpcStats]
+getStats f m = forM ["1", "5", "10", "15", "20", "25", "30"] $ \d -> do
+               system $ printf "hpc report --include=%s --xml-output --hpcdir=_results _results/%s-%s.tix > %s-%s.xml" m f d f d
+               readHpc $ fromString $ printf "%s-%s.xml" f (d::String)
 
 -- mkPlot name stats = toFile (def {_fo_format = EPS}) (name<.>"eps") $ do
 --     layout_title .= name
