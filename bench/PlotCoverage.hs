@@ -19,6 +19,7 @@ import Text.XML
 import Text.XML.Cursor
 import System.Environment
 import System.FilePath
+import System.IO
 
 main = do
   [fn] <- getArgs
