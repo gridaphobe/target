@@ -64,7 +64,7 @@ checkMany h time (f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
 
 checkAt :: Test -> String -> Int -> Timeout -> IO (Double, Maybe Result)
 checkAt (T f) sp n time = timed $ do
-  r <- try $ timeout time $ targetResultWithStr f sp "bench/XMonad/StackSet.hs" (defaultOpts {depth=n, keepGoing=True})
+  r <- try $ timeout time $ targetResultWithStr f sp "bench/XMonad/StackSet.hs" (defaultOpts {logging=False, depth=n, keepGoing=True})
   case r of
     Left (e :: SomeException) -> return $ Just $ Errored $ show e
     Right r                   -> return r
