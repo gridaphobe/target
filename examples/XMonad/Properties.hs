@@ -1,7 +1,6 @@
 {-# OPTIONS -fglasgow-exts -w #-}
 {-@ LIQUID "-i../../bench" @-}
-{-@ LIQUID "-i../../examples" @-}
-{-@ LIQUID "-i../../src" @-}
+{- OPTIONS -ibench #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverlappingInstances  #-}

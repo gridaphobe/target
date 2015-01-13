@@ -58,12 +58,14 @@ data TestResult
 
 testResultRecords :: TestResult -> [NamedRecord]
 testResultRecords (TestResult name l s ls lss _)
-  = [ namedRecord $ [ "Depth" .= bshow d
-                    , "Target" .= maybe "nan" bshow (L.index l (d-2))
-                    , "SmallCheck" .= maybe "nan" bshow (L.index s (d-2))
-                    , "Lazy-SmallCheck" .= maybe "nan" bshow (L.index ls (d-2))
-                    ] ++ maybe [] (\ss ->
-        namedRecord [ "Lazy-SmallCheck-slow" .= maybe "nan" bshow (L.index ss (d-2))])
+  = [ namedRecord [ "Depth" .= bshow d
+                  , "Target" .= uncurry toResult (lookup3 d l)
+                  , "SmallCheck" .= uncurry toResult (lookup3 d s)
+                  , "Lazy-SmallCheck" .= uncurry toResult (lookup3 d ls)
+                  ]
+      <> maybe (namedRecord []) (\ss ->
+          namedRecord [ "Lazy-SmallCheck-slow" .= uncurry toResult (lookup3 d ss)])
+         lss
     | d <- [2..20]
     ]
   -- = [ namedRecord $ [ "Tool"      .= B8.pack "Target" ]
@@ -90,12 +92,14 @@ toResult :: Double -> Outcome -> B.ByteString
 toResult d TimeOut      = "nan"
 toResult d (Complete i) = bshow d
 
-header :: V.Vector B.ByteString
+-- header :: V.Vector B.ByteString
 -- header = V.fromList $ ["Tool"] ++ [bshow d | d <- [2..20]]
-header = V.fromList [ "Depth", "Target", "SmallCheck", "Lazy-SmallCheck", "Lazy-SmallCheck-slow"]
+header (TestResult name l s ls lss _)
+  = V.fromList $ [ "Depth", "Target", "SmallCheck", "Lazy-SmallCheck"]
+              ++ maybe [] (const ["Lazy-SmallCheck-slow"]) lss
 
 logCsv f r = withFile f WriteMode $ \h -> do
-  LB.hPutStr h $ encodeByName header $ testResultRecords r
+  LB.hPutStr h $ encodeByName (header r) $ testResultRecords r
   return r
 
 main :: IO ()
