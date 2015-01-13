@@ -58,21 +58,25 @@ data TestResult
 
 testResultRecords :: TestResult -> [NamedRecord]
 testResultRecords (TestResult name l s ls lss _)
-  = [ namedRecord $ [ "Benchmark" .= B8.pack name
-                    , "Tool"      .= B8.pack "Target" ]
-                 ++ [ bshow d .= toResult t o | d <- [2..20], let (t,o) = lookup3 d l ]
-    , namedRecord $ [ "Benchmark" .= B8.pack name
-                    , "Tool"      .= B8.pack "SmallCheck" ]
-                 ++ [ bshow d .= toResult t o | d <- [2..20], let (t,o) = lookup3 d s ]
-    , namedRecord $ [ "Benchmark" .= B8.pack name
-                    , "Tool"      .= B8.pack "Lazy-SmallCheck" ]
-                 ++ [ bshow d .= toResult t o | d <- [2..20], let (t,o) = lookup3 d ls ]
+  = [ namedRecord $ [ "Depth" .= bshow d
+                    , "Target" .= maybe "nan" bshow (L.index l (d-2))
+                    , "SmallCheck" .= maybe "nan" bshow (L.index s (d-2))
+                    , "Lazy-SmallCheck" .= maybe "nan" bshow (L.index ls (d-2))
+                    ] ++ maybe [] (\ss ->
+        namedRecord [ "Lazy-SmallCheck-slow" .= maybe "nan" bshow (L.index ss (d-2))])
+    | d <- [2..20]
     ]
-   ++ maybe [] (\ss ->
-    [ namedRecord $ [ "Benchmark" .= B8.pack name
-                    , "Tool"      .= B8.pack "Lazy-SmallCheck-slow" ]
-                 ++ [ bshow d .= toResult t o | d <- [2..20], let (t,o) = lookup3 d ss ]
-    ]) lss
+  -- = [ namedRecord $ [ "Tool"      .= B8.pack "Target" ]
+  --                ++ [ bshow d .= toResult t o | d <- [2..20], let (t,o) = lookup3 d l ]
+  --   , namedRecord $ [ "Tool"      .= B8.pack "SmallCheck" ]
+  --                ++ [ bshow d .= toResult t o | d <- [2..20], let (t,o) = lookup3 d s ]
+  --   , namedRecord $ [ "Tool"      .= B8.pack "Lazy-SmallCheck" ]
+  --                ++ [ bshow d .= toResult t o | d <- [2..20], let (t,o) = lookup3 d ls ]
+  --   ]
+  --  ++ maybe [] (\ss ->
+  --   [ namedRecord $ [ "Tool"      .= B8.pack "Lazy-SmallCheck-slow" ]
+  --                ++ [ bshow d .= toResult t o | d <- [2..20], let (t,o) = lookup3 d ss ]
+  --   ]) lss
 
 bshow :: Show a => a -> B.ByteString
 bshow = B8.pack . show
@@ -83,11 +87,12 @@ lookup3 x xs = case L.find (\(a,b,c) -> a == x) xs of
                  Just (i,d,o) -> (d,o)
 
 toResult :: Double -> Outcome -> B.ByteString
-toResult d TimeOut      = "X"
+toResult d TimeOut      = "nan"
 toResult d (Complete i) = bshow d
 
 header :: V.Vector B.ByteString
-header = V.fromList $ ["Benchmark", "Tool"] ++ [bshow d | d <- [2..20]]
+-- header = V.fromList $ ["Tool"] ++ [bshow d | d <- [2..20]]
+header = V.fromList [ "Depth", "Target", "SmallCheck", "Lazy-SmallCheck", "Lazy-SmallCheck-slow"]
 
 logCsv f r = withFile f WriteMode $ \h -> do
   LB.hPutStr h $ encodeByName header $ testResultRecords r
