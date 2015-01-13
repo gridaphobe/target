@@ -48,7 +48,7 @@ checkMany h time (f,sp) = putStrNow (printf "Testing %s..\n" sp) >> go 2
                                     ((n,d,Complete r):) <$> go (n+1)
 
 checkAt :: Test -> String -> Int -> Timeout -> IO (Double, Maybe Result)
-checkAt (T f) sp n time = timed $ timeout time $ targetResultWithStr f sp "bench/RBTree.hs" (defaultOpts {depth=n, keepGoing=True})
+checkAt (T f) sp n time = timed $ timeout time $ targetResultWithStr f sp "bench/RBTree.hs" (defaultOpts {logging=False, depth=n, keepGoing=True})
 
 --time = 5 # Minute
 

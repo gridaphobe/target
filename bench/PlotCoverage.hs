@@ -35,7 +35,7 @@ main = do
 
 getStats :: String -> IO [HpcStats]
 getStats m = forM ["1", "5", "10", "15", "20", "25", "30"] $ \d -> do
-               system $ printf "hpc report --xml-output --hpcdir=_results _results/%s-%s.tix > %s-%s.xml" m d m d
+               system $ printf "hpc report --exclude=Main --xml-output --hpcdir=_results _results/%s-%s.tix > %s-%s.xml" m d m d
                readHpc $ fromString $ printf "%s-%s.xml" m (d::String)
 
 -- mkPlot name stats = toFile (def {_fo_format = EPS}) (name<.>"eps") $ do

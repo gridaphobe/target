@@ -179,7 +179,7 @@ resultPassed (Passed i) = i
 checkTarget f n m = checkMany (show n++"/Target")
                               (\d max -> resultPassed <$>
                                          targetResultWith f n m (mkOpts d max))
-  where mkOpts d max = defaultOpts { depth = d, maxSuccess = Just max, scDepth = True }
+  where mkOpts d max = defaultOpts { logging = False, depth = d, maxSuccess = Just max, scDepth = True }
 
 checkSmall p n = checkMany (show n++"/SmallCheck")
                            (\d n -> fromIntegral.fst.fst <$> runTestWithStats d n (p d))
