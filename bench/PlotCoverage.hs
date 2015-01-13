@@ -24,7 +24,7 @@ main = do
   [fn] <- getArgs
   sts  <- getStats fn
   withFile (printf "bench/%s.csv" fn) WriteMode $ \h ->
-    mapM_ (LB.hPutStr h . encodeByName header . toNamedRecord) sts
+    mapM_ (LB.hPutStr h . C.encodeByName hpcHeader . C.toNamedRecord) sts
 
   
 
