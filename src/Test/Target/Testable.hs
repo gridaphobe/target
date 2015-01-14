@@ -118,8 +118,10 @@ class (AllHave Targetable (Args f), Targetable (Res f)
   mkExprs    :: f -> [Symbol] -> HList (Args f) -> [(Symbol,Expr)]
 
 instance (Show a, Targetable a, Testable b) => Testable (a -> b) where
-  queryArgs f d (stripQuals -> (RFun _ i o _))
-    = liftM2 (:) (query (Proxy :: Proxy a) d i) (queryArgs (f undefined) d o)
+  queryArgs f d (stripQuals -> (RFun x i o _))
+    = do v  <- query (Proxy :: Proxy a) d i
+         vs <- queryArgs (f undefined) d (subst (mkSubst [(x,var v)]) o)
+         return (v:vs)
   queryArgs _ _ t = error $ "queryArgs called with non-function type: " ++ show t
   decodeArgs f (v:vs) (t:ts)
     = liftM2 (:::) (decode v t) (decodeArgs (f undefined) vs ts)
