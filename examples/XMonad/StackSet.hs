@@ -70,7 +70,10 @@ import Data.Proxy
 import Data.Ratio
 import Language.Fixpoint.Types
 import Test.Target
+import Test.Target.Eval
+import Test.Target.Expr
 import Test.Target.Targetable
+import Test.Target.Util
 
 -- $intro
 --
@@ -930,15 +933,29 @@ instance (Num a, Integral a, Targetable a) => Targetable (Ratio a) where
   getType _ = FObj "GHC.Real.Ratio"
   query _ d t = query (Proxy :: Proxy Int) d t
   decode v t= decode v t >>= \ (x::Int) -> return (fromIntegral x)
-  -- query _ d t = fresh (FObj "GHC.Real.Ratio") >>= \x ->
-  --   do query (Proxy :: Proxy Int) d t
-  --      query (Proxy :: Proxy Int) d t
-  --      return x
-  -- stitch d t = do x :: Int <- stitch d t
-  --                 y' :: Int <- stitch d t
-  --                 -- we should really modify `t' above to have Z3 generate non-zero denoms
-  --                 let y = if y' == 0 then 1 else y'
-  --                 let toA z = fromIntegral z :: a
-  --                 return $ toA x % toA y
   toExpr x = EApp (dummyLoc "GHC.Real.:%") [toExpr (numerator x), toExpr (denominator x)]
-  check = undefined
+  check z t = do
+    let x = numerator z
+    let y = denominator z
+    let cn = symbol ("GHC.Real.:%" :: String)
+    [(_,ta)] <- unfold cn t
+    (bx, vx) <- check x ta
+    (by, vy) <- check y ta
+    let v = app cn [vx, vy]
+    b <- eval (reft t) v
+    return (b && bx && by, v)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
