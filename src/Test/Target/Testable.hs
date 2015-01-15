@@ -75,7 +75,12 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
           | Just (_ :: AsyncException) <- fromException e -> throwM e
           | Just (SmtError _) <- fromException e -> throwM e
           | Just (ExpectedValues _) <- fromException e -> throwM e
-          | otherwise -> mbKeepGoing xs n
+          | otherwise -> do
+              real <- gets realized
+              modify $ \s@(TargetState {..}) -> s { realized = [] }
+              _ <- io $ command ctx $ Assert Nothing $ PNot $ pAnd
+                    [ ESym (SL $ symbolText x) `eq` ESym (SL v) | (x,v) <- real ]
+              mbKeepGoing xs n'
         Right r -> do
           real <- gets realized
           modify $ \s@(TargetState {..}) -> s { realized = [] }
@@ -89,16 +94,17 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
           -- causing us to return a spurious error
           _ <- io $ command ctx $ Assert Nothing $ PNot $ pAnd
                 [ ESym (SL $ symbolText x) `eq` ESym (SL v) | (x,v) <- real ]
-          -- let env = map (second (`app` [])) cts ++ mkExprs f (map fst xts) xs
-          -- sat <- evalType (M.fromList env) to (toExpr r)
+
           case sat of
             False -> mbKeepGoing xs n'
-            True ->
+            True -> do
               asks maxSuccess >>= \case
                 Nothing -> go n' =<< io (command ctx CheckSat)
                 Just m | m == n' -> return $ Passed m
                        | otherwise -> go n' =<< io (command ctx CheckSat)
+
     go _ r = error $ "go _ " ++ show r
+
     mbKeepGoing xs n = do
       kg <- asks keepGoing
       if kg
