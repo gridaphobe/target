@@ -938,9 +938,9 @@ instance (Num a, Integral a, Targetable a) => Targetable (Ratio a) where
     let x = numerator z
     let y = denominator z
     let cn = symbol ("GHC.Real.:%" :: String)
-    [(_,ta)] <- unfold cn t
-    (bx, vx) <- check x ta
-    (by, vy) <- check y ta
+    [(_,tx),(_,ty)] <- unfold cn t
+    (bx, vx) <- check x tx
+    (by, vy) <- check y ty
     let v = app cn [vx, vy]
     b <- eval (reft t) v
     return (b && bx && by, v)
