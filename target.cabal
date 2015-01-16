@@ -1,5 +1,5 @@
 name:                target
-version:             0.1.0.0
+version:             0.1.1.0
 synopsis:            Generate test-suites from refinement types.
 
 description:         Target is a library for testing Haskell functions based on
