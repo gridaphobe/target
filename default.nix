@@ -7,7 +7,8 @@
 mkDerivation {
   pname = "target";
   version = "0.1.0.0";
-  src = ./.;
+  src = (import <nixpkgs> {}).haskellFilterSource ["bench" "examples" "test"] ./.;
+  doCheck = false;
   buildDepends = [
     base containers directory exceptions filepath ghc ghc-paths
     liquid-fixpoint liquidhaskell mtl pretty process syb tagged
