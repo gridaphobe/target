@@ -51,11 +51,11 @@ hofsTests_bad = [('HOFs.foo, T HOFs.foo_bad), ('HOFs.list_foo, T HOFs.list_foo_b
 
 mkSuccess :: Testable f => f -> TH.Name -> String -> Int -> TestTree
 mkSuccess f n fp d
-  = testCase (show n ++ "/" ++ show d) $ shouldSucceed d f n fp
+  = testCase (show n ++ "/" ++ show d) $ shouldSucceed d f (show n) fp
 
 mkFailure :: Testable f => f -> TH.Name -> String -> Int -> TestTree
 mkFailure f n fp d
-  = testCase (show n ++ "/" ++ show d) $ shouldFail d f n fp
+  = testCase (show n ++ "/" ++ show d) $ shouldFail d f (show n) fp
 
 shouldSucceed d f name file
   = do r <- targetResultWith f name file (defaultOpts {depth = d})
