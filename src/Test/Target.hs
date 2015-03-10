@@ -1,12 +1,16 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 module Test.Target
-  ( target, targetResult, targetWith, targetResultWith, targetResultWithStr
-  -- , targetTH
-  , Result(..), Testable
+  ( target, targetResult, targetWith, targetResultWith
+  , targetTH, targetResultTH, targetWithTH, targetResultWithTH
+  , Result(..), Testable, Targetable(..)
   , TargetOpts(..), defaultOpts
   , Test(..)
+  , monomorphic
   ) where
+
 
 import           Control.Applicative
 import           Control.Monad
@@ -20,9 +24,10 @@ import           Language.Fixpoint.Names
 import           Language.Fixpoint.SmtLib2       hiding (verbose)
 
 import           Test.Target.Monad
-import           Test.Target.Targetable ()
+import           Test.Target.Targetable (Targetable(..))
 import           Test.Target.Targetable.Function ()
 import           Test.Target.Testable
+import           Test.Target.TH
 import           Test.Target.Types
 import           Test.Target.Util
 
@@ -30,24 +35,30 @@ import           Test.Target.Util
 -- inputs and calling the function.
 target :: Testable f
        => f -- ^ the function
-       -> TH.Name -- ^ the name of the function
+       -> String -- ^ the name of the function
        -> FilePath -- ^ the path to the module that defines the function
        -> IO ()
 target f name path
   = targetWith f name path defaultOpts
+
+targetTH :: TH.Name -> FilePath -> TH.ExpQ
+targetTH f m = [| target $(monomorphic f) $(TH.stringE $ show f) m |]
 
 -- targetTH :: TH.ExpQ -- (TH.TExp (Testable f => f -> TH.Name -> IO ()))
 -- targetTH = TH.location >>= \TH.Loc {..} ->
 --   [| \ f n -> target f (show n) loc_filename |]
 
 -- | Like 'target', but returns the 'Result' instead of printing to standard out.
-targetResult :: Testable f => f -> TH.Name -> FilePath -> IO Result
+targetResult :: Testable f => f -> String -> FilePath -> IO Result
 targetResult f name path
   = targetResultWith f name path defaultOpts
 
+targetResultTH :: TH.Name -> FilePath -> TH.ExpQ
+targetResultTH f m = [| targetResult $(monomorphic f) $(TH.stringE $ show f) m |]
+
 -- | Like 'target', but accepts options to control the enumeration depth,
 -- solver, and verbosity.
-targetWith :: Testable f => f -> TH.Name -> FilePath -> TargetOpts -> IO ()
+targetWith :: Testable f => f -> String -> FilePath -> TargetOpts -> IO ()
 targetWith f name path opts
   = do res <- targetResultWith f name path opts
        case res of
@@ -55,12 +66,12 @@ targetWith f name path opts
          Failed x -> printf "Found counter-example: %s\n\n" x
          Errored x -> printf "Error! %s\n\n" x
 
--- | Like 'targetWith', but returns the 'Result' instead of printing to standard out.
-targetResultWith :: Testable f => f -> TH.Name -> FilePath -> TargetOpts -> IO Result
-targetResultWith f (show -> name) path opts = targetResultWithStr f name path opts
+targetWithTH :: TH.Name -> FilePath -> TargetOpts -> TH.ExpQ
+targetWithTH f m opts = [| targetWith $(monomorphic f) $(TH.stringE $ show f) m opts |]
 
-targetResultWithStr :: Testable f => f -> String -> FilePath -> TargetOpts -> IO Result
-targetResultWithStr f name path opts
+-- | Like 'targetWith', but returns the 'Result' instead of printing to standard out.
+targetResultWith :: Testable f => f -> String -> FilePath -> TargetOpts -> IO Result
+targetResultWith f name path opts
   = do when (verbose opts) $
          printf "Testing %s\n" name
        sp  <- getSpec path
@@ -72,5 +83,8 @@ targetResultWithStr f name path opts
   where
     mkContext = if logging opts then makeContext else makeContextNoLog
     killContext ctx = terminateProcess (pId ctx) >> cleanupContext ctx
+
+targetResultWithTH :: TH.Name -> FilePath -> TargetOpts -> TH.ExpQ
+targetResultWithTH f m opts = [| targetResultWith $(monomorphic f) $(TH.stringE $ show f) m opts |]
 
 data Test = forall t. Testable t => T t

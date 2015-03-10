@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE TemplateHaskell            #-}
 module Test.Target.Monad
   ( whenVerbose
   , noteUsed
@@ -35,6 +36,7 @@ import           Data.IORef
 import           Data.List                        hiding (sort)
 import           Data.Monoid
 import qualified Data.Text.Lazy                   as LT
+import           Language.Haskell.TH.Lift
 import           System.IO.Unsafe
 import           Text.Printf
 
@@ -100,13 +102,13 @@ data TargetOpts = TargetOpts
 
 defaultOpts :: TargetOpts
 defaultOpts = TargetOpts
-  { depth = 5
+  { depth = 3
   , solver = Z3
   , verbose = False
   , logging = True
   , keepGoing = False
   , maxSuccess = Nothing
-  , scDepth = False
+  , scDepth = True
   }
 
 data TargetState = TargetState
@@ -268,3 +270,8 @@ getValue v = do
   noteUsed x
   return (snd x)
 
+----------------------------------------------------------------------
+-- Template Haskell non-sense, MUST be at the bottom of the file
+----------------------------------------------------------------------
+
+deriveLiftMany [''SMTSolver, ''TargetOpts]
