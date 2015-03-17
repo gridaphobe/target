@@ -178,7 +178,7 @@ resultPassed (Passed i) = i
 -- checkTarget :: CanTest f => f -> String -> FilePath -> IO [(Int,Double,Outcome)]
 checkTarget f n m = checkMany (show n++"/Target")
                               (\d max -> resultPassed <$>
-                                         targetResultWith f n m (mkOpts d max))
+                                         targetResultWith f (show n) m (mkOpts d max))
   where mkOpts d max = defaultOpts { logging = False, depth = d, maxSuccess = Just max, scDepth = True }
 
 checkSmall p n = checkMany (show n++"/SmallCheck")
