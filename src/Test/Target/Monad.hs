@@ -270,8 +270,10 @@ getValue v = do
   noteUsed x
   return (snd x)
 
+
+
 ----------------------------------------------------------------------
--- Template Haskell non-sense, MUST be at the bottom of the file
+-- Template Haskell nonsense, MUST be at the bottom of the file
 ----------------------------------------------------------------------
 
 deriveLiftMany [''SMTSolver, ''TargetOpts]

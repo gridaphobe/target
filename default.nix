@@ -6,8 +6,8 @@
 }:
 mkDerivation {
   pname = "target";
-  version = "HEAD";
-  src = (import <nixpkgs> {}).haskellFilterSource ["bench" "examples" "test"] ./.;
+  version = "0.1.1.1";
+  src = (import <nixpkgs> {}).fetchgitLocal ./.;
   doCheck = false;
   buildDepends = [
     base containers directory exceptions filepath ghc ghc-paths
