@@ -12,10 +12,10 @@ before_install:
  - export PATH="$HOME/.cabal/bin:/opt/ghc/7.8.4/bin:/opt/cabal/1.20/bin:$PATH"
  - sudo /opt/ghc/7.8.4/bin/ghc-pkg expose ghc
  - cabal-1.20 update
- - git clone git://github.com/ucsd-progsys/liquid-fixpoint.git /tmp/fixpoint
- - git clone git://github.com/ucsd-progsys/liquidhaskell.git /tmp/liquidhaskell
- - pushd /tmp/fixpoint && cabal-1.20 install && popd
- - pushd /tmp/liquidhaskell && cabal-1.20 install && popd
+# - git clone git://github.com/ucsd-progsys/liquid-fixpoint.git /tmp/fixpoint
+# - git clone git://github.com/ucsd-progsys/liquidhaskell.git /tmp/liquidhaskell
+# - pushd /tmp/fixpoint && cabal-1.20 install && popd
+# - pushd /tmp/liquidhaskell && cabal-1.20 install && popd
  - mkdir -p "$HOME/.cabal/bin"
  - curl http://goto.ucsd.edu/~gridaphobe/z3 -o "$HOME/.cabal/bin/z3"
  - chmod a+x "$HOME/.cabal/bin/z3"
