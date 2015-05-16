@@ -81,7 +81,7 @@ targetResultWith f name path opts
          test f ty)
         `finally` killContext ctx
   where
-    mkContext = if logging opts then makeContext else makeContextNoLog
+    mkContext = if logging opts then flip makeContext (".target/" ++ name) else makeContextNoLog
     killContext ctx = terminateProcess (pId ctx) >> cleanupContext ctx
 
 targetResultWithTH :: TH.Name -> FilePath -> TargetOpts -> TH.ExpQ

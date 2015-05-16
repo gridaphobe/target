@@ -32,8 +32,8 @@ eval r e = do
 -- | Evaluate a refinement with the given expression substituted for the value
 -- variable, in the given environment of free symbols.
 evalWith :: M.HashMap Symbol Expr -> Reft -> Expr -> Target Bool
-evalWith m (Reft (v, rs)) x
-  = and <$> sequence [ evalPred p (M.insert v x m) | RConc p <- rs ]
+evalWith m (Reft (v, Refa p)) x
+  = evalPred p (M.insert v x m)
 
 evalPred :: Pred -> M.HashMap Symbol Expr -> Target Bool
 evalPred PTrue           _ = return True
@@ -111,9 +111,9 @@ evalSet "Set_mem" [e1, EApp f e2] | val f == setSym
   = return $ if e1 `elem` e2 then 0 else 1
 evalSet f es = throwM $ EvalError $ printf "evalSet(%s, %s)" (show f) (show es)
 
-evalBody
-  :: Language.Haskell.Liquid.Types.Def ctor
-     -> [Expr] -> M.HashMap Symbol Expr -> Target Expr
+-- evalBody
+--   :: Language.Haskell.Liquid.Types.Def ctor
+--      -> [Expr] -> M.HashMap Symbol Expr -> Target Expr
 evalBody eq xs env = go $ body eq
   where
     go (E e) = evalExpr (subst su e) env
@@ -125,7 +125,7 @@ evalBody eq xs env = go $ body eq
     --go (R v (PBexp (EApp f e))) | val f == "Set_emp" = return $ app setSym []
     ----FIXME: figure out how to handle the general case..
     --go (R v p) = return (ECon (I 0))
-    su = mkSubst $ zip (binds eq) xs
+    su = mkSubst $ zip (map fst (binds eq)) xs
 
 evalRel :: Symbol -> Pred -> M.HashMap Symbol Expr -> Target (Maybe Expr)
 evalRel v (PAnd ps)       m = Just . head . catMaybes <$> sequence [evalRel v p m | p <- ps]

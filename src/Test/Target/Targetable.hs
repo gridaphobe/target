@@ -30,7 +30,7 @@ import qualified Data.Text                       as T
 import           Data.Word                       (Word8)
 import           GHC.Generics
 
-import           Language.Fixpoint.Types         hiding (prop, ofReft)
+import           Language.Fixpoint.Types         hiding (prop, ofReft, reft)
 import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Types   hiding (var)
 
@@ -126,8 +126,8 @@ apply c vs = do
     Nothing -> return ()
   let x = app c vs
   t <- lookupCtor c
-  let (xs, _, rt) = bkArrowDeep t
-      su          = mkSubst $ zip (map symbol xs) vs
+  let (xs, _, _, rt) = bkArrowDeep t
+      su             = mkSubst $ zip (map symbol xs) vs
   addConstructor (c, rTypeSort mempty t)
   constrain $ ofReft (subst su $ reft rt) x
   return x
@@ -179,9 +179,9 @@ constrain p = do
 -- | Given a refinement @{v | p}@ and an expression @e@, construct
 -- the predicate @p[e/v]@.
 ofReft :: Reft -> Expr -> Pred
-ofReft (Reft (v, rs)) e
+ofReft (Reft (v, Refa p)) e
   = let x = mkSubst [(v, e)]
-    in pAnd [subst x p | RConc p <- rs]
+    in subst x p
 
 --------------------------------------------------------------------------------
 --- Instances

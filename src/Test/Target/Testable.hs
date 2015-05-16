@@ -29,7 +29,7 @@ import qualified Data.Text.Lazy                  as LT
 import           Text.Printf
 
 import           Language.Fixpoint.SmtLib2
-import           Language.Fixpoint.Types
+import           Language.Fixpoint.Types         hiding (Result)
 import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Types   hiding (Result (..), env, var)
 
@@ -49,7 +49,7 @@ test f t
   = do d <- asks depth
        vs <- queryArgs f d t
        setup
-       let (xs, tis, to) = bkArrowDeep $ stripQuals t
+       let (xs, tis, _, to) = bkArrowDeep $ stripQuals t
        ctx <- gets smtContext
        try (process f ctx vs (zip xs tis) to) >>= \case
          Left  (e :: TargetException) -> return $ Errored $ show e

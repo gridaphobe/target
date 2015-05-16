@@ -22,7 +22,7 @@ import           Data.Proxy
 import qualified Data.Text                       as T
 import qualified GHC
 import           Language.Fixpoint.SmtLib2
-import           Language.Fixpoint.Types         hiding (ofReft)
+import           Language.Fixpoint.Types         hiding (ofReft, reft)
 import           Language.Haskell.Liquid.GhcMisc (qualifiedNameSymbol)
 import           Language.Haskell.Liquid.RefType (addTyConInfo, rTypeSort)
 import           Language.Haskell.Liquid.Types   hiding (var)
@@ -56,7 +56,7 @@ genFun p _ (stripQuals -> t)
 
 stitchFun :: forall f. (Targetable (Res f))
           => Proxy f -> SpecType -> Target ([Expr] -> Res f)
-stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, to))
+stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, _, to))
   = do mref <- io $ newIORef []
        d <- asks depth
        state' <- get
@@ -98,7 +98,7 @@ stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, to))
 genExpr :: Expr -> Target Symbol
 genExpr (EApp (val -> c) es)
   = do xes <- mapM genExpr es
-       (xs, _, to) <- bkArrowDeep . stripQuals <$> lookupCtor c
+       (xs, _, _, to) <- bkArrowDeep . stripQuals <$> lookupCtor c
        let su  = mkSubst $ zip xs $ map var xes
            to' = subst su to
        x <- fresh $ FObj $ symbol $ rtc_tc $ rt_tycon to'
