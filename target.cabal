@@ -66,8 +66,8 @@ library
                      , filepath >= 1.3.0.1
                      , ghc >= 7.8.3
                      , ghc-paths
-                     , liquid-fixpoint >= 0.2
-                     , liquidhaskell >= 0.2
+                     , liquid-fixpoint >= 0.3
+                     , liquidhaskell >= 0.4
                      , mtl >= 2.1.2
                      , pretty
                      , process
