@@ -68,7 +68,7 @@ import           GHC.Generics
 
 import Data.Proxy
 import Data.Ratio
-import Language.Fixpoint.Types
+import Language.Fixpoint.Types hiding (reft)
 import Test.Target
 import Test.Target.Eval
 import Test.Target.Expr
