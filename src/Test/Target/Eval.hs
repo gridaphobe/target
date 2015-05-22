@@ -111,9 +111,9 @@ evalSet "Set_mem" [e1, EApp f e2] | val f == setSym
   = return $ if e1 `elem` e2 then 0 else 1
 evalSet f es = throwM $ EvalError $ printf "evalSet(%s, %s)" (show f) (show es)
 
--- evalBody
---   :: Language.Haskell.Liquid.Types.Def ctor
---      -> [Expr] -> M.HashMap Symbol Expr -> Target Expr
+evalBody
+  :: Language.Haskell.Liquid.Types.Def ty ctor
+     -> [Expr] -> M.HashMap Symbol Expr -> Target Expr
 evalBody eq xs env = go $ body eq
   where
     go (E e) = evalExpr (subst su e) env

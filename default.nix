@@ -8,7 +8,7 @@ mkDerivation {
   pname = "target";
   version = "0.1.1.1";
   src = (import <nixpkgs> {}).fetchgitLocal ./.;
-  doCheck = false;
+  doCheck = true;
   buildDepends = [
     base containers directory exceptions filepath ghc ghc-paths
     liquid-fixpoint liquidhaskell mtl pretty process syb tagged
