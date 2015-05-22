@@ -104,27 +104,27 @@ stripQuals = snd . bkClass . fourth4 . bkUniv
 fourth4 :: (t, t1, t2, t3) -> t3
 fourth4 (_,_,_,d) = d
 
-getSpec :: FilePath -> IO GhcSpec
-getSpec target
+getSpec :: [String] -> FilePath -> IO GhcSpec
+getSpec opts target
   = do cfg  <- mkOpts mempty
-       info <- getGhcInfo cfg target
+       info <- getGhcInfo (cfg {ghcOptions = opts}) target
        case info of
          Left err -> error $ show err
          Right i  -> return $ spec i
 
-runGhc :: GHC.Ghc a -> IO a
-runGhc x = GHC.runGhc (Just GHC.Paths.libdir) $ do
-             df <- GHC.getSessionDynFlags
-             let df' = df { GHC.ghcMode   = GHC.CompManager
-                          , GHC.ghcLink   = GHC.NoLink --GHC.LinkInMemory
-                          , GHC.hscTarget = GHC.HscNothing --GHC.HscInterpreted
-                          -- , GHC.optLevel  = 0 --2
-                          , GHC.log_action = \_ _ _ _ _ -> return ()
-                          , GHC.importPaths = "bench" : GHC.importPaths df
-                          } `GHC.gopt_set` GHC.Opt_ImplicitImportQualified
-                            `GHC.xopt_set` GHC.Opt_MagicHash
-             _ <- GHC.setSessionDynFlags df'
-             x
+runGhc :: [String] -> GHC.Ghc a -> IO a
+runGhc o x = GHC.runGhc (Just GHC.Paths.libdir) $ do
+               df <- GHC.getSessionDynFlags
+               let df' = df { GHC.ghcMode   = GHC.CompManager
+                            , GHC.ghcLink   = GHC.NoLink --GHC.LinkInMemory
+                            , GHC.hscTarget = GHC.HscNothing --GHC.HscInterpreted
+                            -- , GHC.optLevel  = 0 --2
+                            , GHC.log_action = \_ _ _ _ _ -> return ()
+                            } `GHC.gopt_set` GHC.Opt_ImplicitImportQualified
+                              `GHC.xopt_set` GHC.Opt_MagicHash
+               (df'',_,_) <- GHC.parseDynamicFlags df' (map GHC.noLoc o)
+               _ <- GHC.setSessionDynFlags df''
+               x
 
 loadModule :: FilePath -> GHC.Ghc GHC.ModSummary
 loadModule f = do target <- GHC.guessTarget f Nothing

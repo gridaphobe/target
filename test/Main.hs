@@ -58,15 +58,16 @@ mkFailure f n fp d
   = testCase (show n ++ "/" ++ show d) $ shouldFail d f (show n) fp
 
 shouldSucceed d f name file
-  = do r <- targetResultWith f name file (defaultOpts {depth = d})
+  = do r <- targetResultWith f name file (testOpts {depth = d})
        assertString $ case r of
                        Passed _ -> ""
                        Failed s -> "Unexpected counter-example: " ++ s
                        Errored s -> "Unexpected error: " ++ s
 
 shouldFail d f name file
-  = do r <- targetResultWith f name file (defaultOpts {depth = d})
+  = do r <- targetResultWith f name file (testOpts {depth = d})
        assertBool "Expected counter-example" $ case r of
                                                Passed _ -> False
                                                _        -> True
 
+testOpts = defaultOpts {ghcOpts = ["-isrc", "-package", "ghc"]}

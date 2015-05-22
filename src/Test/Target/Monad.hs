@@ -98,6 +98,8 @@ data TargetOpts = TargetOpts
     -- enumerate the whole input space
   , scDepth    :: !Bool
     -- ^ whether to use SmallCheck's notion of depth
+  , ghcOpts    :: ![String]
+    -- ^ extra options to pass to GHC
   }
 
 defaultOpts :: TargetOpts
@@ -109,6 +111,7 @@ defaultOpts = TargetOpts
   , keepGoing = False
   , maxSuccess = Nothing
   , scDepth = True
+  , ghcOpts = []
   }
 
 data TargetState = TargetState
@@ -208,10 +211,11 @@ lookupCtor :: Symbol -> Target SpecType
 lookupCtor c
   = do mt <- lookup c <$> gets ctorEnv
        m  <- gets filePath
+       o  <- asks ghcOpts
        case mt of
          Just t -> return t
          Nothing -> do
-           t <- io $ runGhc $ do
+           t <- io $ runGhc o $ do
                   _ <- loadModule m
                   t <- GHC.exprType (printf "(%s)" (symbolString c))
                   return (ofType t)
