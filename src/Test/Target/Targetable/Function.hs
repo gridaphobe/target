@@ -82,7 +82,7 @@ stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, _, to))
                  let su = mkSubst $ zipWith (\v e -> (v, var e)) vs xes
                  xo <- query (Proxy :: Proxy (Res f)) d (subst su to)
                  vs <- gets variables
-                 mapM_ (\x -> io . command ctx $ Declare (symbol x) [] (snd x)) vs
+                 mapM_ (\x -> io . smtWrite ctx $ makeDecl (symbol x) (snd x)) vs
                  cs <- gets constraints
                  mapM_ (\c -> io . command ctx $ Assert Nothing c) cs
 

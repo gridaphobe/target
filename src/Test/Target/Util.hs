@@ -6,6 +6,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ParallelListComp #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Test.Target.Util where
 
 import           Control.Applicative
@@ -14,6 +15,8 @@ import           Data.List
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Generics                    (everywhere, mkT)
+import           Data.Text.Format                hiding (print)
+import qualified Data.Text.Lazy                  as LT
 import           Debug.Trace
 
 import qualified DynFlags as GHC
@@ -23,6 +26,7 @@ import qualified GHC.Exts as GHC
 import qualified GHC.Paths
 import qualified HscTypes as GHC
 
+import           Language.Fixpoint.SmtLib2
 import           Language.Fixpoint.Types          hiding (prop)
 import           Language.Haskell.Liquid.CmdLine
 import           Language.Haskell.Liquid.GhcInterface
@@ -67,6 +71,26 @@ type family Args a where
 type family Res a where
   Res (a -> b) = Res b
   Res a        = a
+
+-- liquid-fixpoint started encoding `FObj s` as `Int` in 0.3.0.0, but we
+-- want to preserve the type aliases for easier debugging.. so here's a
+-- copy of the SMTLIB2 Sort instance..
+smt2Sort :: Sort -> LT.Text
+smt2Sort FInt        = "Int"
+smt2Sort (FApp t []) | t == intFTyCon = "Int"
+smt2Sort (FApp t []) | t == boolFTyCon = "Bool"
+smt2Sort (FApp t [FApp ts _,_]) | t == appFTyCon  && fTyconSymbol ts == "Set_Set" = "Set"
+smt2Sort (FObj s)    = smt2 s
+smt2Sort s@(FFunc _ _) = error $ "smt2 FFunc: " ++ show s
+smt2Sort _           = "Int"
+
+makeDecl :: Symbol -> Sort -> LT.Text
+-- FIXME: hack..
+makeDecl x (FFunc _ ts)
+  = format "(declare-fun {} ({}) {})"
+           (smt2 x, LT.unwords (map smt2Sort (init ts)), smt2Sort (last ts))
+makeDecl x t
+  = format "(declare-const {} {})" (smt2 x, smt2Sort t)
 
 safeFromJust :: String -> Maybe a -> a
 safeFromJust msg Nothing  = error $ "safeFromJust: " ++ msg

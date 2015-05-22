@@ -146,12 +146,6 @@ instance (Targetable a, Args a ~ '[], Res a ~ a) => Testable a where
   mkExprs _ _ _    = []
 
 
-makeDecl :: Symbol -> Sort -> Command
--- FIXME: hack..
-makeDecl x _ | x `M.member` smt_set_funs = Assert Nothing PTrue
-makeDecl x (FFunc _ ts) = Declare x (init ts) (last ts)
-makeDecl x t            = Declare x []        t
-
 func :: Sort -> Bool
 func (FFunc _ _) = True
 func _           = False
@@ -169,19 +163,25 @@ setup = {-# SCC "setup" #-} do
      FInt       -> return ()
      FObj "GHC.Types.Bool"   -> defSort ("GHC.Types.Bool" :: T.Text) ("Bool" :: T.Text)
      FObj "CHOICE" -> defSort ("CHOICE" :: T.Text) ("Bool" :: T.Text)
-     s        -> defSort (LT.toStrict $ smt2 s) ("Int" :: T.Text)
+     s        -> defSort (LT.toStrict $ smt2Sort s) ("Int" :: T.Text)
    -- declare constructors
    cts <- gets constructors
-   mapM_ (\ (c,t) -> io . command ctx $ makeDecl (symbol c) t) cts
+   mapM_ (\ (c,t) -> io $ smtWrite ctx $ makeDecl (symbol c) t) cts
    let nullary = [var c | (c,t) <- cts, not (func t)]
    unless (null nullary) $
      void $ io $ command ctx $ Distinct nullary
    -- declare variables
    vs <- gets variables
-   mapM_ (\ x -> io . command ctx $ Declare (symbol x) [] (arrowize $ snd x)) vs
+   let defVar (x,t) = io $ smtWrite ctx (makeDecl x (arrowize t))
+   mapM_ defVar vs
    -- declare measures
    ms <- gets measEnv
-   mapM_ (\m -> io . command ctx $ makeDecl (val $ name m) (rTypeSort emb $ sort m)) ms
+   let defFun x t = io $ smtWrite ctx (makeDecl x t)
+   forM_ ms $ \m -> do
+     let x = val (name m)
+     if x `M.member` smt_set_funs
+       then return ()
+       else defFun x (rTypeSort emb (sort m))
    -- assert constraints
    cs <- gets constraints
    --mapM_ (\c -> do {i <- gets seed; modify $ \s@(GS {..}) -> s { seed = seed + 1 };
