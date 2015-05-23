@@ -64,8 +64,8 @@ evalBrel Ge = (>=)
 evalBrel Lt = (<)
 evalBrel Le = (<=)
 
-applyMeasure :: Measure SpecType GHC.DataCon -> Expr -> M.HashMap Symbol Expr -> Target Expr
-applyMeasure m (EApp c xs) env
+applyMeasure :: String -> [Language.Haskell.Liquid.Types.Def SpecType GHC.DataCon] -> Expr -> M.HashMap Symbol Expr -> Target Expr
+applyMeasure name eqns (EApp c xs) env
   = meq >>= \eq -> evalBody eq xs env
   where
     ct = symbolString $ case val c of
@@ -76,12 +76,12 @@ applyMeasure m (EApp c xs) env
       "GHC.Tuple.(,,,)" -> "(,,,)"
       "GHC.Tuple.(,,,,)" -> "(,,,,)"
       x -> x
-    meq = case find ((==ct) . show . ctor) $ eqns m of
-           Nothing -> throwM $ EvalError $ printf "applyMeasure(%s): no equation for %s" (show m) (show ct)
+    meq = case find ((==ct) . show . ctor) eqns of
+           Nothing -> throwM $ EvalError $ printf "applyMeasure(%s): no equation for %s" name (show ct)
            Just x -> return x
 
-applyMeasure m e           _
-  = throwM $ EvalError $ printf "applyMeasure(%s, %s)" (showpp m) (showpp e)
+applyMeasure n m e           _
+  = throwM $ EvalError $ printf "applyMeasure(%s, %s)" n (showpp e)
 
 setSym :: Symbol
 setSym = "LC_SET"
@@ -151,11 +151,11 @@ evalExpr (EApp f es)    m
   | val f == "Set_emp" || val f == "Set_sng" || val f `M.member` smt_set_funs
   = mapM (`evalExpr` m) es >>= \es' -> evalSet (val f) es'
   | otherwise
-  = find ((==f) . name) <$> gets measEnv >>= \case
-      Nothing -> EApp f <$> mapM (`evalExpr` m) es
-                    --FIXME: should really extend this to multi-param measures..
-      Just ms -> do e' <- evalExpr (head es) m
-                    applyMeasure ms e' m
+  = filter ((==f) . name) <$> gets measEnv >>= \case
+      [] -> EApp f <$> mapM (`evalExpr` m) es
+                      --FIXME: should really extend this to multi-param measures..
+      ms -> do e' <- evalExpr (head es) m
+               applyMeasure (symbolString $ val f) (concatMap eqns ms) e' m
 evalExpr (EIte p e1 e2) m
   = do b <- evalPred p m
        if b
