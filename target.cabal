@@ -73,7 +73,7 @@ library
                      , process
                      , syb >= 0.4.2
                      , tagged >= 0.7
-                     , template-haskell
+                     , template-haskell >= 2.8
                      , text >= 1.0
                      , text-format
                      , th-lift

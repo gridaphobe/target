@@ -41,12 +41,7 @@ infoType (TH.VarI _ ty _ _) = ty
 deconstructType :: Error -> TH.Type -> TH.Q ([TH.Name], TH.Cxt, TH.Type)
 deconstructType err ty0@(TH.ForallT xs ctx ty) = do
   let plain (TH.PlainTV  _)          = True
--- NOTE: this is a poor proxy for template-haskell >= 2.8
-#if __GLASGOW_HASKELL__ >= 710
       plain (TH.KindedTV _ TH.StarT) = True
-#else
-      plain (TH.KindedTV _ TH.StarK) = True
-#endif
       plain _                        = False
   unless (all plain xs) $ err "Higher-kinded type variables in type"
   return (map (\(TH.PlainTV x) -> x) xs, ctx, ty)
