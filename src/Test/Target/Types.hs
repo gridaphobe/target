@@ -66,6 +66,6 @@ choicesort = FObj "CHOICE"
 data Result = Passed !Int
             | Failed !String
             | Errored !String
-            deriving (Show)
+            deriving (Show, Typeable)
 
 -- resultPassed (Passed i) = i
