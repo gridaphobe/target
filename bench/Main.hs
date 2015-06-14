@@ -20,7 +20,7 @@ import           Control.Monad
 import qualified Data.ByteString            as B
 import qualified Data.ByteString.Char8      as B8
 import qualified Data.ByteString.Lazy       as LB
-import           Data.Csv
+import           Data.Csv                   hiding (header)
 import qualified Data.List                  as L
 import           Data.IORef
 import           Data.Monoid
