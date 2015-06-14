@@ -25,5 +25,5 @@ main = do
     Left e -> hPrint stderr e >> exitWith (ExitFailure 2)
     Right x -> x >>= \case
       Errored e -> hPutStrLn stderr e >> exitWith (ExitFailure 2)
-      Failed s  -> putStrLn s >> exitWith (ExitFailure 2)
+      Failed s  -> printf "Found counter-example: %s\n" s >> exitWith (ExitFailure 1)
       Passed n  -> printf "OK! Passed %d tests.\n" n >> exitSuccess
