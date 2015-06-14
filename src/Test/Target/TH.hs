@@ -41,7 +41,8 @@ infoType (TH.VarI _ ty _ _) = ty
 deconstructType :: Error -> TH.Type -> TH.Q ([TH.Name], TH.Cxt, TH.Type)
 deconstructType err ty0@(TH.ForallT xs ctx ty) = do
   let plain (TH.PlainTV  _)          = True
-#if MIN_VERSION_template_haskell(2,8,0)
+-- NOTE: this is a poor proxy for template-haskell >= 2.8
+#if __GLASGOW_HASKELL__ >= 710
       plain (TH.KindedTV _ TH.StarT) = True
 #else
       plain (TH.KindedTV _ TH.StarK) = True
