@@ -81,7 +81,7 @@ applyMeasure name eqns (EApp c xs) env
            Nothing -> throwM $ EvalError $ printf "applyMeasure(%s): no equation for %s" name (show ct)
            Just x -> return x
 
-applyMeasure n m e           _
+applyMeasure n _ e           _
   = throwM $ EvalError $ printf "applyMeasure(%s, %s)" n (showpp e)
 
 setSym :: Symbol

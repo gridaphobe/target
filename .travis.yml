@@ -22,7 +22,7 @@ install:
 # Here starts the actual work to be performed for the package under test; any command which exits with a non-zero exit code causes the build to fail.
 script:
  # -v2 provides useful information for debugging
- - cabal configure --enable-benchmarks --enable-tests -v2
+ - cabal configure --enable-benchmarks --enable-tests -v2 -Werror
  - cabal build
  - cabal haddock
  - ./dist/build/test/test
