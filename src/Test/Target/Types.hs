@@ -8,7 +8,7 @@ import qualified Control.Monad.Catch           as Ex
 import qualified Data.Text                     as T
 import           Data.Typeable
 
-import           Language.Fixpoint.SmtLib2
+import           Language.Fixpoint.Smt.Interface
 import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.Types
 

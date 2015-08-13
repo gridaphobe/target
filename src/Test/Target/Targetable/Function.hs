@@ -21,7 +21,7 @@ import           Data.Monoid
 import           Data.Proxy
 import qualified Data.Text                       as T
 import qualified GHC
-import           Language.Fixpoint.SmtLib2
+import           Language.Fixpoint.Smt.Interface
 import           Language.Fixpoint.Types         hiding (ofReft, reft)
 import           Language.Haskell.Liquid.GhcMisc (qualifiedNameSymbol)
 import           Language.Haskell.Liquid.RefType (addTyConInfo, rTypeSort)

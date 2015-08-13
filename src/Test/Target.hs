@@ -18,16 +18,16 @@ import           Control.Monad.Catch
 import           Control.Monad.State
 import qualified Language.Haskell.TH             as TH
 import           System.Process                  (terminateProcess)
+import           Test.QuickCheck.All             (monomorphic)
 import           Text.Printf                     (printf)
 
 import           Language.Fixpoint.Names
-import           Language.Fixpoint.SmtLib2       hiding (verbose)
+import           Language.Fixpoint.Smt.Interface hiding (verbose)
 
 import           Test.Target.Monad
 import           Test.Target.Targetable (Targetable(..))
 import           Test.Target.Targetable.Function ()
 import           Test.Target.Testable
-import           Test.Target.TH
 import           Test.Target.Types
 import           Test.Target.Util
 

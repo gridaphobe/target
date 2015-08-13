@@ -42,7 +42,7 @@ import           Text.Printf
 
 import           Language.Fixpoint.Config         (SMTSolver (..))
 import           Language.Fixpoint.Names
-import           Language.Fixpoint.SmtLib2        hiding (verbose)
+import           Language.Fixpoint.Smt.Interface  hiding (verbose)
 import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.PredType
 import           Language.Haskell.Liquid.RefType

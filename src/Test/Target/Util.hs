@@ -26,7 +26,7 @@ import qualified GHC.Exts as GHC
 import qualified GHC.Paths
 import qualified HscTypes as GHC
 
-import           Language.Fixpoint.SmtLib2
+import           Language.Fixpoint.Smt.Interface
 import           Language.Fixpoint.Types          hiding (prop)
 import           Language.Haskell.Liquid.CmdLine
 import           Language.Haskell.Liquid.GhcInterface

@@ -28,7 +28,8 @@ import           Data.Text.Format                hiding (print)
 import qualified Data.Text.Lazy                  as LT
 import           Text.Printf
 
-import           Language.Fixpoint.SmtLib2
+import           Language.Fixpoint.Smt.Interface
+import           Language.Fixpoint.Smt.Theories  (theorySymbols)
 import           Language.Fixpoint.Types         hiding (Result)
 import           Language.Haskell.Liquid.RefType
 import           Language.Haskell.Liquid.Types   hiding (Result (..), env, var)
@@ -179,7 +180,7 @@ setup = {-# SCC "setup" #-} do
    let defFun x t = io $ smtWrite ctx (makeDecl x t)
    forM_ ms $ \m -> do
      let x = val (name m)
-     if x `M.member` smt_set_funs
+     if x `M.member` theorySymbols
        then return ()
        else defFun x (rTypeSort emb (sort m))
    -- assert constraints

@@ -12,7 +12,8 @@ import           Data.Maybe
 import           Text.Printf
 
 import qualified GHC
-import           Language.Fixpoint.SmtLib2
+import           Language.Fixpoint.Smt.Interface
+import           Language.Fixpoint.Smt.Theories  (theorySymbols)
 import           Language.Fixpoint.Types         hiding (R)
 import           Language.Haskell.Liquid.Types   hiding (var)
 
@@ -148,7 +149,7 @@ evalExpr (EVar x)       m = return $ m M.! x
 evalExpr (ESym s)       _ = return $ ESym s
 evalExpr (EBin b e1 e2) m = evalBop b <$> evalExpr e1 m <*> evalExpr e2 m
 evalExpr (EApp f es)    m
-  | val f == "Set_emp" || val f == "Set_sng" || val f `M.member` smt_set_funs
+  | val f == "Set_emp" || val f == "Set_sng" || val f `M.member` theorySymbols
   = mapM (`evalExpr` m) es >>= \es' -> evalSet (val f) es'
   | otherwise
   = filter ((==f) . name) <$> gets measEnv >>= \case
