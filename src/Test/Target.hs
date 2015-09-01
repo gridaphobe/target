@@ -76,13 +76,14 @@ targetResultWith f name path opts
          printf "Testing %s\n" name
        sp  <- getSpec (ghcOpts opts) path
        ctx <- mkContext (solver opts)
-       runTarget opts (initState path sp ctx) (do
-         ty <- safeFromJust "targetResultWith" . lookup (symbol name) <$> gets sigs
-         test f ty)
-        `finally` killContext ctx
+       do r <- runTarget opts (initState path sp ctx) $ do
+                 ty <- safeFromJust "targetResultWith" . lookup (symbol name) <$> gets sigs
+                 test f ty
+          _ <- cleanupContext ctx
+          return r
+        `onException` terminateProcess (pId ctx)
   where
     mkContext = if logging opts then flip makeContext (".target/" ++ name) else makeContextNoLog
-    killContext ctx = terminateProcess (pId ctx) >> cleanupContext ctx
 
 targetResultWithTH :: TH.Name -> FilePath -> TargetOpts -> TH.ExpQ
 targetResultWithTH f m opts = [| targetResultWith $(monomorphic f) $(TH.stringE $ show f) m opts |]
