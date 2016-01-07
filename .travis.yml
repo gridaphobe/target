@@ -29,12 +29,8 @@ before_install:
 - stack --no-terminal solver --modify-stack-yaml
 - travis_retry curl "http://goto.ucsd.edu/~gridaphobe/$SMT" -o "${HOME}/.local/bin/$SMT"
 
-install:
- - stack --no-terminal build --only-dependencies --test --no-run-tests
-
 script:
- - stack --no-terminal build --test --no-run-tests --haddock
- - stack --no-terminal test
+ - stack --no-terminal test --haddock --no-haddock-deps
 
 notifications:
   slack:
