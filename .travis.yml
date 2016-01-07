@@ -12,21 +12,21 @@ cache:
     - $HOME/.stack
     - .stack-work
 
-before_install:
-# Download and unpack the stack executable
-- mkdir -p ~/.local/bin
-- export PATH=$HOME/.local/bin:$PATH
-- travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
-- travis_retry stack install cabal-install
-- travis_retry curl "http://goto.ucsd.edu/~gridaphobe/$SMT" -o "${HOME}/.local/bin/$SMT"
-
 env:
   global:
   - SMT=z3
   - GHC=ghc-7.10.3
 
+before_install:
+# Download and unpack the stack executable
+- mkdir -p ~/.local/bin
+- export PATH=$HOME/.local/bin:$PATH
+- travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+- echo "resolver: ${GHC}" > stack.yaml
+- travis_retry stack --no-terminal --install-ghc install cabal-install
+- travis_retry curl "http://goto.ucsd.edu/~gridaphobe/$SMT" -o "${HOME}/.local/bin/$SMT"
+
 install:
- - echo "resolver: ${GHC}" > stack.yaml
  - stack --no-terminal setup
  - stack --no-terminal ghc -- --version
  - stack --no-terminal update
