@@ -28,6 +28,7 @@ before_install:
 - stack --no-terminal update
 - stack --no-terminal solver --modify-stack-yaml
 - travis_retry curl "http://goto.ucsd.edu/~gridaphobe/$SMT" -o "${HOME}/.local/bin/$SMT"
+- chmod +x "$HOME/.local/bin/$SMT"
 
 script:
  - stack --no-terminal test --haddock --no-haddock-deps
