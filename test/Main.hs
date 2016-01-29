@@ -21,7 +21,21 @@ import qualified RBTree
 import qualified RBTreeTest               as RBTree
 
 
-main = defaultMainWithIngredients [listingTests, consoleTestReporter, antXMLRunner] tests
+main = defaultMainWithIngredients
+         [ listingTests
+         , combineReporters consoleTestReporter antXMLRunner
+         , consoleTestReporter
+         ] tests
+
+-- | Combine two @TestReporter@s into one.
+--
+-- Runs the reporters in sequence, so it's best to start with the one
+-- that will produce incremental output, e.g. 'consoleTestReporter'.
+combineReporters (TestReporter opts1 run1) (TestReporter opts2 run2)
+  = TestReporter (opts1 ++ opts2) $ \opts tree -> do
+      f1 <- run1 opts tree
+      f2 <- run2 opts tree
+      return $ \smap -> f1 smap >> f2 smap
 
 tests, pos, neg :: TestTree
 
