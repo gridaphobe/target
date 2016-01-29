@@ -1,0 +1,12 @@
+machine:
+  ghc:
+    version: 7.10.2
+
+dependencies:
+  pre:
+    - curl "http://goto.ucsd.edu/~gridaphobe/z3" -o "${HOME}/.cabal/bin/z3"
+    - chmod a+x "${HOME}/.cabal/bin/z3"
+
+test:
+  post:
+    - cabal haddock --builddir=$CIRCLE_ARTIFACTS
