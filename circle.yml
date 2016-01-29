@@ -1,13 +1,13 @@
 machine:
   ghc:
     version: 7.10.2
-
-dependencies:
   pre:
-    - mkdir -p "${HOME}/.cabal/bin/"
-    - curl "http://goto.ucsd.edu/~gridaphobe/z3" -o "${HOME}/.cabal/bin/z3"
-    - chmod a+x "${HOME}/.cabal/bin/z3"
+    - sudo add-apt-repository -y ppa:hvr/z3
+    - sudo apt-get -y update
+    - sudo apt-get -y install z3
 
 test:
+  override:
+    - cabal install --enable-tests
   post:
     - cabal haddock --builddir=$CIRCLE_ARTIFACTS
