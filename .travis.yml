@@ -26,7 +26,7 @@ before_install:
 - stack --no-terminal install cabal-install
 - stack --no-terminal init --resolver $GHC
 - stack --no-terminal update
-- stack --no-terminal solver --modify-stack-yaml
+- stack --no-terminal solver --update-config
 - travis_retry curl "http://goto.ucsd.edu/~gridaphobe/$SMT" -o "${HOME}/.local/bin/$SMT"
 - chmod +x "$HOME/.local/bin/$SMT"
 
