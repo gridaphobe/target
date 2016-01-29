@@ -11,4 +11,5 @@ test:
     - cabal build
     - cabal exec -- sh -c "./dist/build/test/test --xml=$CIRCLE_TEST_REPORTS/tasty.xml"
   post:
+    - cabal configure
     - cabal haddock --builddir=$CIRCLE_ARTIFACTS
