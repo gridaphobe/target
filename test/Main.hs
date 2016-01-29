@@ -7,6 +7,7 @@ import qualified Language.Haskell.TH as TH
 import           System.IO
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import           Test.Tasty.Runners
 import           Test.Tasty.Runners.AntXML
 
 import           Test.Target
@@ -20,7 +21,7 @@ import qualified RBTree
 import qualified RBTreeTest               as RBTree
 
 
-main = defaultMainWithIngredients [antXMLRunner] tests
+main = defaultMainWithIngredients [listingTests, consoleTestReporter, antXMLRunner] tests
 
 tests, pos, neg :: TestTree
 
