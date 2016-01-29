@@ -1,39 +1,29 @@
-{ nixpkgs ? import <nixpkgs> {}, compiler ? "ghc7101" }:
+{ nixpkgs ? import <nixpkgs> {}, compiler ? "default", profiling ? false }:
 
 let
 
   inherit (nixpkgs) pkgs;
 
-  f = { mkDerivation, array, base, containers, deepseq, directory
-      , exceptions, filepath, ghc, ghc-paths, ghc-prim, hint
-      , liquid-fixpoint, liquidhaskell, mtl, pretty, process, QuickCheck
-      , stdenv, syb, tagged, tasty, tasty-hunit, template-haskell, text
-      , text-format, th-lift, transformers, unordered-containers, vector
-      , z3
-      }:
-      mkDerivation {
-        pname = "target";
-        version = "9.9.9.9";
-        src = ./.;
-        isLibrary = true;
-        isExecutable = true;
-        buildDepends = [
-          base containers directory exceptions filepath ghc ghc-paths hint
-          liquid-fixpoint liquidhaskell mtl pretty process QuickCheck syb
-          tagged template-haskell text text-format th-lift transformers
-          unordered-containers vector
-        ];
-        testDepends = [
-          array base containers deepseq ghc ghc-prim liquid-fixpoint
-          liquidhaskell mtl tagged tasty tasty-hunit template-haskell
-          unordered-containers
-        ];
-        buildTools = [ z3 ];
-        description = "Generate test-suites from refinement types";
-        license = stdenv.lib.licenses.mit;
-      };
+  liquidhaskell = import ../haskell { inherit (nixpkgs) fetchgitLocal; };
+  liquid-fixpoint = import ../haskell/liquid-fixpoint { inherit (nixpkgs) fetchgitLocal; };
+  prover = import ../haskell/prover { inherit (nixpkgs) fetchgitLocal; };
 
-  drv = pkgs.haskell.packages.${compiler}.callPackage f {};
+  f = import ./default.nix { inherit (pkgs) fetchgitLocal; };
+
+  haskellPackages = (if compiler == "default"
+                     then pkgs.haskellPackages
+                     else pkgs.haskell.packages.${compiler}
+                    ).override {
+                      overrides = self: super: {
+                        liquid-fixpoint = (self.callPackage liquid-fixpoint { inherit (pkgs) z3; }).overrideDerivation (drv: { doCheck = false; });
+                        prover = (self.callPackage prover {}).overrideDerivation (drv: { doCheck = false; });
+                        liquidhaskell = (self.callPackage liquidhaskell { inherit (pkgs) z3; }).overrideDerivation (drv: { doCheck = false; });
+
+                        mkDerivation = drv: super.mkDerivation (drv // { enableLibraryProfiling = profiling; });
+                      };
+                    };
+
+  drv = haskellPackages.callPackage f { inherit (pkgs) z3; };
 
 in
 

@@ -8,6 +8,8 @@ machine:
 
 test:
   override:
-    - cabal install --enable-tests
+    - cabal build
+    - cabal exec ./dist/build/test/test -- --xml="$CIRCLE_TEST_REPORTS/tasty"
+    # - cabal install --enable-tests
   post:
     - cabal haddock --builddir=$CIRCLE_ARTIFACTS

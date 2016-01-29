@@ -1,3 +1,4 @@
+{ fetchgitLocal }:
 { mkDerivation, array, base, containers, deepseq, directory
 , exceptions, filepath, ghc, ghc-paths, ghc-prim, hint
 , liquid-fixpoint, liquidhaskell, mtl, pretty, process, QuickCheck
@@ -8,21 +9,22 @@
 mkDerivation {
   pname = "target";
   version = "9.9.9.9";
-  src = (import <nixpkgs> {}).fetchgitLocal ./.;
+  src = fetchgitLocal ./.;
   isLibrary = true;
   isExecutable = true;
-  buildDepends = [
-    base containers directory exceptions filepath ghc ghc-paths hint
+  libraryHaskellDepends = [
+    base containers directory exceptions filepath ghc ghc-paths
     liquid-fixpoint liquidhaskell mtl pretty process QuickCheck syb
     tagged template-haskell text text-format th-lift transformers
     unordered-containers vector
   ];
-  testDepends = [
+  executableHaskellDepends = [ base hint ];
+  testHaskellDepends = [
     array base containers deepseq ghc ghc-prim liquid-fixpoint
     liquidhaskell mtl tagged tasty tasty-hunit template-haskell
     unordered-containers
   ];
-  buildTools = [ z3 ];
+  testSystemDepends = [ z3 ];
   description = "Generate test-suites from refinement types";
   license = stdenv.lib.licenses.mit;
 }
