@@ -35,18 +35,17 @@ import qualified Data.HashSet                     as S
 import           Data.IORef
 import           Data.List                        hiding (sort)
 import           Data.Monoid
-import qualified Data.Text.Lazy                   as LT
+import qualified Data.Text                        as T
 import           Language.Haskell.TH.Lift
 import           System.IO.Unsafe
 import           Text.Printf
 
-import           Language.Fixpoint.Config         (SMTSolver (..))
-import           Language.Fixpoint.Names
 import           Language.Fixpoint.Smt.Interface  hiding (verbose)
 import           Language.Fixpoint.Types
-import           Language.Haskell.Liquid.PredType
-import           Language.Haskell.Liquid.RefType
-import           Language.Haskell.Liquid.Tidy
+import           Language.Fixpoint.Types.Config (SMTSolver(..))
+import           Language.Haskell.Liquid.Types.PredType
+import           Language.Haskell.Liquid.Types.RefType
+import           Language.Haskell.Liquid.UX.Tidy
 import           Language.Haskell.Liquid.Types    hiding (var, Target)
 
 import qualified GHC
@@ -56,9 +55,6 @@ import           Test.Target.Util
 
 -- import           Debug.Trace
 
-
-instance Symbolic LT.Text where
-  symbol = symbol . LT.toStrict
 
 newtype Target a = Target (StateT TargetState (ReaderT TargetOpts IO) a)
   deriving ( Functor, Applicative, Monad, MonadIO, Alternative
@@ -182,7 +178,7 @@ addDep from (EVar to) = modify $ \s@(TargetState {..}) ->
   s { deps = M.insertWith (flip (++)) from [to] deps }
 addDep _ _ = return ()
 
-addConstraint :: Pred -> Target ()
+addConstraint :: Expr -> Target ()
 addConstraint p = modify $ \s@(TargetState {..}) -> s { constraints = p:constraints }
 
 addConstructor :: Variable -> Target ()
@@ -240,16 +236,20 @@ fresh sort
   = do n <- freshInt
        let sorts' = sortTys sort
        modify $ \s@(TargetState {..}) -> s { sorts = S.union (S.fromList (arrowize sort : sorts')) sorts }
-       let x = symbol $ LT.unpack (LT.intercalate "->" $ map (LT.fromStrict.symbolText.unObj) sorts') ++ show n
+       let x = symbol $ T.unpack (T.intercalate "->" $ map (symbolText.unObj) sorts') ++ show n
        modify $ \s@(TargetState {..}) -> s { variables = (x,sort) : variables }
        return x
 
 sortTys :: Sort -> [Sort]
-sortTys (FFunc _ ts) = concatMap sortTys ts
-sortTys t            = [t]
+--sortTys (FFunc _ ts) = concatMap sortTys ts
+sortTys t
+  | Just (_, ts, t) <- functionSort t
+  = concatMap sortTys ts ++ [t]
+  | otherwise
+  = [t]
 
 arrowize :: Sort -> Sort
-arrowize = FObj . symbol . LT.intercalate "->" . map (LT.fromStrict . symbolText . unObj) . sortTys
+arrowize = FObj . symbol . T.intercalate "->" . map (symbolText . unObj) . sortTys
 
 unObj :: Sort -> Symbol
 unObj FInt     = "Int"
@@ -262,7 +262,7 @@ freshChoice :: String -> Target Symbol
 freshChoice cn
   = do n <- freshInt
        modify $ \s@(TargetState {..}) -> s { sorts = S.insert choicesort sorts }
-       let x = symbol $ LT.unpack (smt2 choicesort) ++ "-" ++ cn ++ "-" ++ show n
+       let x = symbol $ T.unpack (smt2 choicesort) ++ "-" ++ cn ++ "-" ++ show n
        modify $ \s@(TargetState {..}) -> s { variables = (x,choicesort) : variables }
        return x
 

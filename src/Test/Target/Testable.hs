@@ -24,14 +24,14 @@ import qualified Data.HashMap.Strict             as M
 import qualified Data.HashSet                    as S
 import           Data.Proxy
 import qualified Data.Text                       as T
-import           Data.Text.Format                hiding (print)
-import qualified Data.Text.Lazy                  as LT
+import           Data.Text.Format                hiding (format, print)
 import           Text.Printf
 
 import           Language.Fixpoint.Smt.Interface
 import           Language.Fixpoint.Smt.Theories  (theorySymbols)
+import           Language.Fixpoint.Smt.Types     (format)
 import           Language.Fixpoint.Types         hiding (Result)
-import           Language.Haskell.Liquid.RefType
+import           Language.Haskell.Liquid.Types.RefType
 import           Language.Haskell.Liquid.Types   hiding (Result (..), env, var)
 
 import           Test.Target.Targetable          hiding (apply)
@@ -164,7 +164,7 @@ setup = {-# SCC "setup" #-} do
      FInt       -> return ()
      FObj "GHC.Types.Bool"   -> defSort ("GHC.Types.Bool" :: T.Text) ("Bool" :: T.Text)
      FObj "CHOICE" -> defSort ("CHOICE" :: T.Text) ("Bool" :: T.Text)
-     s        -> defSort (LT.toStrict $ smt2Sort s) ("Int" :: T.Text)
+     s        -> defSort (smt2Sort s) ("Int" :: T.Text)
    -- declare constructors
    cts <- gets constructors
    mapM_ (\ (c,t) -> io $ smtWrite ctx $ makeDecl (symbol c) t) cts
@@ -180,25 +180,28 @@ setup = {-# SCC "setup" #-} do
    let defFun x t = io $ smtWrite ctx (makeDecl x t)
    forM_ ms $ \m -> do
      let x = val (name m)
-     if x `M.member` theorySymbols
-       then return ()
-       else defFun x (rTypeSort emb (sort m))
+     unless (x `M.member` theorySymbols) $
+       defFun x (rTypeSort emb (sort m))
    -- assert constraints
    cs <- gets constraints
    --mapM_ (\c -> do {i <- gets seed; modify $ \s@(GS {..}) -> s { seed = seed + 1 };
    --                 io . command ctx $ Assert (Just i) c})
    --  cs
-   mapM_ (\c -> io . command ctx $ Assert Nothing c) cs
+   mapM_ (io . command ctx . Assert Nothing) cs
    -- deps <- V.fromList . map (symbol *** symbol) <$> gets deps
    -- io $ generateDepGraph "deps" deps cs
    -- return (ctx,vs,deps)
 
-sortTys :: Sort -> [Sort]
-sortTys (FFunc _ ts) = concatMap sortTys ts
-sortTys t            = [t]
+-- sortTys :: Sort -> [Sort]
+-- sortTys (FFunc _ ts) = concatMap sortTys ts
+-- sortTys t            = [t]
 
 arrowize :: Sort -> Sort
-arrowize = FObj . symbol . LT.intercalate "->" . map (LT.fromStrict . symbolText . unObj) . sortTys
+arrowize t
+  | Just (_, ts, t) <- functionSort t
+  = FObj . symbol . T.intercalate "->" . map (symbolText . unObj) $ (ts ++ [t])
+  | otherwise
+  = t
 
 unObj :: Sort -> Symbol
 unObj FInt     = "Int"

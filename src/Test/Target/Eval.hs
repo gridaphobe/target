@@ -1,14 +1,20 @@
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Test.Target.Eval ( eval, evalWith ) where
+{-# LANGUAGE ViewPatterns      #-}
+module Test.Target.Eval ( eval, evalWith, evalExpr ) where
 
-import           Control.Arrow                   (second)
 import           Control.Applicative
+import           Control.Arrow                   (second)
 import           Control.Monad.Catch
 import           Control.Monad.State
 import qualified Data.HashMap.Strict             as M
+import           Data.Hashable
 import           Data.List
 import           Data.Maybe
+import qualified Data.Set                        as S
+import           GHC.Generics
+import           Text.PrettyPrint
 import           Text.Printf
 
 import qualified GHC
@@ -20,6 +26,7 @@ import           Language.Haskell.Liquid.Types   hiding (var)
 import           Test.Target.Expr
 import           Test.Target.Monad
 import           Test.Target.Types
+import           Test.Target.Util
 
 -- import           Debug.Trace
 
@@ -28,15 +35,17 @@ import           Test.Target.Types
 eval :: Reft -> Expr -> Target Bool
 eval r e = do
   cts <- gets freesyms
-  evalWith (M.fromList $ map (second (`app` [])) cts) r e
+  evalWith (M.fromList $ map (second (`VC` [])) cts) r e
 
 -- | Evaluate a refinement with the given expression substituted for the value
 -- variable, in the given environment of free symbols.
-evalWith :: M.HashMap Symbol Expr -> Reft -> Expr -> Target Bool
-evalWith m (Reft (v, Refa p)) x
-  = evalPred p (M.insert v x m)
+evalWith :: M.HashMap Symbol Val -> Reft -> Expr -> Target Bool
+evalWith m (Reft (v, p)) x
+  = do xx <- evalExpr x m
+       evalPred p (M.insert v xx m)
 
-evalPred :: Pred -> M.HashMap Symbol Expr -> Target Bool
+
+evalPred :: Expr -> M.HashMap Symbol Val -> Target Bool
 evalPred PTrue           _ = return True
 evalPred PFalse          _ = return False
 evalPred (PAnd ps)       m = and <$> sequence [evalPred p m | p <- ps]
@@ -50,12 +59,34 @@ evalPred (PIff p q)      m = and <$> sequence [ evalPred (p `imp` q) m
                                               , evalPred (q `imp` p) m
                                               ]
 evalPred (PAtom b e1 e2) m = evalBrel b <$> evalExpr e1 m <*> evalExpr e2 m
-evalPred (PBexp e)       m = (==0) <$> evalExpr e m
+-- evalPred (PBexp e)       m = (==0) <$> evalPred e m
 evalPred p               _ = throwM $ EvalError $ "evalPred: " ++ show p
--- evalPred (PAll ss p)     m = undefined
--- evalPred PTop            m = undefined
+-- evalExpr (PAll ss p)     m = undefined
+-- evalExpr PTop            m = undefined
+-- evalExpr :: Expr -> M.HashMap Symbol Expr -> Target Expr
 
-evalBrel :: Brel -> Expr -> Expr -> Bool
+evalExpr :: Expr -> M.HashMap Symbol Val -> Target Val
+evalExpr (ECon i)       _ = return $! VV i
+evalExpr (EVar x)       m = return $! m M.! x
+evalExpr (ESym s)       _ = return $! VX s
+evalExpr (EBin b e1 e2) m = evalBop b <$> evalExpr e1 m <*> evalExpr e2 m
+evalExpr (splitEApp_maybe -> Just (f, es))    m
+  | f == "Set_emp" || f == "Set_sng" || f `M.member` theorySymbols
+  = mapM (`evalExpr` m) es >>= \es' -> evalSet f es'
+  | otherwise
+  = filter ((==f) . val . name) <$> gets measEnv >>= \case
+      [] -> VC f <$> mapM (`evalExpr` m) es
+                      --FIXME: should really extend this to multi-param measures..
+      ms -> do e' <- evalExpr (head es) m
+               applyMeasure (symbolString f) (concatMap eqns ms) e' m
+evalExpr (EIte p e1 e2) m
+  = do b <- evalPred p m
+       if b
+         then evalExpr e1 m
+         else evalExpr e2 m
+evalExpr e              _ = throwM $ EvalError $ printf "evalExpr(%s)" (show e)
+
+evalBrel :: Brel -> Val -> Val -> Bool
 evalBrel Eq = (==)
 evalBrel Ne = (/=)
 evalBrel Ueq = (==)
@@ -65,11 +96,11 @@ evalBrel Ge = (>=)
 evalBrel Lt = (<)
 evalBrel Le = (<=)
 
-applyMeasure :: String -> [Language.Haskell.Liquid.Types.Def SpecType GHC.DataCon] -> Expr -> M.HashMap Symbol Expr -> Target Expr
-applyMeasure name eqns (EApp c xs) env
-  = meq >>= \eq -> evalBody eq xs env
+applyMeasure :: String -> [Language.Haskell.Liquid.Types.Def SpecType GHC.DataCon] -> Val -> M.HashMap Symbol Val -> Target Val
+applyMeasure name eqns (VC f es) env -- (splitEApp_maybe -> Just (f, es)) env
+  = meq >>= \eq -> evalBody eq es env
   where
-    ct = symbolString $ case val c of
+    ct = symbolString $ case f of
       "GHC.Types.[]" -> "[]"
       "GHC.Types.:"  -> ":"
       "GHC.Tuple.(,)" -> "(,)"
@@ -84,51 +115,54 @@ applyMeasure name eqns (EApp c xs) env
 applyMeasure n _ e           _
   = throwM $ EvalError $ printf "applyMeasure(%s, %s)" n (showpp e)
 
-setSym :: Symbol
-setSym = "LC_SET"
+-- setSym :: Symbol
+-- setSym = "LC_SET"
 
-nubSort :: [Expr] -> [Expr]
-nubSort = nub . Data.List.sort
+-- nubSort :: [Expr] -> [Expr]
+-- nubSort = nub . Data.List.sort
 
-mkSet :: [Expr] -> Expr
-mkSet = app setSym . nubSort
+-- mkSet :: [Expr] -> Expr
+-- mkSet = app setSym . nubSort
 
-evalSet :: Symbol -> [Expr] -> Target Expr
-evalSet "Set_emp" [e]
-  = return $ if e == app setSym [] then 0 else 1
-evalSet "Set_sng" [e]
-  = return $ mkSet [e]
-evalSet "Set_add" [e1, EApp _ e2]
-  = return $ mkSet $ e1:e2
-evalSet "Set_cap" [EApp _ e1, EApp _ e2]
-  = return $ mkSet $ intersect e1 e2
-evalSet "Set_cup" [EApp _ e1, EApp _ e2]
-  = return $ mkSet $ e1 ++ e2
-evalSet "Set_dif" [EApp _ e1, EApp _ e2]
-  = return $ mkSet $ e1 \\ e2
-evalSet "Set_sub" [EApp _ e1, EApp _ e2]
-  = return $ if null (e1 \\ e2) then 0 else 1
-evalSet "Set_mem" [e1, EApp f e2] | val f == setSym
-  = return $ if e1 `elem` e2 then 0 else 1
+evalSet :: Symbol -> [Val] -> Target Val
+evalSet "Set_emp" [VS s]
+  = return $! if S.null s then VB True else VB False
+evalSet "Set_sng" [v]
+  = return $! VS $ S.singleton v
+-- TODO!!
+evalSet "Set_add" [v, VS s]
+  = return $! VS $ S.insert v s
+evalSet "Set_cap" [VS s1, VS s2]
+  = return $! VS $ S.intersection s1 s2
+evalSet "Set_cup" [VS s1, VS s2]
+  = return $! VS $ S.union s1 s2
+evalSet "Set_dif" [VS s1, VS s2]
+  = return $! VS $ s1 S.\\ s2
+evalSet "Set_sub" [VS s1, VS s2]
+  = return $! VB $ S.isSubsetOf s1 s2
+evalSet "Set_mem" [v, VS s]
+  = return $! VB $ S.member v s
 evalSet f es = throwM $ EvalError $ printf "evalSet(%s, %s)" (show f) (show es)
 
 evalBody
   :: Language.Haskell.Liquid.Types.Def ty ctor
-     -> [Expr] -> M.HashMap Symbol Expr -> Target Expr
+     -> [Val] -> M.HashMap Symbol Val -> Target Val
 evalBody eq xs env = go $ body eq
   where
-    go (E e) = evalExpr (subst su e) env
-    go (P p) = evalPred (subst su p) env >>= \b -> return $ if b then 0 else 1
-    go (R v p) = do e <- evalRel v (subst su p) env
+    go (E e) = evalExpr e env'
+    go (P p) = evalPred p env' >>= \b -> return $ if b then VB True else VB False
+    go (R v p) = do e <- evalRel v p env'
                     case e of
                       Nothing -> throwM $ EvalError $ "evalBody can't handle: " ++ show (R v p)
                       Just e  -> return e
     --go (R v (PBexp (EApp f e))) | val f == "Set_emp" = return $ app setSym []
     ----FIXME: figure out how to handle the general case..
     --go (R v p) = return (ECon (I 0))
-    su = mkSubst $ zip (map fst (binds eq)) xs
 
-evalRel :: Symbol -> Pred -> M.HashMap Symbol Expr -> Target (Maybe Expr)
+    env' = M.union (M.fromList (zip (map fst (binds eq)) xs)) env
+    -- su = mkSubst $ zip (map fst (binds eq)) xs
+
+evalRel :: Symbol -> Expr -> M.HashMap Symbol Val -> Target (Maybe Val)
 evalRel v (PAnd ps)       m = Just . head . catMaybes <$> sequence [evalRel v p m | p <- ps]
 evalRel v (PImp p q)      m = do pv <- evalPred p m
                                  if pv
@@ -137,37 +171,18 @@ evalRel v (PImp p q)      m = do pv <- evalPred p m
 evalRel v (PAtom Eq (EVar v') e2) m
   | v == v'
   = Just <$> evalExpr e2 m
-evalRel v (PBexp (EApp f [EVar v'])) _
-  | v == v' && val f == "Set_emp"
-  = return $ Just $ app setSym []
+-- evalRel v (PBexp (EApp f [EVar v'])) _
+evalRel v (EApp (EVar f) (EVar v')) _
+  | v == v' && f == "Set_emp"
+  = return $! Just $ VS S.empty
 evalRel _ p               _
   = throwM $ EvalError $ "evalRel: " ++ show p
 
-evalExpr :: Expr -> M.HashMap Symbol Expr -> Target Expr
-evalExpr (ECon i)       _ = return $ ECon i
-evalExpr (EVar x)       m = return $ m M.! x
-evalExpr (ESym s)       _ = return $ ESym s
-evalExpr (EBin b e1 e2) m = evalBop b <$> evalExpr e1 m <*> evalExpr e2 m
-evalExpr (EApp f es)    m
-  | val f == "Set_emp" || val f == "Set_sng" || val f `M.member` theorySymbols
-  = mapM (`evalExpr` m) es >>= \es' -> evalSet (val f) es'
-  | otherwise
-  = filter ((==f) . name) <$> gets measEnv >>= \case
-      [] -> EApp f <$> mapM (`evalExpr` m) es
-                      --FIXME: should really extend this to multi-param measures..
-      ms -> do e' <- evalExpr (head es) m
-               applyMeasure (symbolString $ val f) (concatMap eqns ms) e' m
-evalExpr (EIte p e1 e2) m
-  = do b <- evalPred p m
-       if b
-         then evalExpr e1 m
-         else evalExpr e2 m
-evalExpr e              _ = throwM $ EvalError $ printf "evalExpr(%s)" (show e)
 
-evalBop :: Bop -> Expr -> Expr -> Expr
-evalBop Plus  (ECon (I x)) (ECon (I y)) = ECon . I $ x + y
-evalBop Minus (ECon (I x)) (ECon (I y)) = ECon . I $ x - y
-evalBop Times (ECon (I x)) (ECon (I y)) = ECon . I $ x * y
-evalBop Div   (ECon (I x)) (ECon (I y)) = ECon . I $ x `div` y
-evalBop Mod   (ECon (I x)) (ECon (I y)) = ECon . I $ x `mod` y
-evalBop b     e1           e2           = error $ printf "evalBop(%s, %s, %s)" (show b) (show e1) (show e2)
+evalBop :: Bop -> Val -> Val -> Val
+evalBop Plus  (VV (I x)) (VV (I y)) = VV . I $ x + y
+evalBop Minus (VV (I x)) (VV (I y)) = VV . I $ x - y
+evalBop Times (VV (I x)) (VV (I y)) = VV . I $ x * y
+evalBop Div   (VV (I x)) (VV (I y)) = VV . I $ x `div` y
+evalBop Mod   (VV (I x)) (VV (I y)) = VV . I $ x `mod` y
+evalBop b     e1           e2       = error $ printf "evalBop(%s, %s, %s)" (show b) (show e1) (show e2)

@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns #-}
 module Test.Target.Util where
 
 import           Control.Applicative
@@ -14,9 +15,9 @@ import           Control.Monad.IO.Class
 import           Data.List
 import           Data.Maybe
 import           Data.Monoid
-import           Data.Generics                    (everywhere, mkT)
-import           Data.Text.Format                hiding (print)
-import qualified Data.Text.Lazy                  as LT
+import           Data.Generics                   (everywhere, mkT)
+import           Data.Text.Format                hiding (format, print)
+import qualified Data.Text                       as T
 import           Debug.Trace
 
 import qualified DynFlags as GHC
@@ -27,11 +28,13 @@ import qualified GHC.Paths
 import qualified HscTypes as GHC
 
 import           Language.Fixpoint.Smt.Interface
+import qualified Language.Fixpoint.Smt.Theories as Thy
+import           Language.Fixpoint.Smt.Types
 import           Language.Fixpoint.Types          hiding (prop)
-import           Language.Haskell.Liquid.CmdLine
-import           Language.Haskell.Liquid.GhcInterface
-import           Language.Haskell.Liquid.PredType
-import           Language.Haskell.Liquid.RefType
+import           Language.Haskell.Liquid.UX.CmdLine
+import           Language.Haskell.Liquid.GHC.Interface
+import           Language.Haskell.Liquid.Types.PredType
+import           Language.Haskell.Liquid.Types.RefType
 import           Language.Haskell.Liquid.Types    hiding (var)
 
 type Depth = Int
@@ -75,20 +78,25 @@ type family Res a where
 -- liquid-fixpoint started encoding `FObj s` as `Int` in 0.3.0.0, but we
 -- want to preserve the type aliases for easier debugging.. so here's a
 -- copy of the SMTLIB2 Sort instance..
-smt2Sort :: Sort -> LT.Text
-smt2Sort FInt        = "Int"
-smt2Sort (FApp t []) | t == intFTyCon = "Int"
-smt2Sort (FApp t []) | t == boolFTyCon = "Bool"
-smt2Sort (FApp t [FApp ts _,_]) | t == appFTyCon  && fTyconSymbol ts == "Set_Set" = "Set"
-smt2Sort (FObj s)    = smt2 s
-smt2Sort s@(FFunc _ _) = error $ "smt2 FFunc: " ++ show s
-smt2Sort _           = "Int"
+smt2Sort :: Sort -> T.Text
+smt2Sort s = case s of
+  FObj s' -> smt2 s'
+  _       -> smt2 s
+-- smt2Sort s           | Just t <- Thy.smt2Sort s = t
+-- smt2Sort FInt        = "Int"
+-- smt2Sort (FApp t []) | t == intFTyCon = "Int"
+-- smt2Sort (FApp t []) | t == boolFTyCon = "Bool"
+-- --smt2Sort (FApp t [FApp ts _,_]) | t == appFTyCon  && fTyconSymbol ts == "Set_Set" = "Set"
+-- smt2Sort (FObj s)    = smt2 s
+-- smt2Sort s@(FFunc _ _) = error $ "smt2 FFunc: " ++ show s
+-- smt2Sort _           = "Int"
 
-makeDecl :: Symbol -> Sort -> LT.Text
+makeDecl :: Symbol -> Sort -> T.Text
 -- FIXME: hack..
-makeDecl x (FFunc _ ts)
+makeDecl x t
+  | Just (_, ts, t) <- functionSort t
   = format "(declare-fun {} ({}) {})"
-           (smt2 x, LT.unwords (map smt2Sort (init ts)), smt2Sort (last ts))
+           (smt2 x, T.unwords (map smt2Sort ts), smt2Sort t)
 makeDecl x t
   = format "(declare-const {} {})" (smt2 x, smt2Sort t)
 
@@ -97,29 +105,37 @@ safeFromJust msg Nothing  = error $ "safeFromJust: " ++ msg
 safeFromJust _   (Just x) = x
 
 applyPreds :: SpecType -> SpecType -> [(Symbol,SpecType)]
-applyPreds sp' dc = zip xs (map tx ts)
+applyPreds sp' dc = -- trace ("sp : " ++ showpp sp') $ trace ("dc : " ++ showpp dc)
+                    zip xs (map tx ts)
   where
     sp = removePreds <$> sp'
-    removePreds (U r _ _) = U r mempty mempty
+    removePreds (MkUReft r _ _) = MkUReft r mempty mempty
     (as, ps, _, t) = bkUniv dc
     (xs, ts, _, _) = bkArrow . snd $ bkClass t
     -- args  = reverse tyArgs
     su    = [(tv, toRSort t, t) | tv <- as | t <- rt_args sp]
     sup   = [(p, r) | p <- ps | r <- rt_pargs sp]
-    tx    = (\t -> replacePreds "applyPreds" t sup) . everywhere (mkT $ propPsToProp sup) . subsTyVars_meet su
+    tx    = (\t -> replacePreds "applyPreds" t sup)
+          . everywhere (mkT $ propPsToProp sup)
+          . subsTyVars_meet su
 
-propPsToProp
-  :: [(PVar t3, Ref t (UReft t2) t1)]
-     -> Ref t (UReft t2) t1 -> Ref t (UReft t2) t1
+propPsToProp :: [(RPVar, SpecProp)] -> SpecProp -> SpecProp
 propPsToProp su r = foldr propPToProp r su
 
-propPToProp
-  :: (PVar t3, Ref t (UReft t2) t1)
-     -> Ref t (UReft t2) t1 -> Ref t (UReft t2) t1
-propPToProp (p, r) (RPropP _ (U _ (Pr [up]) _))
+propPToProp :: (RPVar, SpecProp) -> SpecProp -> SpecProp
+propPToProp (p, r) (RProp _ (RHole (MkUReft _ (Pr [up]) _)))
   | pname p == pname up
   = r
 propPToProp _ m = m
+
+splitEApp_maybe :: Expr -> Maybe (Symbol, [Expr])
+splitEApp_maybe e@(EApp {}) = Just $ go [] e
+  where
+    go acc (EApp f e) = go (e:acc) f
+    go acc (EVar s)   = (s, acc)
+    go _ e = error $ "splitEApp_maybe: " ++ showpp e
+splitEApp_maybe _ = Nothing
+
 
 
 stripQuals :: SpecType -> SpecType
@@ -130,11 +146,11 @@ fourth4 (_,_,_,d) = d
 
 getSpec :: [String] -> FilePath -> IO GhcSpec
 getSpec opts target
-  = do cfg  <- mkOpts mempty
-       info <- getGhcInfo (cfg {ghcOptions = opts}) target
-       case info of
-         Left err -> error $ show err
-         Right i  -> return $ spec i
+  = do cfg  <- getOpts ["--quiet"]
+       spec.fst <$> getGhcInfo Nothing (cfg {ghcOptions = opts}) target
+       -- case info of
+       --   Left err -> error $ show err
+       --   Right i  -> return $ spec i
 
 runGhc :: [String] -> GHC.Ghc a -> IO a
 runGhc o x = GHC.runGhc (Just GHC.Paths.libdir) $ do

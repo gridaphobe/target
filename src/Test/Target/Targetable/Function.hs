@@ -20,13 +20,14 @@ import           Data.IORef
 import           Data.Monoid
 import           Data.Proxy
 import qualified Data.Text                       as T
+import           System.IO.Unsafe
+
 import qualified GHC
 import           Language.Fixpoint.Smt.Interface
 import           Language.Fixpoint.Types         hiding (ofReft, reft)
-import           Language.Haskell.Liquid.GhcMisc (qualifiedNameSymbol)
-import           Language.Haskell.Liquid.RefType (addTyConInfo, rTypeSort)
+import           Language.Haskell.Liquid.GHC.Misc (qualifiedNameSymbol)
+import           Language.Haskell.Liquid.Types.RefType (addTyConInfo, rTypeSort)
 import           Language.Haskell.Liquid.Types   hiding (var)
-import           System.IO.Unsafe
 
 import           Test.Target.Targetable
 import           Test.Target.Eval
@@ -70,7 +71,7 @@ stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, _, to))
            Just v  -> return v
            Nothing -> do
              cts <- gets freesyms
-             let env = map (second (`app` [])) cts
+             let env = map (second (`VC` [])) cts
              bs <- zipWithM (evalType (M.fromList env)) tis es
              case and bs of
                --FIXME: better error message
@@ -96,7 +97,7 @@ stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, _, to))
                  return o
     
 genExpr :: Expr -> Target Symbol
-genExpr (EApp (val -> c) es)
+genExpr (splitEApp_maybe -> Just (c, es))
   = do xes <- mapM genExpr es
        (xs, _, _, to) <- bkArrowDeep . stripQuals <$> lookupCtor c
        let su  = mkSubst $ zip xs $ map var xes
@@ -115,9 +116,9 @@ genExpr (ESym (SL s)) | T.length s == 1
        return x
 genExpr e = error $ "genExpr: " ++ show e
 
-evalType :: M.HashMap Symbol Expr -> SpecType -> Expr -> Target Bool
-evalType m t e@(EApp c xs)
-  = do dcp <- lookupCtor (val c)
+evalType :: M.HashMap Symbol Val -> SpecType -> Expr -> Target Bool
+evalType m t e@(splitEApp_maybe -> Just (c, xs))
+  = do dcp <- lookupCtor c
        tyi <- gets tyconInfo
        vts <- freshen $ applyPreds (addTyConInfo M.empty tyi t) dcp
        liftM2 (&&) (evalWith m (toReft $ rt_reft t) e) (evalTypes m vts xs)
@@ -135,18 +136,19 @@ freshen ((v,t):vts)
        return ((v',t'):vts')
 
 evalTypes
-  :: M.HashMap Symbol Expr
+  :: M.HashMap Symbol Val
      -> [(Symbol, SpecType)] -> [Expr] -> Target Bool
 evalTypes _ []         []     = return True
 evalTypes m ((v,t):ts) (x:xs)
-  = liftM2 (&&) (evalType m' t x) (evalTypes m' ts xs)
-  where
-    m' = M.insert v x m
+  = do xx <- evalExpr x m
+       let m' = M.insert v xx m
+       liftM2 (&&) (evalType m' t x) (evalTypes m' ts xs)
+
 evalTypes _ _ _ = error "evalTypes called with lists of unequal length!"
 
 instance (Targetable a, Targetable b, b ~ Res (a -> b))
   => Targetable (a -> b) where
-  getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)]
+  getType _ = mkFFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)]
   query = genFun
   decode _ t
     = do f <- stitchFun (Proxy :: Proxy (a -> b)) t
@@ -156,8 +158,8 @@ instance (Targetable a, Targetable b, b ~ Res (a -> b))
 
 instance (Targetable a, Targetable b, Targetable c, c ~ Res (a -> b -> c))
   => Targetable (a -> b -> c) where
-  getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)
-                      ,getType (Proxy :: Proxy c)]
+  getType _ = mkFFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)
+                        ,getType (Proxy :: Proxy c)]
   query = genFun
   decode _ t
     = do f <- stitchFun (Proxy :: Proxy (a -> b -> c)) t
@@ -167,8 +169,8 @@ instance (Targetable a, Targetable b, Targetable c, c ~ Res (a -> b -> c))
 
 instance (Targetable a, Targetable b, Targetable c, Targetable d, d ~ Res (a -> b -> c -> d))
   => Targetable (a -> b -> c -> d) where
-  getType _ = FFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)
-                      ,getType (Proxy :: Proxy c), getType (Proxy :: Proxy d)]
+  getType _ = mkFFunc 0 [getType (Proxy :: Proxy a), getType (Proxy :: Proxy b)
+                        ,getType (Proxy :: Proxy c), getType (Proxy :: Proxy d)]
   query = genFun
   decode _ t
     = do f <- stitchFun (Proxy :: Proxy (a -> b -> c -> d)) t

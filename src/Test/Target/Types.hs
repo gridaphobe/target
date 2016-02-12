@@ -1,12 +1,16 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveDataTypeable   #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 module Test.Target.Types where
 
-import qualified Control.Monad.Catch           as Ex
-import qualified Data.Text                     as T
+import qualified Control.Monad.Catch             as Ex
+import qualified Data.Set                        as S
+import qualified Data.Text                       as T
 import           Data.Typeable
+import           GHC.Generics
+import           Text.PrettyPrint
 
 import           Language.Fixpoint.Smt.Interface
 import           Language.Fixpoint.Types
@@ -44,7 +48,7 @@ ensureValues x = do
     Values _ -> return a
     r        -> Ex.throwM $ ExpectedValues r
 
-type Constraint = [Pred]
+type Constraint = [Expr]
 type Variable   = ( Symbol -- the name
                   , Sort   -- the `Sort'
                   )
@@ -69,3 +73,18 @@ data Result = Passed !Int
             deriving (Show, Typeable)
 
 -- resultPassed (Passed i) = i
+
+data Val
+  = VB !Bool
+  | VV !Constant
+  | VX !SymConst
+  | VS !(S.Set Val) -- ??
+  | VC Symbol [Val]
+  deriving (Generic, Show, Eq, Ord)
+
+instance PPrint Val where
+  pprint (VB b) = pprint b
+  pprint (VV v) = pprint v
+  pprint (VX x) = pprint x
+  pprint (VS s) = "Set.fromList" <+> pprint (S.toList s)
+  pprint (VC c vs) = parens $ pprint c <+> hsep (map pprint vs)

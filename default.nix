@@ -4,7 +4,7 @@
 , liquid-fixpoint, liquidhaskell, mtl, pretty, process, QuickCheck
 , stdenv, syb, tagged, tasty, tasty-hunit, template-haskell, text
 , text-format, th-lift, transformers, unordered-containers, vector
-, z3
+, z3, tasty-ant-xml
 }:
 mkDerivation {
   pname = "target";
@@ -22,7 +22,7 @@ mkDerivation {
   testHaskellDepends = [
     array base containers deepseq ghc ghc-prim liquid-fixpoint
     liquidhaskell mtl tagged tasty tasty-hunit template-haskell
-    unordered-containers
+    unordered-containers tasty-ant-xml
   ];
   testSystemDepends = [ z3 ];
   description = "Generate test-suites from refinement types";

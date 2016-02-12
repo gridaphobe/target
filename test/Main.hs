@@ -86,4 +86,4 @@ shouldFail d f name file
                                                Passed _ -> False
                                                _        -> True
 
-testOpts = defaultOpts {ghcOpts = ["-isrc", "-package", "ghc"]}
+testOpts = defaultOpts {ghcOpts = ["-isrc", "-package ghc"]}

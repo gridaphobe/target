@@ -31,7 +31,7 @@ import           Data.Word                       (Word8)
 import           GHC.Generics
 
 import           Language.Fixpoint.Types         hiding (prop, ofReft, reft)
-import           Language.Haskell.Liquid.RefType
+import           Language.Haskell.Liquid.Types.RefType
 import           Language.Haskell.Liquid.Types   hiding (var)
 
 import           Test.Target.Expr
@@ -168,7 +168,7 @@ whichOf v = do
 
 
 -- | Assert a logical predicate, guarded by the current choice variable.
-constrain :: Pred -> Target ()
+constrain :: Expr -> Target ()
 constrain p = do
   mc <- gets chosen
   case mc of
@@ -178,8 +178,8 @@ constrain p = do
 
 -- | Given a refinement @{v | p}@ and an expression @e@, construct
 -- the predicate @p[e/v]@.
-ofReft :: Reft -> Expr -> Pred
-ofReft (Reft (v, Refa p)) e
+ofReft :: Reft -> Expr -> Expr
+ofReft (Reft (v, p)) e
   = let x = mkSubst [(v, e)]
     in subst x p
 
@@ -321,10 +321,10 @@ reproxyGElem :: Proxy (M1 d c f a) -> Proxy (f a)
 reproxyGElem = reproxy
 
 instance (Datatype c, GToExprCtor f) => GToExpr (D1 c f) where
-  gtoExpr (M1 x) = app (qualify mod (symbolString $ val d)) xs
+  gtoExpr (M1 x) = app (qualify mod (symbolString d)) xs
     where
       mod  = GHC.Generics.moduleName (undefined :: D1 c f a)
-      (EApp d xs) = gtoExprCtor x
+      (EVar d, xs) = splitEApp $ gtoExprCtor x
 
 instance (Datatype c, GQueryCtors f) => GQuery (D1 c f) where
   gquery p d t = inModule mod . making sort $ do

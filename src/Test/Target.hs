@@ -21,7 +21,7 @@ import           System.Process                  (terminateProcess)
 import           Test.QuickCheck.All             (monomorphic)
 import           Text.Printf                     (printf)
 
-import           Language.Fixpoint.Names
+import           Language.Fixpoint.Types.Names
 import           Language.Fixpoint.Smt.Interface hiding (verbose)
 
 import           Test.Target.Monad
@@ -83,7 +83,9 @@ targetResultWith f name path opts
           return r
         `onException` terminateProcess (pId ctx)
   where
-    mkContext = if logging opts then flip makeContext (".target/" ++ name) else makeContextNoLog
+    mkContext = if logging opts
+                then flip (makeContext False) (".target/" ++ name)
+                else makeContextNoLog False
 
 targetResultWithTH :: TH.Name -> FilePath -> TargetOpts -> TH.ExpQ
 targetResultWithTH f m opts = [| targetResultWith $(monomorphic f) $(TH.stringE $ show f) m opts |]
