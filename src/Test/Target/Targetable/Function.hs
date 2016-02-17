@@ -141,7 +141,8 @@ evalTypes
 evalTypes _ []         []     = return True
 evalTypes m ((v,t):ts) (x:xs)
   = do xx <- evalExpr x m
-       let m' = M.insert v xx m
+       -- FIXME: tidy??
+       let m' = M.insert (tidySymbol v) xx m
        liftM2 (&&) (evalType m' t x) (evalTypes m' ts xs)
 
 evalTypes _ _ _ = error "evalTypes called with lists of unequal length!"

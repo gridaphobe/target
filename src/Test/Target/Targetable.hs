@@ -40,7 +40,7 @@ import           Test.Target.Monad
 import           Test.Target.Types
 import           Test.Target.Util
 
--- import Debug.Trace
+import Debug.Trace
 
 --------------------------------------------------------------------------------
 --- Constrainable Data
@@ -126,6 +126,7 @@ apply c vs = do
     Nothing -> return ()
   let x = app c vs
   t <- lookupCtor c
+  -- traceShowM ("apply.ctor", c, t)
   let (xs, _, _, rt) = bkArrowDeep t
       su             = mkSubst $ zip (map symbol xs) vs
   addConstructor (c, rTypeSort mempty t)

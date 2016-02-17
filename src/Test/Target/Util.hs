@@ -129,11 +129,11 @@ propPToProp (p, r) (RProp _ (RHole (MkUReft _ (Pr [up]) _)))
 propPToProp _ m = m
 
 splitEApp_maybe :: Expr -> Maybe (Symbol, [Expr])
-splitEApp_maybe e@(EApp {}) = Just $ go [] e
+splitEApp_maybe e@(EApp {}) = go [] e
   where
     go acc (EApp f e) = go (e:acc) f
-    go acc (EVar s)   = (s, acc)
-    go _ e = error $ "splitEApp_maybe: " ++ showpp e
+    go acc (EVar s)   = Just (s, acc)
+    go _ e = Nothing -- error $ "splitEApp_maybe: " ++ showpp e
 splitEApp_maybe _ = Nothing
 
 

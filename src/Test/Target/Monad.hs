@@ -23,7 +23,7 @@ module Test.Target.Monad
   ) where
 
 import           Control.Applicative
-import           Control.Arrow                    (first, (***))
+import           Control.Arrow                    (first, second, (***))
 import qualified Control.Exception                as Ex
 import           Control.Monad
 import           Control.Monad.Catch
@@ -53,7 +53,7 @@ import qualified GHC
 import           Test.Target.Types
 import           Test.Target.Util
 
--- import           Debug.Trace
+import           Debug.Trace
 
 
 newtype Target a = Target (StateT TargetState (ReaderT TargetOpts IO) a)
@@ -144,7 +144,7 @@ initState fp sp ctx = TargetState
   , measEnv      = meas
   , embEnv       = tcEmbeds sp
   , tyconInfo    = tyi
-  , freesyms     = free
+  , freesyms     = tidyF free
   , constructors = []
   , sigs         = sigs
   , chosen       = Nothing
@@ -155,14 +155,17 @@ initState fp sp ctx = TargetState
   , smtContext   = ctx
   }
   where
-    dcons = tidy $ map (first symbol) (dconsP sp)
-    cts   = tidy $ map (symbol *** val) (ctors sp)
-    tyi   = tidy $ makeTyConInfo (tconsP sp)
-    free  = tidy $ map (symbol *** symbol) $ freeSyms sp
-    sigs  = tidy $ map (symbol *** val) $ tySigs sp
-    meas  = tidy $ measures sp
-    tidy :: forall a. Data a => a -> a
-    tidy  = everywhere (mkT tidySymbol)
+    -- FIXME: can we NOT tidy???
+    dcons = tidyF $ map (first symbol) (dconsP sp)
+    -- NOTE: we want to tidy all occurrences of nullary datacons in the signatures
+    cts   = subst su $ tidyF $ map (symbol *** val) (ctors sp)
+    tyi   = makeTyConInfo (tconsP sp)
+    free  = tidyS $ map (symbol *** symbol) $ freeSyms sp
+    sigs  = tidyF $ map (symbol *** val) $ tySigs sp
+    meas  = measures sp
+    tidyF = map (first tidySymbol)
+    tidyS = map (second tidySymbol)
+    su = mkSubst (map (second eVar) free)
 
 whenVerbose :: Target () -> Target ()
 whenVerbose x

@@ -28,7 +28,7 @@ import           Test.Target.Monad
 import           Test.Target.Types
 import           Test.Target.Util
 
--- import           Debug.Trace
+import           Debug.Trace
 
 -- | Evaluate a refinement with the given expression substituted for the value
 -- variable.
@@ -42,7 +42,8 @@ eval r e = do
 evalWith :: M.HashMap Symbol Val -> Reft -> Expr -> Target Bool
 evalWith m (Reft (v, p)) x
   = do xx <- evalExpr x m
-       evalPred p (M.insert v xx m)
+                  -- FIXME: tidy is suspicious!!
+       evalPred p (M.insert (tidySymbol v) xx m)
 
 
 evalPred :: Expr -> M.HashMap Symbol Val -> Target Bool
@@ -59,32 +60,55 @@ evalPred (PIff p q)      m = and <$> sequence [ evalPred (p `imp` q) m
                                               , evalPred (q `imp` p) m
                                               ]
 evalPred (PAtom b e1 e2) m = evalBrel b <$> evalExpr e1 m <*> evalExpr e2 m
+evalPred e@(splitEApp_maybe -> Just (f, es))    m
+  | f == "Set_emp" || f == "Set_sng" || f `M.member` theorySymbols
+  = mapM (`evalExpr` m) es >>= \es' -> fromExpr <$> evalSet f es'
+  | otherwise
+  = filter ((==f) . val . name) <$> gets measEnv >>= \case
+      [] -> error $ "evalPred: cannot evaluate " ++ show e -- VC f <$> mapM (`evalExpr` m) es
+                      --FIXME: should really extend this to multi-param measures..
+      ms -> do e' <- evalExpr (head es) m
+               fromExpr <$> applyMeasure (symbolString f) (concatMap eqns ms) e' m
 -- evalPred (PBexp e)       m = (==0) <$> evalPred e m
 evalPred p               _ = throwM $ EvalError $ "evalPred: " ++ show p
 -- evalExpr (PAll ss p)     m = undefined
 -- evalExpr PTop            m = undefined
 -- evalExpr :: Expr -> M.HashMap Symbol Expr -> Target Expr
 
+fromExpr :: Val -> Bool
+fromExpr (VB True) = True
+fromExpr (VB False) = False
+fromExpr e = error $ "fromExpr: " ++ show e ++ " is not boolean"
+
 evalExpr :: Expr -> M.HashMap Symbol Val -> Target Val
-evalExpr (ECon i)       _ = return $! VV i
-evalExpr (EVar x)       m = return $! m M.! x
-evalExpr (ESym s)       _ = return $! VX s
-evalExpr (EBin b e1 e2) m = evalBop b <$> evalExpr e1 m <*> evalExpr e2 m
-evalExpr (splitEApp_maybe -> Just (f, es))    m
+evalExpr e m = do
+  -- traceShowM ("evalExpr", e)
+  evalExpr' e m
+
+evalExpr' :: Expr -> M.HashMap Symbol Val -> Target Val
+evalExpr' (ECon i)       _ = return $! VV i
+evalExpr' (EVar x)       m = return $! -- traceShow (x,m)
+                                       -- FIXME: tidy is fishy!!
+                                       -- datacons are embedded as vars and may not
+                                       -- be in the freesym environment
+                                    fromMaybe (VC x []) (M.lookup (tidySymbol x) m)
+evalExpr' (ESym s)       _ = return $! VX s
+evalExpr' (EBin b e1 e2) m = evalBop b <$> evalExpr' e1 m <*> evalExpr' e2 m
+evalExpr' (splitEApp_maybe -> Just (f, es))    m
   | f == "Set_emp" || f == "Set_sng" || f `M.member` theorySymbols
-  = mapM (`evalExpr` m) es >>= \es' -> evalSet f es'
+  = mapM (`evalExpr'` m) es >>= \es' -> evalSet f es'
   | otherwise
   = filter ((==f) . val . name) <$> gets measEnv >>= \case
-      [] -> VC f <$> mapM (`evalExpr` m) es
+      [] -> VC f <$> mapM (`evalExpr'` m) es
                       --FIXME: should really extend this to multi-param measures..
-      ms -> do e' <- evalExpr (head es) m
+      ms -> do e' <- evalExpr' (head es) m
                applyMeasure (symbolString f) (concatMap eqns ms) e' m
-evalExpr (EIte p e1 e2) m
+evalExpr' (EIte p e1 e2) m
   = do b <- evalPred p m
        if b
-         then evalExpr e1 m
-         else evalExpr e2 m
-evalExpr e              _ = throwM $ EvalError $ printf "evalExpr(%s)" (show e)
+         then evalExpr' e1 m
+         else evalExpr' e2 m
+evalExpr' e              _ = throwM $ EvalError $ printf "evalExpr(%s)" (show e)
 
 evalBrel :: Brel -> Val -> Val -> Bool
 evalBrel Eq = (==)
@@ -98,9 +122,12 @@ evalBrel Le = (<=)
 
 applyMeasure :: String -> [Language.Haskell.Liquid.Types.Def SpecType GHC.DataCon] -> Val -> M.HashMap Symbol Val -> Target Val
 applyMeasure name eqns (VC f es) env -- (splitEApp_maybe -> Just (f, es)) env
-  = meq >>= \eq -> evalBody eq es env
+  = do
+       -- traceShowM ("applyMeasure", name)
+       meq >>= \eq -> evalBody eq es env
   where
-    ct = symbolString $ case f of
+    -- FIXME: tidy is fishy!!
+    ct = symbolString . tidySymbol $ case f of
       "GHC.Types.[]" -> "[]"
       "GHC.Types.:"  -> ":"
       "GHC.Tuple.(,)" -> "(,)"

@@ -28,11 +28,12 @@ import           Data.Text.Format                hiding (format, print)
 import           Text.Printf
 
 import           Language.Fixpoint.Smt.Interface
+import           Language.Fixpoint.Smt.Serialize
 import           Language.Fixpoint.Smt.Theories  (theorySymbols)
 import           Language.Fixpoint.Smt.Types     (format)
 import           Language.Fixpoint.Types         hiding (Result)
 import           Language.Haskell.Liquid.Types.RefType
-import           Language.Haskell.Liquid.Types   hiding (Result (..), env, var)
+import           Language.Haskell.Liquid.Types   hiding (Result (..), env, var, Only)
 
 import           Test.Target.Targetable          hiding (apply)
 -- import           Test.Target.Eval
@@ -41,7 +42,7 @@ import           Test.Target.Monad
 import           Test.Target.Types
 import           Test.Target.Util
 
--- import Debug.Trace
+import Debug.Trace
 
 -- | Test that a function inhabits the given refinement type by enumerating
 -- valid inputs and calling the function on the inputs.
@@ -79,8 +80,10 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
           | otherwise -> do
               real <- gets realized
               modify $ \s@(TargetState {..}) -> s { realized = [] }
-              _ <- io $ command ctx $ Assert Nothing $ PNot $ pAnd
-                    [ ESym (SL $ symbolText x) `eq` ESym (SL v) | (x,v) <- real ]
+              let model = [ format "(= {} {})" (symbolText x, v) | (x,v) <- real ]
+              unless (null model) $
+                void $ io $ smtWrite ctx $ format "(assert (not (and {})))"
+                     $ Only $ smt2many model
               mbKeepGoing xs n'
         Right r -> do
           real <- gets realized
@@ -93,8 +96,10 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
           -- refuting the current model forces the solver to return unsat next
           -- time, the solver will return unsat when the HOF queries for an output,
           -- causing us to return a spurious error
-          _ <- io $ command ctx $ Assert Nothing $ PNot $ pAnd
-                [ ESym (SL $ symbolText x) `eq` ESym (SL v) | (x,v) <- real ]
+          let model = [ format "(= {} {})" (symbolText x, v) | (x,v) <- real ]
+          unless (null model) $
+            void $ io $ smtWrite ctx $ format "(assert (not (and {})))"
+                 $ Only $ smt2many model
 
           case sat of
             False -> mbKeepGoing xs n'
@@ -148,6 +153,7 @@ instance (Targetable a, Args a ~ '[], Res a ~ a) => Testable a where
 
 
 func :: Sort -> Bool
+func (FAbs  _ s) = func s
 func (FFunc _ _) = True
 func _           = False
 
