@@ -265,7 +265,7 @@ freshChoice :: String -> Target Symbol
 freshChoice cn
   = do n <- freshInt
        modify $ \s@(TargetState {..}) -> s { sorts = S.insert choicesort sorts }
-       let x = symbol $ T.unpack (smt2 choicesort) ++ "-" ++ cn ++ "-" ++ show n
+       let x = symbol $ T.unpack (mysmt2 choicesort) ++ "-" ++ cn ++ "-" ++ show n
        modify $ \s@(TargetState {..}) -> s { variables = (x,choicesort) : variables }
        return x
 

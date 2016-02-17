@@ -8,6 +8,8 @@ machine:
 
 test:
   pre:
+    - git clone --recursive --branch develop git://github.com/ucsd-progsys.git /tmp/liquid-haskell
+    - cabal install /tmp/liquid-haskell/liquid-fixpoint /tmp/liquid-haskell/prover /tmp/liquid-haskell
     - mkdir -p $CIRCLE_TEST_REPORTS/tasty
   override:
     - cabal build

@@ -28,6 +28,7 @@ import qualified GHC.Paths
 import qualified HscTypes as GHC
 
 import           Language.Fixpoint.Smt.Interface
+import           Language.Fixpoint.Smt.Serialize
 import qualified Language.Fixpoint.Smt.Theories as Thy
 import           Language.Fixpoint.Smt.Types
 import           Language.Fixpoint.Types          hiding (prop)
@@ -80,8 +81,8 @@ type family Res a where
 -- copy of the SMTLIB2 Sort instance..
 smt2Sort :: Sort -> T.Text
 smt2Sort s = case s of
-  FObj s' -> smt2 s'
-  _       -> smt2 s
+  FObj s' -> mysmt2 s'
+  _       -> mysmt2 s
 -- smt2Sort s           | Just t <- Thy.smt2Sort s = t
 -- smt2Sort FInt        = "Int"
 -- smt2Sort (FApp t []) | t == intFTyCon = "Int"
@@ -96,9 +97,9 @@ makeDecl :: Symbol -> Sort -> T.Text
 makeDecl x t
   | Just (_, ts, t) <- functionSort t
   = format "(declare-fun {} ({}) {})"
-           (smt2 x, T.unwords (map smt2Sort ts), smt2Sort t)
+           (mysmt2 x, T.unwords (map smt2Sort ts), smt2Sort t)
 makeDecl x t
-  = format "(declare-const {} {})" (smt2 x, smt2Sort t)
+  = format "(declare-const {} {})" (mysmt2 x, smt2Sort t)
 
 safeFromJust :: String -> Maybe a -> a
 safeFromJust msg Nothing  = error $ "safeFromJust: " ++ msg
@@ -136,7 +137,8 @@ splitEApp_maybe e@(EApp {}) = go [] e
     go _ e = Nothing -- error $ "splitEApp_maybe: " ++ showpp e
 splitEApp_maybe _ = Nothing
 
-
+mysmt2 :: SMTLIB2 a => a -> Raw
+mysmt2 x = smt2 initSMTEnv x
 
 stripQuals :: SpecType -> SpecType
 stripQuals = snd . bkClass . fourth4 . bkUniv
