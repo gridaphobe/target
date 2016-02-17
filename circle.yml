@@ -6,10 +6,17 @@ machine:
     - sudo apt-get -y update
     - sudo apt-get -y install z3
 
+dependencies:
+  override:
+    - git clone --recursive --branch develop git://github.com/ucsd-progsys/liquidhaskell.git /tmp/liquid-haskell
+    - cabal update
+    - cabal sandbox init
+    - cabal install /tmp/liquid-haskell/liquid-fixpoint /tmp/liquid-haskell/prover /tmp/liquid-haskell
+    - cabal install --upgrade-dependencies --constraint="template-haskell installed" --dependencies-only --enable-tests
+    - cabal configure --enable-tests
+
 test:
   pre:
-    - git clone --recursive --branch develop git://github.com/ucsd-progsys/liquidhaskell.git /tmp/liquid-haskell
-    - cabal install /tmp/liquid-haskell/liquid-fixpoint /tmp/liquid-haskell/prover /tmp/liquid-haskell
     - mkdir -p $CIRCLE_TEST_REPORTS/tasty
   override:
     - cabal build
