@@ -12,12 +12,13 @@ import           Data.Typeable
 import           GHC.Generics
 import           Text.PrettyPrint
 
-import           Language.Fixpoint.Smt.Interface
+import           Language.Fixpoint.Smt.Interface hiding (SMTLIB2(..))
 import           Language.Fixpoint.Types
 import           Language.Haskell.Liquid.Types
 
 import           GHC
 
+import           Test.Target.Serialize
 import           Test.Target.Util
 
 
@@ -60,7 +61,7 @@ instance Symbolic Variable where
   symbol (x, _) = symbol x
 
 instance SMTLIB2 Constraint where
-  smt2 _ = mysmt2 . PAnd
+  smt2 = smt2 . PAnd
 
 type DataConEnv = [(Symbol, SpecType)]
 type MeasureEnv = [Measure SpecType DataCon]

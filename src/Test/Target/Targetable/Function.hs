@@ -19,11 +19,12 @@ import qualified Data.HashMap.Strict             as M
 import           Data.IORef
 import           Data.Monoid
 import           Data.Proxy
-import qualified Data.Text                       as T
+import qualified Data.Text                       as ST
+import qualified Data.Text.Lazy                  as T
 import           System.IO.Unsafe
 
 import qualified GHC
-import           Language.Fixpoint.Smt.Interface
+import           Language.Fixpoint.Smt.Interface hiding (format, SMTLIB2(..))
 import           Language.Fixpoint.Types         hiding (ofReft, reft)
 import           Language.Haskell.Liquid.GHC.Misc (qualifiedNameSymbol)
 import           Language.Haskell.Liquid.Types.RefType (addTyConInfo, rTypeSort)
@@ -33,6 +34,7 @@ import           Test.Target.Targetable
 import           Test.Target.Eval
 import           Test.Target.Expr
 import           Test.Target.Monad
+import           Test.Target.Serialize
 import           Test.Target.Types
 import           Test.Target.Util
 
@@ -83,9 +85,9 @@ stitchFun _ (bkArrowDeep . stripQuals -> (vs, tis, _, to))
                  let su = mkSubst $ zipWith (\v e -> (v, var e)) vs xes
                  xo <- query (Proxy :: Proxy (Res f)) d (subst su to)
                  vs <- gets variables
-                 mapM_ (\x -> io . smtWrite ctx $ makeDecl (symbol x) (snd x)) vs
+                 mapM_ (\x -> io . smtWrite ctx $ T.toStrict $ makeDecl (symbol x) (snd x)) vs
                  cs <- gets constraints
-                 mapM_ (\c -> io . command ctx $ Assert Nothing c) cs
+                 mapM_ (\c -> io . smtWrite ctx . T.toStrict $ smt2 $ Assert Nothing c) cs
 
                  resp <- io $ command ctx CheckSat
                  when (resp == Unsat) $ Ex.throwM SmtFailedToProduceOutput
@@ -109,10 +111,10 @@ genExpr (ECon (I i))
   = do x <- fresh FInt
        addConstraint $ var x `eq` expr i
        return x
-genExpr (ESym (SL s)) | T.length s == 1
+genExpr (ESym (SL s)) | ST.length s == 1
   -- This is a Char, so encode it as an Int
   = do x <- fresh FInt
-       addConstraint $ var x `eq` expr (ord $ T.head s)
+       addConstraint $ var x `eq` expr (ord $ ST.head s)
        return x
 genExpr e = error $ "genExpr: " ++ show e
 

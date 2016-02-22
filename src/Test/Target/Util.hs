@@ -16,8 +16,8 @@ import           Data.List
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Generics                   (everywhere, mkT)
-import           Data.Text.Format                hiding (format, print)
-import qualified Data.Text                       as T
+import           Data.Text.Format                hiding (print)
+import qualified Data.Text.Lazy                  as T
 import           Debug.Trace
 
 import qualified DynFlags as GHC
@@ -27,16 +27,19 @@ import qualified GHC.Exts as GHC
 import qualified GHC.Paths
 import qualified HscTypes as GHC
 
-import           Language.Fixpoint.Smt.Interface
-import           Language.Fixpoint.Smt.Serialize
+-- import           Language.Fixpoint.Smt.Interface
+-- import           Language.Fixpoint.Smt.Serialize
 import qualified Language.Fixpoint.Smt.Theories as Thy
-import           Language.Fixpoint.Smt.Types
+import           Language.Fixpoint.Smt.Types      hiding (smt2, format)
 import           Language.Fixpoint.Types          hiding (prop)
 import           Language.Haskell.Liquid.UX.CmdLine
 import           Language.Haskell.Liquid.GHC.Interface
 import           Language.Haskell.Liquid.Types.PredType
 import           Language.Haskell.Liquid.Types.RefType
 import           Language.Haskell.Liquid.Types    hiding (var)
+
+import           Test.Target.Serialize
+
 
 type Depth = Int
 
@@ -79,10 +82,10 @@ type family Res a where
 -- liquid-fixpoint started encoding `FObj s` as `Int` in 0.3.0.0, but we
 -- want to preserve the type aliases for easier debugging.. so here's a
 -- copy of the SMTLIB2 Sort instance..
-smt2Sort :: Sort -> T.Text
-smt2Sort s = case s of
-  FObj s' -> mysmt2 s'
-  _       -> mysmt2 s
+-- smt2Sort :: Sort -> T.Text
+-- smt2Sort s = case s of
+--   FObj s' -> smt2 s'
+--   _       -> smt2 s
 -- smt2Sort s           | Just t <- Thy.smt2Sort s = t
 -- smt2Sort FInt        = "Int"
 -- smt2Sort (FApp t []) | t == intFTyCon = "Int"
@@ -97,9 +100,9 @@ makeDecl :: Symbol -> Sort -> T.Text
 makeDecl x t
   | Just (_, ts, t) <- functionSort t
   = format "(declare-fun {} ({}) {})"
-           (mysmt2 x, T.unwords (map smt2Sort ts), smt2Sort t)
+           (smt2 x, T.unwords (map smt2 ts), smt2 t)
 makeDecl x t
-  = format "(declare-const {} {})" (mysmt2 x, smt2Sort t)
+  = format "(declare-const {} {})" (smt2 x, smt2 t)
 
 safeFromJust :: String -> Maybe a -> a
 safeFromJust msg Nothing  = error $ "safeFromJust: " ++ msg
@@ -134,11 +137,8 @@ splitEApp_maybe e@(EApp {}) = go [] e
   where
     go acc (EApp f e) = go (e:acc) f
     go acc (EVar s)   = Just (s, acc)
-    go _ e = Nothing -- error $ "splitEApp_maybe: " ++ showpp e
+    go _   _          = Nothing -- error $ "splitEApp_maybe: " ++ showpp e
 splitEApp_maybe _ = Nothing
-
-mysmt2 :: SMTLIB2 a => a -> Raw
-mysmt2 x = smt2 initSMTEnv x
 
 stripQuals :: SpecType -> SpecType
 stripQuals = snd . bkClass . fourth4 . bkUniv

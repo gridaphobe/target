@@ -23,14 +23,14 @@ import           Control.Monad.State
 import qualified Data.HashMap.Strict             as M
 import qualified Data.HashSet                    as S
 import           Data.Proxy
-import qualified Data.Text                       as T
-import           Data.Text.Format                hiding (format, print)
+import qualified Data.Text                       as ST
+import qualified Data.Text.Lazy                  as T
+import           Data.Text.Format                hiding (print)
 import           Text.Printf
 
-import           Language.Fixpoint.Smt.Interface
-import           Language.Fixpoint.Smt.Serialize
+import           Language.Fixpoint.Smt.Interface hiding (SMTLIB2(..))
+-- import           Language.Fixpoint.Smt.Serialize
 import           Language.Fixpoint.Smt.Theories  (theorySymbols)
-import           Language.Fixpoint.Smt.Types     (format)
 import           Language.Fixpoint.Types         hiding (Result)
 import           Language.Haskell.Liquid.Types.RefType
 import           Language.Haskell.Liquid.Types   hiding (Result (..), env, var, Only)
@@ -39,6 +39,7 @@ import           Test.Target.Targetable          hiding (apply)
 -- import           Test.Target.Eval
 import           Test.Target.Expr
 import           Test.Target.Monad
+import           Test.Target.Serialize
 import           Test.Target.Types
 import           Test.Target.Util
 
@@ -63,7 +64,7 @@ process :: Testable f
 process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
   where
     go !n Unsat    = return $ Passed n
-    go _  (Error e)= throwM $ SmtError $ T.unpack e
+    go _  (Error e)= throwM $ SmtError $ ST.unpack e
     go !n Sat      = do
       when (n `mod` 100 == 0) $ whenVerbose $ io $ printf "Checked %d inputs\n" n
       let n' = n + 1
@@ -82,7 +83,7 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
               modify $ \s@(TargetState {..}) -> s { realized = [] }
               let model = [ format "(= {} {})" (symbolText x, v) | (x,v) <- real ]
               unless (null model) $
-                void $ io $ smtWrite ctx $ format "(assert (not (and {})))"
+                void $ io $ smtWrite ctx $ T.toStrict $ format "(assert (not (and {})))"
                      $ Only $ smt2many model
               mbKeepGoing xs n'
         Right r -> do
@@ -98,7 +99,7 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
           -- causing us to return a spurious error
           let model = [ format "(= {} {})" (symbolText x, v) | (x,v) <- real ]
           unless (null model) $
-            void $ io $ smtWrite ctx $ format "(assert (not (and {})))"
+            void $ io $ smtWrite ctx $ T.toStrict $ format "(assert (not (and {})))"
                  $ Only $ smt2many model
 
           case sat of
@@ -163,27 +164,27 @@ setup = {-# SCC "setup" #-} do
    emb <- gets embEnv
    -- declare sorts
    ss  <- S.toList <$> gets sorts
-   let defSort b e = io $ smtWrite ctx (format "(define-sort {} () {})" (b,e))
+   let defSort b e = io $ smtWrite ctx (T.toStrict $ format "(define-sort {} () {})" (b,e))
    -- FIXME: combine this with the code in `fresh`
    forM_ ss $ \case
      FObj "Int" -> return ()
      FInt       -> return ()
      FObj "GHC.Types.Bool"   -> defSort ("GHC.Types.Bool" :: T.Text) ("Bool" :: T.Text)
      FObj "CHOICE" -> defSort ("CHOICE" :: T.Text) ("Bool" :: T.Text)
-     s        -> defSort (smt2Sort s) ("Int" :: T.Text)
+     s        -> defSort (smt2 s) ("Int" :: T.Text)
    -- declare constructors
    cts <- gets constructors
-   mapM_ (\ (c,t) -> io $ smtWrite ctx $ makeDecl (symbol c) t) cts
+   mapM_ (\ (c,t) -> io $ smtWrite ctx $ T.toStrict $ makeDecl (symbol c) t) cts
    let nullary = [var c | (c,t) <- cts, not (func t)]
    unless (null nullary) $
-     void $ io $ command ctx $ Distinct nullary
+     void $ io $ smtWrite ctx $ T.toStrict $ smt2 $ Distinct nullary
    -- declare variables
    vs <- gets variables
-   let defVar (x,t) = io $ smtWrite ctx (makeDecl x (arrowize t))
+   let defVar (x,t) = io $ smtWrite ctx $ T.toStrict (makeDecl x (arrowize t))
    mapM_ defVar vs
    -- declare measures
    ms <- gets measEnv
-   let defFun x t = io $ smtWrite ctx (makeDecl x t)
+   let defFun x t = io $ smtWrite ctx $ T.toStrict (makeDecl x t)
    forM_ ms $ \m -> do
      let x = val (name m)
      unless (x `M.member` theorySymbols) $
@@ -193,7 +194,7 @@ setup = {-# SCC "setup" #-} do
    --mapM_ (\c -> do {i <- gets seed; modify $ \s@(GS {..}) -> s { seed = seed + 1 };
    --                 io . command ctx $ Assert (Just i) c})
    --  cs
-   mapM_ (io . command ctx . Assert Nothing) cs
+   mapM_ (io . smtWrite ctx . T.toStrict . smt2 . Assert Nothing) cs
    -- deps <- V.fromList . map (symbol *** symbol) <$> gets deps
    -- io $ generateDepGraph "deps" deps cs
    -- return (ctx,vs,deps)
@@ -205,7 +206,7 @@ setup = {-# SCC "setup" #-} do
 arrowize :: Sort -> Sort
 arrowize t
   | Just (_, ts, t) <- functionSort t
-  = FObj . symbol . T.intercalate "->" . map (symbolText . unObj) $ (ts ++ [t])
+  = FObj . symbol . ST.intercalate "->" . map (symbolText . unObj) $ (ts ++ [t])
   | otherwise
   = t
 

@@ -35,12 +35,13 @@ import qualified Data.HashSet                     as S
 import           Data.IORef
 import           Data.List                        hiding (sort)
 import           Data.Monoid
-import qualified Data.Text                        as T
+import qualified Data.Text                        as ST
+import qualified Data.Text.Lazy                   as T
 import           Language.Haskell.TH.Lift
 import           System.IO.Unsafe
 import           Text.Printf
 
-import           Language.Fixpoint.Smt.Interface  hiding (verbose)
+import           Language.Fixpoint.Smt.Interface  hiding (verbose, SMTLIB2(..), format)
 import           Language.Fixpoint.Types
 import           Language.Fixpoint.Types.Config (SMTSolver(..))
 import           Language.Haskell.Liquid.Types.PredType
@@ -50,6 +51,7 @@ import           Language.Haskell.Liquid.Types    hiding (var, Target)
 
 import qualified GHC
 
+import           Test.Target.Serialize
 import           Test.Target.Types
 import           Test.Target.Util
 
@@ -239,7 +241,7 @@ fresh sort
   = do n <- freshInt
        let sorts' = sortTys sort
        modify $ \s@(TargetState {..}) -> s { sorts = S.union (S.fromList (arrowize sort : sorts')) sorts }
-       let x = symbol $ T.unpack (T.intercalate "->" $ map (symbolText.unObj) sorts') ++ show n
+       let x = symbol $ ST.unpack (ST.intercalate "->" $ map (symbolText.unObj) sorts') ++ show n
        modify $ \s@(TargetState {..}) -> s { variables = (x,sort) : variables }
        return x
 
@@ -252,7 +254,7 @@ sortTys t
   = [t]
 
 arrowize :: Sort -> Sort
-arrowize = FObj . symbol . T.intercalate "->" . map (symbolText . unObj) . sortTys
+arrowize = FObj . symbol . ST.intercalate "->" . map (symbolText . unObj) . sortTys
 
 unObj :: Sort -> Symbol
 unObj FInt     = "Int"
@@ -265,7 +267,7 @@ freshChoice :: String -> Target Symbol
 freshChoice cn
   = do n <- freshInt
        modify $ \s@(TargetState {..}) -> s { sorts = S.insert choicesort sorts }
-       let x = symbol $ T.unpack (mysmt2 choicesort) ++ "-" ++ cn ++ "-" ++ show n
+       let x = symbol $ T.unpack (smt2 choicesort) ++ "-" ++ cn ++ "-" ++ show n
        modify $ \s@(TargetState {..}) -> s { variables = (x,choicesort) : variables }
        return x
 
